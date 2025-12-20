@@ -1,0 +1,771 @@
+// Wait for DOM and Tauri to be ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded');
+
+    // Check if Tauri API is available
+    if (!window.__TAURI__) {
+        console.error('Tauri API not available!');
+        alert('Error: Tauri API not loaded');
+        return;
+    }
+
+    console.log('Tauri API available');
+    init();
+});
+
+// Use Tauri's injected API
+const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.tauri?.invoke;
+
+// State
+let profiles = [];
+let editingProfileId = null;
+let isSubmitting = false;
+let collapsedGroups = new Set();
+
+// DOM Elements
+let profilesList;
+let searchInput;
+let newProfileBtn;
+let profileModal;
+let profileForm;
+let closeModalBtn;
+let cancelBtn;
+let deleteProfileBtn;
+let modalTitle;
+let authMethodSelect;
+let keyPathGroup;
+let passwordGroup;
+let confirmModal;
+let confirmMessage;
+let confirmOkBtn;
+let confirmCancelBtn;
+let settingsBtn;
+let settingsModal;
+let closeSettingsBtn;
+let themeSelect;
+let exportProfilesBtn;
+let importProfilesBtn;
+let importFileInput;
+let deleteAllProfilesBtn;
+let confirmTitle;
+let toastElement;
+let toastMessage;
+
+// Confirmation promise resolver
+let confirmResolver = null;
+
+// Initialize app
+async function init() {
+    console.log('Initializing app...');
+
+    // Get DOM elements
+    profilesList = document.getElementById('profiles-list');
+    searchInput = document.getElementById('search-input');
+    newProfileBtn = document.getElementById('new-profile-btn');
+    profileModal = document.getElementById('profile-modal');
+    profileForm = document.getElementById('profile-form');
+    closeModalBtn = document.getElementById('close-modal');
+    cancelBtn = document.getElementById('cancel-btn');
+    deleteProfileBtn = document.getElementById('delete-profile-btn');
+    modalTitle = document.getElementById('modal-title');
+    authMethodSelect = document.getElementById('profile-auth-method');
+    keyPathGroup = document.getElementById('key-path-group');
+    passwordGroup = document.getElementById('password-group');
+    confirmModal = document.getElementById('confirm-modal');
+    confirmMessage = document.getElementById('confirm-message');
+    confirmOkBtn = document.getElementById('confirm-ok');
+    confirmCancelBtn = document.getElementById('confirm-cancel');
+    settingsBtn = document.getElementById('settings-btn');
+    settingsModal = document.getElementById('settings-modal');
+    closeSettingsBtn = document.getElementById('close-settings');
+    themeSelect = document.getElementById('theme-select');
+    exportProfilesBtn = document.getElementById('export-profiles-btn');
+    importProfilesBtn = document.getElementById('import-profiles-btn');
+    importFileInput = document.getElementById('import-file-input');
+    deleteAllProfilesBtn = document.getElementById('delete-all-profiles-btn');
+    confirmTitle = document.getElementById('confirm-title');
+    toastElement = document.getElementById('toast');
+    toastMessage = document.getElementById('toast-message');
+
+    console.log('DOM elements retrieved');
+
+    await loadProfiles();
+    loadThemePreference();
+    setupEventListeners();
+
+    console.log('App initialized');
+}
+
+// Load profiles from backend
+async function loadProfiles() {
+    try {
+        profiles = await invoke('get_profiles');
+        renderProfiles();
+    } catch (error) {
+        console.error('Failed to load profiles:', error);
+        profiles = [];
+        renderProfiles();
+    }
+}
+
+// Render profiles in the UI with collapsible groups
+function renderProfiles(filter = '') {
+    const filteredProfiles = profiles.filter(profile => {
+        const searchText = filter.toLowerCase();
+        return (
+            profile.name.toLowerCase().includes(searchText) ||
+            profile.host.toLowerCase().includes(searchText) ||
+            profile.username.toLowerCase().includes(searchText) ||
+            (profile.description && profile.description.toLowerCase().includes(searchText)) ||
+            (profile.group && profile.group.toLowerCase().includes(searchText))
+        );
+    });
+
+    if (filteredProfiles.length === 0) {
+        profilesList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🔌</div>
+                <div class="empty-state-title">No SSH Profiles Yet</div>
+                <div class="empty-state-text">
+                    ${filter ? 'No profiles match your search.' : 'Create your first SSH profile to get started.'}
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Group profiles
+    const grouped = {};
+    filteredProfiles.forEach(profile => {
+        const group = profile.group || 'Ungrouped';
+        if (!grouped[group]) grouped[group] = [];
+        grouped[group].push(profile);
+    });
+
+    // Render grouped profiles with collapsible sections
+    let html = '';
+    Object.keys(grouped).sort().forEach(groupName => {
+        const isCollapsed = collapsedGroups.has(groupName);
+        const chevron = isCollapsed ? '▶' : '▼';
+
+        html += `
+            <div class="profile-group">
+                <div class="profile-group-header" data-group="${escapeHtml(groupName)}">
+                    <span class="group-chevron">${chevron}</span>
+                    <span class="group-name">${escapeHtml(groupName)}</span>
+                    <span class="group-count">${grouped[groupName].length}</span>
+                </div>
+                <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
+        `;
+
+        grouped[groupName].forEach(profile => {
+            html += `
+                <div class="profile-card" data-id="${profile.id}">
+                    <div class="profile-card-header">
+                        <div class="profile-card-title">${escapeHtml(profile.name)}</div>
+                    </div>
+                    <div class="profile-card-info">
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">User:</span>
+                            <span>${escapeHtml(profile.username)}</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Host:</span>
+                            <span>${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Auth:</span>
+                            <span>${profile.auth_method || 'key'}</span>
+                        </div>
+                    </div>
+                    ${profile.description ? `<div class="profile-card-description">${escapeHtml(profile.description)}</div>` : ''}
+                    <div class="profile-card-actions">
+                        <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
+                        <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
+                        <button class="btn btn-secondary btn-small duplicate-btn" data-id="${profile.id}">Duplicate</button>
+                        <button class="btn btn-danger btn-small delete-btn" data-id="${profile.id}">Delete</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+    });
+
+    profilesList.innerHTML = html;
+
+    // Attach event listeners to group headers
+    document.querySelectorAll('.profile-group-header').forEach(header => {
+        header.addEventListener('click', (e) => {
+            const groupName = header.dataset.group;
+            toggleGroup(groupName);
+        });
+    });
+
+    // Attach event listeners to buttons
+    document.querySelectorAll('.connect-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            connectToProfile(btn.dataset.id);
+        });
+    });
+
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            editProfile(btn.dataset.id);
+        });
+    });
+
+    document.querySelectorAll('.duplicate-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            duplicateProfile(btn.dataset.id);
+        });
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            console.log('Delete button clicked on card, id:', btn.dataset.id);
+            await deleteProfile(btn.dataset.id);
+        });
+    });
+}
+
+// Toggle group collapse state
+function toggleGroup(groupName) {
+    if (collapsedGroups.has(groupName)) {
+        collapsedGroups.delete(groupName);
+    } else {
+        collapsedGroups.add(groupName);
+    }
+    renderProfiles(searchInput.value);
+}
+
+// Setup event listeners
+function setupEventListeners() {
+    console.log('Setting up event listeners...');
+
+    searchInput.addEventListener('input', (e) => {
+        renderProfiles(e.target.value);
+    });
+
+    newProfileBtn.addEventListener('click', () => {
+        console.log('New profile button clicked!');
+        openModal();
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+        closeModal();
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        closeModal();
+    });
+
+    deleteProfileBtn.addEventListener('click', async () => {
+        console.log('Delete button clicked in modal');
+        if (editingProfileId) {
+            const deleted = await deleteProfile(editingProfileId);
+            // Only close modal if deletion was successful
+            if (deleted) {
+                closeModal();
+            }
+        }
+    });
+
+    profileModal.addEventListener('click', (e) => {
+        if (e.target === profileModal) {
+            closeModal();
+        }
+    });
+
+    profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Prevent double submission
+        if (isSubmitting) {
+            console.log('Already submitting, ignoring...');
+            return;
+        }
+
+        isSubmitting = true;
+        try {
+            await saveProfile();
+        } finally {
+            isSubmitting = false;
+        }
+    });
+
+    authMethodSelect.addEventListener('change', () => {
+        updateAuthMethodVisibility();
+    });
+
+    // Confirmation dialog buttons
+    confirmOkBtn.addEventListener('click', () => {
+        if (confirmResolver) {
+            confirmResolver(true);
+            confirmResolver = null;
+        }
+        confirmModal.classList.add('hidden');
+    });
+
+    confirmCancelBtn.addEventListener('click', () => {
+        if (confirmResolver) {
+            confirmResolver(false);
+            confirmResolver = null;
+        }
+        confirmModal.classList.add('hidden');
+    });
+
+    confirmModal.addEventListener('click', (e) => {
+        if (e.target === confirmModal) {
+            if (confirmResolver) {
+                confirmResolver(false);
+                confirmResolver = null;
+            }
+            confirmModal.classList.add('hidden');
+        }
+    });
+
+    // Settings modal
+    settingsBtn.addEventListener('click', () => {
+        openSettings();
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+        closeSettings();
+    });
+
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            closeSettings();
+        }
+    });
+
+    // Theme toggle
+    themeSelect.addEventListener('change', () => {
+        applyTheme(themeSelect.value);
+    });
+
+    // Export/Import
+    exportProfilesBtn.addEventListener('click', async () => {
+        await exportProfiles();
+    });
+
+    importProfilesBtn.addEventListener('click', () => {
+        importFileInput.click();
+    });
+
+    importFileInput.addEventListener('change', async (e) => {
+        if (e.target.files && e.target.files[0]) {
+            await importProfiles(e.target.files[0]);
+            e.target.value = ''; // Reset file input
+        }
+    });
+
+    deleteAllProfilesBtn.addEventListener('click', async () => {
+        await deleteAllProfiles();
+    });
+}
+
+// Custom confirm dialog
+function customConfirm(message, options = {}) {
+    return new Promise((resolve) => {
+        const title = options.title || 'Confirm';
+        const okText = options.okText || 'Yes';
+        const cancelText = options.cancelText || 'No';
+        const okClass = options.okClass || 'btn-danger';
+
+        confirmTitle.textContent = title;
+        confirmMessage.innerHTML = message;
+        confirmOkBtn.textContent = okText;
+        confirmCancelBtn.textContent = cancelText;
+        confirmOkBtn.className = `btn ${okClass}`;
+
+        confirmModal.classList.remove('hidden');
+        confirmResolver = resolve;
+
+        // Focus cancel button by default (safer option)
+        setTimeout(() => confirmCancelBtn.focus(), 100);
+    });
+}
+
+// Toast notification
+function showToast(message, duration = 3000, type = 'success') {
+    toastMessage.textContent = message;
+    toastElement.classList.remove('hidden', 'toast-error', 'toast-success');
+
+    // Add appropriate class based on type
+    if (type === 'error') {
+        toastElement.classList.add('toast-error');
+    } else {
+        toastElement.classList.add('toast-success');
+    }
+
+    setTimeout(() => {
+        toastElement.classList.add('hidden');
+    }, duration);
+}
+
+// Update form based on selected auth method
+function updateAuthMethodVisibility() {
+    const method = authMethodSelect.value;
+
+    keyPathGroup.classList.toggle('hidden', method !== 'key');
+    passwordGroup.classList.toggle('hidden', method !== 'password');
+}
+
+// Settings modal functions
+function openSettings() {
+    settingsModal.classList.remove('hidden');
+}
+
+function closeSettings() {
+    settingsModal.classList.add('hidden');
+}
+
+// Theme functions
+function loadThemePreference() {
+    const savedTheme = localStorage.getItem('theme') || 'system';
+    themeSelect.value = savedTheme;
+    applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+    localStorage.setItem('theme', theme);
+
+    if (theme === 'system') {
+        // Check system preference
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.body.classList.toggle('light-mode', !prefersDark);
+    } else if (theme === 'light') {
+        document.body.classList.add('light-mode');
+    } else {
+        document.body.classList.remove('light-mode');
+    }
+}
+
+// Listen for system theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (themeSelect.value === 'system') {
+        document.body.classList.toggle('light-mode', !e.matches);
+    }
+});
+
+// Export profiles to JSON
+async function exportProfiles() {
+    try {
+        const data = await invoke('export_profiles');
+        const defaultFilename = `ssh-profiles-${new Date().toISOString().split('T')[0]}.json`;
+
+        // Call Tauri backend to show save dialog and write file
+        const success = await invoke('save_profiles_to_file', {
+            data: data,
+            defaultFilename: defaultFilename
+        });
+
+        if (success) {
+            showToast('Profiles exported successfully!');
+            console.log('Profiles exported successfully');
+        } else {
+            console.log('User cancelled save dialog');
+        }
+    } catch (error) {
+        console.error('Failed to export profiles:', error);
+        showToast('Failed to export profiles: ' + error, 4000, 'error');
+    }
+}
+
+// Import profiles from JSON
+async function importProfiles(file) {
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // Close settings modal first to avoid visibility issues
+        closeSettings();
+
+        // Check if we have existing profiles
+        if (profiles.length > 0) {
+            const existingCount = profiles.length;
+            const importCount = data.profiles?.length || 0;
+            const existingText = existingCount === 1 ? 'existing profile' : 'existing profiles';
+            const importText = importCount === 1 ? 'new profile' : 'new profiles';
+
+            const confirmMessage = `
+                <div>You have <span class="profile-name">${existingCount} ${existingText}</span>.</div>
+                <div class="host-info">Importing will add ${importCount} ${importText} and override all existing profiles.</div>
+                <div class="warning">Do you want to continue?</div>
+            `;
+
+            const confirmImport = await customConfirm(confirmMessage, {
+                title: 'Confirm Import',
+                okText: 'Yes',
+                cancelText: 'No',
+                okClass: 'btn-primary'
+            });
+
+            if (!confirmImport) {
+                console.log('User cancelled import');
+                return;
+            }
+        }
+
+        // Import profiles via backend
+        await invoke('import_profiles', { data: text });
+
+        // Reload profiles
+        await loadProfiles();
+
+        const count = data.profiles?.length || 0;
+        const message = count === 1
+            ? 'Successfully imported 1 profile!'
+            : `Successfully imported ${count} profiles!`;
+        showToast(message);
+        console.log('Profiles imported successfully');
+    } catch (error) {
+        console.error('Failed to import profiles:', error);
+        showToast('Failed to import profiles: ' + error, 4000, 'error');
+    }
+}
+
+// Delete all profiles
+async function deleteAllProfiles() {
+    if (profiles.length === 0) {
+        showToast('No profiles to delete!', 3000, 'error');
+        return;
+    }
+
+    // Close settings modal first
+    closeSettings();
+
+    const count = profiles.length;
+    const profileText = count === 1 ? 'profile' : 'profiles';
+
+    const confirmMessage = `
+        <div>You currently have <span class="profile-name">${count} ${profileText}</span>.</div>
+        <div class="warning">This will permanently delete all profiles and their stored passwords.</div>
+        <div class="warning">This action cannot be undone.</div>
+        <div style="margin-top: 12px;">Are you sure you want to continue?</div>
+    `;
+
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Delete All Profiles',
+        okText: 'Yes',
+        cancelText: 'No',
+        okClass: 'btn-danger'
+    });
+
+    if (!confirmed) {
+        console.log('User cancelled delete all');
+        return;
+    }
+
+    try {
+        // Delete all profiles
+        for (const profile of profiles) {
+            await invoke('delete_profile', { id: profile.id });
+        }
+
+        await loadProfiles();
+        showToast('All profiles deleted successfully!');
+        console.log('All profiles deleted');
+    } catch (error) {
+        console.error('Failed to delete all profiles:', error);
+        showToast('Failed to delete all profiles: ' + error, 4000, 'error');
+    }
+}
+
+// Open modal for new or edit profile
+function openModal(profile = null) {
+    console.log('openModal called with profile:', profile);
+    editingProfileId = profile ? profile.id : null;
+
+    if (profile) {
+        modalTitle.textContent = 'Edit Profile';
+        document.getElementById('profile-name').value = profile.name;
+        document.getElementById('profile-description').value = profile.description || '';
+        document.getElementById('profile-host').value = profile.host;
+        document.getElementById('profile-port').value = profile.port || 22;
+        document.getElementById('profile-username').value = profile.username;
+        document.getElementById('profile-auth-method').value = profile.auth_method || 'key';
+        document.getElementById('profile-key-path').value = profile.key_path || '';
+        document.getElementById('profile-group').value = profile.group || '';
+        deleteProfileBtn.classList.remove('hidden');
+    } else {
+        modalTitle.textContent = 'New Profile';
+        profileForm.reset();
+        document.getElementById('profile-port').value = 22;
+        document.getElementById('profile-auth-method').value = 'key';
+        deleteProfileBtn.classList.add('hidden');
+    }
+
+    updateAuthMethodVisibility();
+    profileModal.classList.remove('hidden');
+}
+
+// Close modal
+function closeModal() {
+    profileModal.classList.add('hidden');
+    editingProfileId = null;
+    profileForm.reset();
+}
+
+// Save profile (create or update)
+async function saveProfile() {
+    console.log('saveProfile called, editingProfileId:', editingProfileId);
+
+    const profileName = document.getElementById('profile-name').value.trim();
+
+    // Check for duplicate names (case-insensitive)
+    const duplicateProfile = profiles.find(p =>
+        p.name.toLowerCase() === profileName.toLowerCase() &&
+        p.id !== editingProfileId
+    );
+
+    if (duplicateProfile) {
+        showToast(`A profile named "${profileName}" already exists. Please choose a different name.`, 4000, 'error');
+        return;
+    }
+
+    const profileData = {
+        id: editingProfileId,
+        name: profileName,
+        description: document.getElementById('profile-description').value || null,
+        host: document.getElementById('profile-host').value,
+        port: parseInt(document.getElementById('profile-port').value) || 22,
+        username: document.getElementById('profile-username').value,
+        auth_method: document.getElementById('profile-auth-method').value,
+        key_path: document.getElementById('profile-key-path').value || null,
+        password: document.getElementById('profile-password').value || null,
+        group: document.getElementById('profile-group').value || null
+    };
+
+    try {
+        if (editingProfileId) {
+            console.log('Updating profile:', profileData);
+            await invoke('update_profile', { profile: profileData });
+        } else {
+            console.log('Creating profile:', profileData);
+            await invoke('create_profile', { profile: profileData });
+        }
+
+        await loadProfiles();
+        closeModal();
+        showToast(editingProfileId ? 'Profile updated successfully!' : 'Profile created successfully!');
+    } catch (error) {
+        console.error('Failed to save profile:', error);
+        showToast('Failed to save profile: ' + error, 4000, 'error');
+    }
+}
+
+// Edit profile
+function editProfile(id) {
+    const profile = profiles.find(p => p.id === id);
+    if (profile) {
+        openModal(profile);
+    }
+}
+
+// Duplicate profile
+function duplicateProfile(id) {
+    const profile = profiles.find(p => p.id === id);
+    if (!profile) return;
+
+    // Create a copy of the profile with (duplicate) appended to name
+    const duplicatedProfile = {
+        ...profile,
+        id: null, // Clear ID so it creates a new profile
+        name: profile.name + ' (duplicate)'
+    };
+
+    // Open modal in "new profile" mode with duplicated data
+    modalTitle.textContent = 'New Profile';
+    editingProfileId = null; // Important: this makes it create a new profile
+    deleteProfileBtn.classList.add('hidden');
+
+    // Fill form with duplicated profile data
+    document.getElementById('profile-name').value = duplicatedProfile.name;
+    document.getElementById('profile-description').value = duplicatedProfile.description || '';
+    document.getElementById('profile-host').value = duplicatedProfile.host;
+    document.getElementById('profile-port').value = duplicatedProfile.port || 22;
+    document.getElementById('profile-username').value = duplicatedProfile.username;
+    document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'key';
+    document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
+    document.getElementById('profile-password').value = ''; // Don't copy password for security
+    document.getElementById('profile-group').value = duplicatedProfile.group || '';
+
+    updateAuthMethodVisibility();
+    profileModal.classList.remove('hidden');
+}
+
+// Delete profile
+// Returns true if deleted, false if cancelled or failed
+async function deleteProfile(id) {
+    console.log('deleteProfile called with id:', id);
+    const profile = profiles.find(p => p.id === id);
+
+    if (!profile) {
+        console.error('Profile not found:', id);
+        return false;
+    }
+
+    console.log('Found profile to delete:', profile);
+
+    const confirmMessage = `
+        <div>Are you sure you want to delete <span class="profile-name">"${escapeHtml(profile.name)}"</span>?</div>
+        <div class="host-info">Host: ${escapeHtml(profile.username)}@${escapeHtml(profile.host)}</div>
+        <div class="warning">This action cannot be undone.</div>
+    `;
+
+    const confirmDelete = await customConfirm(confirmMessage, {
+        title: 'Confirm Delete',
+        okText: 'Delete',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
+    });
+
+    if (!confirmDelete) {
+        console.log('User cancelled deletion');
+        return false;
+    }
+
+    console.log('User confirmed deletion');
+    try {
+        console.log('Calling delete_profile with id:', id);
+        await invoke('delete_profile', { id });
+        console.log('Profile deleted successfully');
+        await loadProfiles();
+        showToast('Profile deleted successfully!');
+        return true;
+    } catch (error) {
+        console.error('Failed to delete profile:', error);
+        showToast('Failed to delete profile: ' + error, 4000, 'error');
+        return false;
+    }
+}
+
+// Connect to SSH profile
+async function connectToProfile(id) {
+    const profile = profiles.find(p => p.id === id);
+    if (!profile) return;
+
+    try {
+        await invoke('connect_ssh', { profileId: id });
+    } catch (error) {
+        console.error('Failed to connect:', error);
+        showToast('Failed to connect: ' + error, 4000, 'error');
+    }
+}
+
+// Utility: Escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

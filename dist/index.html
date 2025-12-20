@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Profile Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <img src="32x32.png" alt="Logo" class="app-logo">
+                <h1>SSH Profile Manager</h1>
+            </div>
+            <div class="header-right">
+                <button id="new-profile-btn" class="btn btn-primary">+ New Profile</button>
+                <button id="settings-btn" class="btn btn-settings">Settings</button>
+            </div>
+        </header>
+
+        <!-- Search and Filter -->
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search profiles..." />
+        </div>
+
+        <!-- Profiles List -->
+        <div class="profiles-container" id="profiles-list">
+            <!-- Profiles will be dynamically loaded here -->
+        </div>
+
+        <!-- Profile Form Modal (hidden by default) -->
+        <div id="profile-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">New Profile</h2>
+                    <button class="close-btn" id="close-modal">&times;</button>
+                </div>
+                <form id="profile-form">
+                    <div class="form-group">
+                        <label for="profile-name">Profile Name <span class="required">*</span></label>
+                        <input type="text" id="profile-name" required placeholder="e.g., Production Server">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-description">Description</label>
+                        <input type="text" id="profile-description" placeholder="Optional description">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="profile-host">Hostname <span class="required">*</span></label>
+                            <input type="text" id="profile-host" required placeholder="e.g., example.com or 192.168.1.1">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-port">Port</label>
+                            <input type="number" id="profile-port" value="22" min="1" max="65535">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-username">Username <span class="required">*</span></label>
+                        <input type="text" id="profile-username" required placeholder="e.g., root">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-auth-method">Authentication Method</label>
+                        <select id="profile-auth-method">
+                            <option value="key">SSH Key</option>
+                            <option value="password">Password</option>
+                            <option value="none">None (Prompt on Connect)</option>
+                        </select>
+                    </div>
+
+                    <!-- SSH Key Path (shown when auth-method is 'key') -->
+                    <div class="form-group" id="key-path-group">
+                        <label for="profile-key-path">SSH Key Path</label>
+                        <input type="text" id="profile-key-path" placeholder="e.g., ~/.ssh/id_rsa">
+                    </div>
+
+                    <!-- Password (shown when auth-method is 'password') -->
+                    <div class="form-group hidden" id="password-group">
+                        <label for="profile-password">Password</label>
+                        <input type="password" id="profile-password" placeholder="Enter password">
+                        <small>Stored securely in system keychain</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-group">Group</label>
+                        <input type="text" id="profile-group" placeholder="e.g., Production, Development">
+                    </div>
+
+                    <div class="form-actions">
+                        <div class="form-actions-left">
+                            <button type="button" class="btn btn-danger hidden" id="delete-profile-btn">Delete Profile</button>
+                        </div>
+                        <div class="form-actions-right">
+                            <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Profile</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Confirmation Dialog -->
+        <div id="confirm-modal" class="modal hidden">
+            <div class="modal-content confirm-modal-content">
+                <div class="modal-header">
+                    <h2 id="confirm-title">Confirm</h2>
+                </div>
+                <div class="confirm-body">
+                    <div id="confirm-message"></div>
+                </div>
+                <div class="form-actions">
+                    <div class="form-actions-left"></div>
+                    <div class="form-actions-right">
+                        <button type="button" class="btn btn-secondary" id="confirm-cancel">No</button>
+                        <button type="button" class="btn btn-danger" id="confirm-ok">Yes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast hidden">
+            <div id="toast-message"></div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="close-btn" id="close-settings">&times;</button>
+                </div>
+                <div class="settings-content">
+                    <!-- Theme Settings -->
+                    <div class="settings-section">
+                        <h3>Appearance</h3>
+                        <div class="form-group">
+                            <label for="theme-select">Theme</label>
+                            <select id="theme-select">
+                                <option value="system">Follow System</option>
+                                <option value="dark">Dark Mode</option>
+                                <option value="light">Light Mode</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Import/Export Settings -->
+                    <div class="settings-section">
+                        <h3>Profile Management</h3>
+                        <div class="settings-actions">
+                            <button id="export-profiles-btn" class="btn btn-secondary">Export Profiles</button>
+                            <button id="import-profiles-btn" class="btn btn-secondary">Import Profiles</button>
+                            <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All Profiles</button>
+                            <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                        </div>
+                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.</p>
+                    </div>
+
+                    <!-- About Section -->
+                    <div class="settings-section settings-about">
+                        <h3>About</h3>
+                        <div class="about-content">
+                            <div class="about-item">
+                                <span class="about-label">Application:</span>
+                                <span class="about-value">SSH Profile Manager</span>
+                            </div>
+                            <div class="about-item">
+                                <span class="about-label">Version:</span>
+                                <span class="about-value">0.1.0</span>
+                            </div>
+                            <div class="about-item">
+                                <span class="about-label">GitHub:</span>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager" target="_blank" class="about-link">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                                    </svg>
+                                    tomsinclair94/ssh-profile-manager
+                                </a>
+                            </div>
+                            <div class="about-item">
+                                <span class="about-label">Built with:</span>
+                                <span class="about-value">Tauri + Rust</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

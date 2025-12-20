@@ -1,0 +1,20 @@
+{
+  "name": "ssh-profile-manager",
+  "version": "1.0.0",
+  "description": "Lightweight SSH Profile Manager",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "keywords": ["ssh", "profile", "manager", "tauri"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.6"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.1"
+  }
+}
