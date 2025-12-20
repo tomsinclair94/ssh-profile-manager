@@ -1,6 +1,6 @@
 [package]
 name = "ssh-profile-manager"
-version = "0.1.0"
+version = "0.1.1"
 description = "SSH Profile Manager - A lightweight SSH client"
 authors = ["you"]
 license = ""
@@ -23,6 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.9.5", features = [] }
 tauri-plugin-log = "2"
+tauri-plugin-shell = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1.11", features = ["v4", "serde"] }
 keyring = "3.6"

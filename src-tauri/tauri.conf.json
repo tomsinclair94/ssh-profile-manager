@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SSH Profile Manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.sshprofilemanager.app",
   "build": {
     "frontendDist": "../dist"
@@ -18,7 +18,22 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Capability for the main window",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "core:window:allow-hide",
+            "core:window:allow-show",
+            "core:app:allow-app-hide",
+            "core:app:allow-app-show",
+            "shell:allow-open"
+          ]
+        }
+      ]
     },
     "withGlobalTauri": true
   },
