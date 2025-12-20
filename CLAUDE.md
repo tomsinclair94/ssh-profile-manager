@@ -10,7 +10,7 @@ A lightweight, cross-platform SSH profile manager built with Tauri. Provides a m
 - **Backend:** Rust with Tauri v2
 - **Database:** SQLite (rusqlite)
 - **Secure Storage:** System keychain (keyring crate)
-- **Platforms:** macOS, Windows (Linux ready)
+- **Platforms:** macOS (Apple Silicon), Windows
 
 ## Current Features
 
@@ -50,7 +50,6 @@ A lightweight, cross-platform SSH profile manager built with Tauri. Provides a m
 - ✅ Terminal automatically gets focus
 - ✅ macOS: Opens in Terminal.app
 - ✅ Windows: Opens in cmd/Windows Terminal
-- ✅ Linux: Tries common terminals (gnome-terminal, konsole, xterm)
 
 ## Project Structure
 
@@ -83,6 +82,75 @@ npm run build
 # - macOS app: src-tauri/target/release/bundle/macos/SSH Profile Manager.app
 # - DMG installer: src-tauri/target/release/bundle/dmg/SSH Profile Manager_0.1.0_aarch64.dmg
 ```
+
+## Release Management
+
+### Current Version: 0.1.0
+
+### Automated Release Process
+
+The app uses GitHub Actions to automatically build and release installers when a version tag is pushed.
+
+**GitHub Actions Workflow:** `.github/workflows/release.yml`
+- Builds DMG for macOS (Apple Silicon only)
+- Builds MSI for Windows
+- Creates GitHub release with installers attached
+- Requires `contents: write` permission to create releases
+
+### Creating a New Release
+
+**IMPORTANT:** When the user asks to create a new release, follow this process:
+
+1. **Ask for Version Number**
+   - Ask the user: "What version number would you like to use for this release? (e.g., 0.2.0, 1.0.0)"
+   - Follow semantic versioning: MAJOR.MINOR.PATCH
+
+2. **Update All Version References**
+   Update the version in these THREE locations:
+   - `src-tauri/tauri.conf.json` (line 4: "version": "X.X.X")
+   - `package.json` (line 3: "version": "X.X.X")
+   - `dist/index.html` (line 175: `<span class="about-value">X.X.X</span>`)
+
+3. **Create Git Tag**
+   After updating files, prepare the git commands but DON'T execute them:
+   ```bash
+   git add .
+   git commit -m "Release vX.X.X"
+   git tag vX.X.X
+   git push origin main
+   git push origin vX.X.X
+   ```
+
+4. **Inform the User**
+   Tell the user:
+   - Version has been updated in all locations
+   - Git commands are ready to execute (show them the commands)
+   - Once pushed, GitHub Actions will automatically build and create the release
+
+### Version Update Locations (Reference)
+
+1. **Tauri Config** (`src-tauri/tauri.conf.json`):
+   ```json
+   "version": "0.1.0"
+   ```
+
+2. **Package.json** (`package.json`):
+   ```json
+   "version": "0.1.0"
+   ```
+
+3. **About Section** (`dist/index.html`):
+   ```html
+   <span class="about-value">0.1.0</span>
+   ```
+
+### Release Output
+
+After GitHub Actions completes:
+- Release appears at: https://github.com/tomsinclair94/ssh-profile-manager/releases
+- Contains:
+  - macOS DMG (Apple Silicon / ARM64)
+  - Windows MSI installer
 
 ## Data Storage
 
@@ -219,7 +287,13 @@ CREATE TABLE profiles (
 
 ## Recent Changes
 
-### Latest Session (December 2024)
+### Latest Session (December 2024 - Release Setup)
+1. **Automated Releases**: Created GitHub Actions workflow for automatic DMG/MSI builds
+2. **Version Management**: Documented release process in CLAUDE.md
+3. **README Updates**: Removed all Linux references (macOS and Windows only)
+4. **Release Process**: Set up automated release workflow triggered by version tags
+
+### Previous Session (December 2024)
 1. **Theme System**: Added light/dark mode toggle with system preference detection
 2. **Export/Import**: Implemented JSON export/import with native save dialogs (using `rfd` crate)
 3. **Delete All Profiles**: Added bulk delete feature with confirmation dialog

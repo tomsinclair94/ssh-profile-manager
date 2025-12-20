@@ -159,7 +159,7 @@ ssh-profile-manager/
 - [ ] Connection history and logs
 
 ### Platform Support
-- [x] macOS (Intel & Apple Silicon)
+- [x] macOS (Apple Silicon / ARM64)
 - [ ] Windows (untested, should work)
 
 ## Contributing

@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*' # Triggers on version tags like v0.1.0, v1.0.0, etc.
 
+permissions:
+  contents: write
+
 jobs:
   release:
     strategy:
@@ -13,13 +16,12 @@ jobs:
         include:
           - platform: macos-latest
             target: aarch64-apple-darwin
-            bundle: dmg
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            bundle: dmg
+            bundle-type: dmg
+            file-pattern: 'src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg'
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
-            bundle: msi
+            bundle-type: msi
+            file-pattern: 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi'
 
     runs-on: ${{ matrix.platform }}
 
@@ -37,15 +39,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install dependencies (macOS)
-        if: matrix.platform == 'macos-latest'
-        run: |
-          npm install
-
-      - name: Install dependencies (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          npm install
+      - name: Install dependencies
+        run: npm install
 
       - name: Build Tauri app
         run: npm run build -- --target ${{ matrix.target }}
@@ -53,9 +48,7 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+          files: ${{ matrix.file-pattern }}
           draft: false
           prerelease: false
         env:
