@@ -314,7 +314,7 @@ CREATE TABLE profiles (
 
 ## Recent Changes
 
-### Latest Session (December 2024 - v0.1.2 Security Fixes)
+### Latest Session (December 2024 - v0.1.2 Security Fixes) ✅ RELEASED
 1. **Code Review**: Comprehensive code review identified 2 critical, 3 high, and 5 medium security vulnerabilities
 2. **SEC-001 Fixed**: Command injection vulnerability in SSH connection handler - CRITICAL
    - Added input validation for hostname, username, port
@@ -329,6 +329,7 @@ CREATE TABLE profiles (
 8. **SEC-010 Fixed**: Content Security Policy enabled - MEDIUM
 9. **Version Updates**: Bumped to v0.1.2 in all 5 locations
 10. **CHANGELOG**: Updated with comprehensive v0.1.2 security fixes
+11. **Release Completed**: Successfully tagged and pushed v0.1.2 to GitHub (commit: 7dac596)
 
 ### Previous Session (December 2024 - v0.1.1 Release)
 1. **GitHub Link Fix**: Added Tauri shell plugin to open external links in browser
