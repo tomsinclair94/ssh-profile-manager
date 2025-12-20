@@ -22,6 +22,17 @@ let profiles = [];
 let editingProfileId = null;
 let isSubmitting = false;
 let collapsedGroups = new Set();
+let originalFormValues = {};
+let filteredGroups = new Set(); // Groups to hide (empty = show all)
+
+// Utility: Debounce function to prevent rapid successive calls
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+    };
+}
 
 // DOM Elements
 let profilesList;
@@ -51,6 +62,16 @@ let deleteAllProfilesBtn;
 let confirmTitle;
 let toastElement;
 let toastMessage;
+let saveProfileBtn;
+let browseKeyBtn;
+let checkUpdatesBtn;
+let autoUpdateCheck;
+let filterBtn;
+let filterPopup;
+let filterGroupsList;
+let clearFiltersBtn;
+let filterBadge;
+let expandCollapseBtn;
 
 // Confirmation promise resolver
 let confirmResolver = null;
@@ -87,14 +108,53 @@ async function init() {
     confirmTitle = document.getElementById('confirm-title');
     toastElement = document.getElementById('toast');
     toastMessage = document.getElementById('toast-message');
+    saveProfileBtn = document.getElementById('save-profile-btn');
+    browseKeyBtn = document.getElementById('browse-key-btn');
+    checkUpdatesBtn = document.getElementById('check-updates-btn');
+    autoUpdateCheck = document.getElementById('auto-update-check');
+    filterBtn = document.getElementById('filter-btn');
+    filterPopup = document.getElementById('filter-popup');
+    filterGroupsList = document.getElementById('filter-groups-list');
+    clearFiltersBtn = document.getElementById('clear-filters-btn');
+    filterBadge = document.getElementById('filter-badge');
+    expandCollapseBtn = document.getElementById('expand-collapse-btn');
 
     console.log('DOM elements retrieved');
 
+    // Set OS-specific browse hint
+    setBrowseHint();
+
     await loadProfiles();
     loadThemePreference();
+    loadAutoUpdatePreference();
+    loadFilterState();
     setupEventListeners();
 
+    // Check for updates on launch if enabled
+    if (autoUpdateCheck.checked) {
+        checkForUpdates(true); // silent check
+    }
+
     console.log('App initialized');
+}
+
+// Set OS-specific hint for browse button
+function setBrowseHint() {
+    const browseHint = document.getElementById('browse-hint');
+    if (!browseHint) return;
+
+    // Detect OS using navigator.platform or userAgent
+    const platform = navigator.platform.toLowerCase();
+    const userAgent = navigator.userAgent.toLowerCase();
+
+    if (platform.includes('mac') || userAgent.includes('mac')) {
+        browseHint.textContent = 'Tip: Press Cmd+Shift+. to show hidden files in browser';
+    } else if (platform.includes('win') || userAgent.includes('win')) {
+        browseHint.textContent = 'Tip: Enable "Show hidden files" in File Explorer settings to see hidden folders';
+    } else {
+        // Linux or other - could add Linux-specific tip if needed
+        browseHint.textContent = 'Tip: Browser opens in ~/.ssh directory';
+    }
 }
 
 // Load profiles from backend
@@ -112,6 +172,13 @@ async function loadProfiles() {
 // Render profiles in the UI with collapsible groups
 function renderProfiles(filter = '') {
     const filteredProfiles = profiles.filter(profile => {
+        // First check if profile's group is filtered out
+        const group = profile.group || 'Ungrouped';
+        if (filteredGroups.has(group)) {
+            return false; // Hide this profile because its group is filtered
+        }
+
+        // Then apply search filter
         const searchText = filter.toLowerCase();
         return (
             profile.name.toLowerCase().includes(searchText) ||
@@ -206,35 +273,8 @@ function renderProfiles(filter = '') {
         });
     });
 
-    // Attach event listeners to buttons
-    document.querySelectorAll('.connect-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            connectToProfile(btn.dataset.id);
-        });
-    });
-
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            editProfile(btn.dataset.id);
-        });
-    });
-
-    document.querySelectorAll('.duplicate-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            duplicateProfile(btn.dataset.id);
-        });
-    });
-
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            console.log('Delete button clicked on card, id:', btn.dataset.id);
-            await deleteProfile(btn.dataset.id);
-        });
-    });
+    // Update expand/collapse button text
+    updateExpandCollapseButton();
 }
 
 // Toggle group collapse state
@@ -247,12 +287,71 @@ function toggleGroup(groupName) {
     renderProfiles(searchInput.value);
 }
 
+// Update expand/collapse button text
+function updateExpandCollapseButton() {
+    const allGroups = getAllGroups();
+
+    // If any group is collapsed, show "Expand Groups"
+    const anyCollapsed = allGroups.some(group => collapsedGroups.has(group));
+
+    if (anyCollapsed) {
+        expandCollapseBtn.textContent = 'Expand Groups';
+    } else {
+        expandCollapseBtn.textContent = 'Collapse Groups';
+    }
+}
+
+// Expand all groups
+function expandAllGroups() {
+    collapsedGroups.clear();
+    renderProfiles(searchInput.value);
+}
+
+// Collapse all groups
+function collapseAllGroups() {
+    const allGroups = getAllGroups();
+    allGroups.forEach(group => collapsedGroups.add(group));
+    renderProfiles(searchInput.value);
+}
+
+// Toggle expand/collapse all groups
+function toggleExpandCollapseAll() {
+    const allGroups = getAllGroups();
+    const anyCollapsed = allGroups.some(group => collapsedGroups.has(group));
+
+    if (anyCollapsed) {
+        expandAllGroups();
+    } else {
+        collapseAllGroups();
+    }
+}
+
 // Setup event listeners
 function setupEventListeners() {
     console.log('Setting up event listeners...');
 
     searchInput.addEventListener('input', (e) => {
         renderProfiles(e.target.value);
+    });
+
+    // Event delegation for profile card buttons (prevents memory leaks)
+    profilesList.addEventListener('click', async (e) => {
+        const target = e.target;
+
+        if (target.classList.contains('connect-btn')) {
+            e.stopPropagation();
+            connectToProfile(target.dataset.id);
+        } else if (target.classList.contains('edit-btn')) {
+            e.stopPropagation();
+            editProfile(target.dataset.id);
+        } else if (target.classList.contains('duplicate-btn')) {
+            e.stopPropagation();
+            duplicateProfile(target.dataset.id);
+        } else if (target.classList.contains('delete-btn')) {
+            e.stopPropagation();
+            console.log('Delete button clicked on card, id:', target.dataset.id);
+            await deleteProfile(target.dataset.id);
+        }
     });
 
     newProfileBtn.addEventListener('click', () => {
@@ -304,6 +403,28 @@ function setupEventListeners() {
 
     authMethodSelect.addEventListener('change', () => {
         updateAuthMethodVisibility();
+        checkFormChanged();
+    });
+
+    // Listen for changes on all form fields to enable/disable Save button
+    const formFields = [
+        'profile-name',
+        'profile-description',
+        'profile-host',
+        'profile-port',
+        'profile-username',
+        'profile-auth-method',
+        'profile-key-path',
+        'profile-password',
+        'profile-group'
+    ];
+
+    formFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('input', checkFormChanged);
+            field.addEventListener('change', checkFormChanged);
+        }
     });
 
     // Confirmation dialog buttons
@@ -371,6 +492,44 @@ function setupEventListeners() {
 
     deleteAllProfilesBtn.addEventListener('click', async () => {
         await deleteAllProfiles();
+    });
+
+    // Browse for SSH key file
+    browseKeyBtn.addEventListener('click', async () => {
+        await browseSshKey();
+    });
+
+    // Update checker
+    checkUpdatesBtn.addEventListener('click', async () => {
+        await checkForUpdates(false); // not silent, show notification
+    });
+
+    autoUpdateCheck.addEventListener('change', () => {
+        saveAutoUpdatePreference();
+    });
+
+    // Expand/collapse all groups button
+    expandCollapseBtn.addEventListener('click', () => {
+        toggleExpandCollapseAll();
+    });
+
+    // Filter button and popup
+    filterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFilterPopup();
+    });
+
+    clearFiltersBtn.addEventListener('click', () => {
+        clearGroupFilters();
+    });
+
+    // Close filter popup when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!filterPopup.classList.contains('hidden') &&
+            !filterPopup.contains(e.target) &&
+            !filterBtn.contains(e.target)) {
+            filterPopup.classList.add('hidden');
+        }
     });
 
     // Handle external links (open in browser)
@@ -442,6 +601,182 @@ function openSettings() {
 
 function closeSettings() {
     settingsModal.classList.add('hidden');
+}
+
+// Update checker functions
+function loadAutoUpdatePreference() {
+    const autoUpdate = localStorage.getItem('autoUpdateCheck');
+    // Default to true (checked) if not set
+    if (autoUpdate === null) {
+        autoUpdateCheck.checked = true;
+        saveAutoUpdatePreference();
+    } else {
+        autoUpdateCheck.checked = autoUpdate === 'true';
+    }
+}
+
+function saveAutoUpdatePreference() {
+    localStorage.setItem('autoUpdateCheck', autoUpdateCheck.checked);
+}
+
+async function checkForUpdates(silent = false) {
+    try {
+        const updateInfo = await invoke('check_for_updates');
+
+        if (updateInfo.update_available) {
+            // Update available
+            const message = `A new version is available!\n\nCurrent: v${updateInfo.current_version}\nLatest: v${updateInfo.latest_version}\n\nWould you like to download it?`;
+            const shouldDownload = await customConfirm(message, {
+                title: 'Update Available',
+                okText: 'Download',
+                cancelText: 'Later'
+            });
+
+            if (shouldDownload) {
+                // Open download URL in browser
+                await shell.open(updateInfo.download_url);
+            }
+        } else if (!silent) {
+            // No update available, only show if not silent
+            showToast('You are running the latest version!');
+        }
+    } catch (error) {
+        console.error('Failed to check for updates:', error);
+        if (!silent) {
+            showToast('Failed to check for updates: ' + error, 4000, 'error');
+        }
+    }
+}
+
+// Filter functions
+function loadFilterState() {
+    const savedFilters = localStorage.getItem('filteredGroups');
+    if (savedFilters) {
+        try {
+            const filtersArray = JSON.parse(savedFilters);
+
+            // Validate data structure
+            if (!Array.isArray(filtersArray)) {
+                throw new Error('Invalid filter data structure');
+            }
+
+            // Validate each item is a string
+            if (!filtersArray.every(item => typeof item === 'string')) {
+                throw new Error('Invalid filter group names');
+            }
+
+            filteredGroups = new Set(filtersArray);
+            updateFilterBadge();
+        } catch (error) {
+            console.error('Failed to load filter state:', error);
+            filteredGroups = new Set();
+
+            // Clear corrupted data
+            localStorage.removeItem('filteredGroups');
+
+            // Notify user
+            showToast('Filter preferences were reset due to corrupted data', 4000, 'error');
+        }
+    }
+}
+
+function saveFilterState() {
+    const filtersArray = Array.from(filteredGroups);
+    localStorage.setItem('filteredGroups', JSON.stringify(filtersArray));
+    updateFilterBadge();
+}
+
+function updateFilterBadge() {
+    const allGroups = getAllGroups();
+    const selectedGroups = allGroups.length - filteredGroups.size;
+
+    // Show badge unless all groups are selected
+    if (selectedGroups === allGroups.length && allGroups.length > 0) {
+        // All groups selected - hide badge
+        filterBadge.classList.add('hidden');
+    } else {
+        // Show number of selected groups (including 0)
+        filterBadge.textContent = selectedGroups;
+        filterBadge.classList.remove('hidden');
+    }
+}
+
+function getAllGroups() {
+    const groups = new Set();
+    profiles.forEach(profile => {
+        groups.add(profile.group || 'Ungrouped');
+    });
+    return Array.from(groups).sort();
+}
+
+function buildFilterGroupsList() {
+    const allGroups = getAllGroups();
+
+    if (allGroups.length === 0) {
+        filterGroupsList.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted);">No groups available</div>';
+        return;
+    }
+
+    let html = '';
+    allGroups.forEach(groupName => {
+        const isChecked = !filteredGroups.has(groupName);
+        const groupProfiles = profiles.filter(p => (p.group || 'Ungrouped') === groupName);
+
+        html += `
+            <div class="filter-group-item">
+                <label>
+                    <input type="checkbox"
+                           class="filter-group-checkbox"
+                           data-group="${escapeHtml(groupName)}"
+                           ${isChecked ? 'checked' : ''}>
+                    <span class="filter-group-name">${escapeHtml(groupName)}</span>
+                </label>
+                <span class="filter-group-count">${groupProfiles.length}</span>
+            </div>
+        `;
+    });
+
+    filterGroupsList.innerHTML = html;
+
+    // Debounced update function to prevent race conditions
+    const updateFilters = debounce(() => {
+        saveFilterState();
+        renderProfiles(searchInput.value);
+    }, 100);
+
+    // Add event listeners to checkboxes
+    document.querySelectorAll('.filter-group-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const groupName = e.target.dataset.group;
+            if (e.target.checked) {
+                // Show this group
+                filteredGroups.delete(groupName);
+            } else {
+                // Hide this group
+                filteredGroups.add(groupName);
+            }
+            updateFilters();
+        });
+    });
+}
+
+function toggleFilterPopup() {
+    const isHidden = filterPopup.classList.contains('hidden');
+
+    if (isHidden) {
+        // Build the list before showing
+        buildFilterGroupsList();
+        filterPopup.classList.remove('hidden');
+    } else {
+        filterPopup.classList.add('hidden');
+    }
+}
+
+function clearGroupFilters() {
+    filteredGroups.clear();
+    saveFilterState();
+    buildFilterGroupsList();
+    renderProfiles(searchInput.value);
 }
 
 // Theme functions
@@ -596,6 +931,23 @@ async function deleteAllProfiles() {
     }
 }
 
+// Browse for SSH key file
+async function browseSshKey() {
+    try {
+        const result = await invoke('browse_ssh_key');
+        if (result) {
+            // User selected a file, populate the key path input
+            document.getElementById('profile-key-path').value = result;
+            // Trigger form change detection
+            checkFormChanged();
+        }
+        // If result is null, user cancelled - do nothing
+    } catch (error) {
+        console.error('Failed to browse for SSH key:', error);
+        showToast('Failed to open file browser: ' + error, 4000, 'error');
+    }
+}
+
 // Open modal for new or edit profile
 function openModal(profile = null) {
     console.log('openModal called with profile:', profile);
@@ -622,6 +974,60 @@ function openModal(profile = null) {
 
     updateAuthMethodVisibility();
     profileModal.classList.remove('hidden');
+
+    // Capture original form values and reset Save button state
+    captureFormValues();
+    // For new profiles, enable Save button immediately
+    // For editing, disable until changes are made
+    if (profile) {
+        saveProfileBtn.disabled = true;
+    } else {
+        saveProfileBtn.disabled = false;
+    }
+}
+
+// Capture current form values (for tracking changes)
+function captureFormValues() {
+    originalFormValues = {
+        name: document.getElementById('profile-name').value,
+        description: document.getElementById('profile-description').value,
+        host: document.getElementById('profile-host').value,
+        port: document.getElementById('profile-port').value,
+        username: document.getElementById('profile-username').value,
+        auth_method: document.getElementById('profile-auth-method').value,
+        key_path: document.getElementById('profile-key-path').value,
+        password: document.getElementById('profile-password').value,
+        group: document.getElementById('profile-group').value
+    };
+}
+
+// Check if form has changed from original values
+function checkFormChanged() {
+    // If creating a new profile, always keep Save button enabled
+    if (!editingProfileId) {
+        saveProfileBtn.disabled = false;
+        return;
+    }
+
+    // Compare current values with original values
+    const currentValues = {
+        name: document.getElementById('profile-name').value,
+        description: document.getElementById('profile-description').value,
+        host: document.getElementById('profile-host').value,
+        port: document.getElementById('profile-port').value,
+        username: document.getElementById('profile-username').value,
+        auth_method: document.getElementById('profile-auth-method').value,
+        key_path: document.getElementById('profile-key-path').value,
+        password: document.getElementById('profile-password').value,
+        group: document.getElementById('profile-group').value
+    };
+
+    // Check if any field has changed
+    const hasChanged = Object.keys(originalFormValues).some(key =>
+        currentValues[key] !== originalFormValues[key]
+    );
+
+    saveProfileBtn.disabled = !hasChanged;
 }
 
 // Close modal
@@ -629,6 +1035,7 @@ function closeModal() {
     profileModal.classList.add('hidden');
     editingProfileId = null;
     profileForm.reset();
+    originalFormValues = {};
 }
 
 // Save profile (create or update)
@@ -662,6 +1069,9 @@ async function saveProfile() {
     };
 
     try {
+        // Capture whether we're editing or creating before closeModal resets editingProfileId
+        const isEditing = !!editingProfileId;
+
         if (editingProfileId) {
             console.log('Updating profile:', profileData);
             await invoke('update_profile', { profile: profileData });
@@ -672,7 +1082,7 @@ async function saveProfile() {
 
         await loadProfiles();
         closeModal();
-        showToast(editingProfileId ? 'Profile updated successfully!' : 'Profile created successfully!');
+        showToast(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
     } catch (error) {
         console.error('Failed to save profile:', error);
         showToast('Failed to save profile: ' + error, 4000, 'error');

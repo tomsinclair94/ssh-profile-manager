@@ -14,7 +14,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="header-title">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.1.2</span>
+                    <span class="version">v0.2.0</span>
                 </div>
             </div>
             <div class="header-right">
@@ -25,7 +25,25 @@
 
         <!-- Search and Filter -->
         <div class="search-bar">
-            <input type="text" id="search-input" placeholder="Search profiles..." />
+            <div class="search-controls">
+                <input type="text" id="search-input" placeholder="Search profiles..." />
+                <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
+                <button id="filter-btn" class="btn btn-secondary">
+                    Filter Groups
+                    <span id="filter-badge" class="filter-badge hidden">0</span>
+                </button>
+            </div>
+
+            <!-- Filter Popup -->
+            <div id="filter-popup" class="filter-popup hidden">
+                <div class="filter-popup-header">
+                    <h3>Filter Groups</h3>
+                    <button id="clear-filters-btn" class="btn btn-secondary btn-small">Clear All</button>
+                </div>
+                <div id="filter-groups-list" class="filter-groups-list">
+                    <!-- Group checkboxes will be dynamically added here -->
+                </div>
+            </div>
         </div>
 
         <!-- Profiles List -->
@@ -54,24 +72,24 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="profile-host">Hostname <span class="required">*</span></label>
-                            <input type="text" id="profile-host" required placeholder="e.g., example.com or 192.168.1.1">
+                            <input type="text" id="profile-host" required placeholder="e.g., example.com or 192.168.1.1" spellcheck="false" autocorrect="off" autocapitalize="off">
                         </div>
 
                         <div class="form-group">
                             <label for="profile-port">Port</label>
-                            <input type="number" id="profile-port" value="22" min="1" max="65535">
+                            <input type="number" id="profile-port" value="22" min="1" max="65535" spellcheck="false" autocorrect="off">
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label for="profile-username">Username <span class="required">*</span></label>
-                        <input type="text" id="profile-username" required placeholder="e.g., root">
+                        <input type="text" id="profile-username" required placeholder="e.g., root" spellcheck="false" autocorrect="off" autocapitalize="off">
                     </div>
 
                     <div class="form-group">
                         <label for="profile-auth-method">Authentication Method</label>
                         <select id="profile-auth-method">
-                            <option value="none">None (Prompt on Connect)</option>
+                            <option value="none">None (Keyboard-Interactive)</option>
                             <option value="key">SSH Key</option>
                             <option value="password">Password</option>
                         </select>
@@ -80,19 +98,23 @@
                     <!-- SSH Key Path (shown when auth-method is 'key') -->
                     <div class="form-group hidden" id="key-path-group">
                         <label for="profile-key-path">SSH Key Path</label>
-                        <input type="text" id="profile-key-path" placeholder="e.g., ~/.ssh/id_rsa">
+                        <div class="input-group">
+                            <input type="text" id="profile-key-path" placeholder="e.g., ~/.ssh/id_rsa" spellcheck="false" autocorrect="off" autocapitalize="off">
+                            <button type="button" class="btn btn-secondary btn-browse" id="browse-key-btn">Browse</button>
+                        </div>
+                        <small id="browse-hint"></small>
                     </div>
 
                     <!-- Password (shown when auth-method is 'password') -->
                     <div class="form-group hidden" id="password-group">
                         <label for="profile-password">Password</label>
-                        <input type="password" id="profile-password" placeholder="Enter password">
+                        <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
                         <small>Stored securely in system keychain</small>
                     </div>
 
                     <div class="form-group">
                         <label for="profile-group">Group</label>
-                        <input type="text" id="profile-group" placeholder="e.g., Production, Development">
+                        <input type="text" id="profile-group" placeholder="e.g., Production, Development" spellcheck="false" autocorrect="off" autocapitalize="off">
                     </div>
 
                     <div class="form-actions">
@@ -101,7 +123,7 @@
                         </div>
                         <div class="form-actions-right">
                             <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Save Profile</button>
+                            <button type="submit" class="btn btn-primary" id="save-profile-btn">Save Profile</button>
                         </div>
                     </div>
                 </form>
@@ -165,6 +187,21 @@
                         <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.</p>
                     </div>
 
+                    <!-- Updates Section -->
+                    <div class="settings-section">
+                        <h3>Updates</h3>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="auto-update-check" checked>
+                                <span>Check for updates on launch</span>
+                            </label>
+                        </div>
+                        <div class="settings-actions">
+                            <button id="check-updates-btn" class="btn btn-secondary">Check for Updates</button>
+                        </div>
+                        <p class="settings-help">Automatically check for new versions when the app starts, or check manually.</p>
+                    </div>
+
                     <!-- About Section -->
                     <div class="settings-section settings-about">
                         <h3>About</h3>
@@ -175,7 +212,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <span class="about-value">0.1.2</span>
+                                <span class="about-value">0.2.0</span>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>

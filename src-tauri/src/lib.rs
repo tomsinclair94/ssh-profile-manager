@@ -409,9 +409,8 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
             }
         }
     } else {
-        // Delete password from keychain if auth method changed
-        delete_password(&profile.id)
-            .map_err(|e| format!("Failed to remove old password: {}", e))?;
+        // Try to delete password from keychain if auth method changed (ignore errors if no password exists)
+        let _ = delete_password(&profile.id);
     }
 
     Ok(())
@@ -506,18 +505,23 @@ async fn save_profiles_to_file(
     default_filename: String,
 ) -> Result<bool, String> {
     use tauri::async_runtime::spawn_blocking;
+    use tokio::time::timeout;
 
-    // Show save dialog in a blocking context
-    let result = spawn_blocking(move || {
-        // Use rfd (native file dialog) which works well with Tauri
-        let file_path = rfd::FileDialog::new()
-            .set_file_name(&default_filename)
-            .add_filter("JSON", &["json"])
-            .save_file();
+    // Show save dialog in a blocking context with 2-minute timeout
+    let result = timeout(
+        std::time::Duration::from_secs(120),
+        spawn_blocking(move || {
+            // Use rfd (native file dialog) which works well with Tauri
+            let file_path = rfd::FileDialog::new()
+                .set_file_name(&default_filename)
+                .add_filter("JSON", &["json"])
+                .save_file();
 
-        file_path
-    })
+            file_path
+        })
+    )
     .await
+    .map_err(|_| "File dialog timed out".to_string())?
     .map_err(|e| format!("Failed to show dialog: {}", e))?;
 
     match result {
@@ -529,6 +533,113 @@ async fn save_profiles_to_file(
         }
         None => Ok(false), // User cancelled
     }
+}
+
+#[tauri::command]
+async fn browse_ssh_key() -> Result<Option<String>, String> {
+    use tauri::async_runtime::spawn_blocking;
+    use tokio::time::timeout;
+
+    // Determine starting directory: prefer ~/.ssh, fallback to home
+    let start_dir = match dirs::home_dir() {
+        Some(home) => {
+            let ssh_dir = home.join(".ssh");
+            if ssh_dir.exists() && ssh_dir.is_dir() {
+                ssh_dir
+            } else {
+                home
+            }
+        }
+        None => std::env::current_dir().unwrap_or_default(),
+    };
+
+    // Show open file dialog in a blocking context with 2-minute timeout
+    let result = timeout(
+        std::time::Duration::from_secs(120),
+        spawn_blocking(move || {
+            // Use rfd (native file dialog) which works well with Tauri
+            let file_path = rfd::FileDialog::new()
+                .set_title("Select SSH Key File")
+                .set_directory(&start_dir)
+                .pick_file();
+
+            file_path
+        })
+    )
+    .await
+    .map_err(|_| "File dialog timed out".to_string())?
+    .map_err(|e| format!("Failed to show dialog: {}", e))?;
+
+    match result {
+        Some(path) => Ok(Some(path.to_string_lossy().to_string())),
+        None => Ok(None), // User cancelled
+    }
+}
+
+// Update checker structures
+#[derive(Debug, Serialize, Deserialize)]
+struct UpdateInfo {
+    current_version: String,
+    latest_version: String,
+    update_available: bool,
+    download_url: String,
+}
+
+#[tauri::command]
+async fn check_for_updates() -> Result<UpdateInfo, String> {
+    // Current version from Cargo.toml
+    const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    // Create async HTTP client with 10-second timeout
+    let client = reqwest::Client::builder()
+        .user_agent("SSH-Profile-Manager")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // Fetch latest release from GitHub API
+    let response = client
+        .get("https://api.github.com/repos/tomsinclair94/ssh-profile-manager/releases/latest")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch releases: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("GitHub API returned status: {}", response.status()));
+    }
+
+    let release: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+    let latest_version = release["tag_name"]
+        .as_str()
+        .ok_or("No tag_name in release")?
+        .trim_start_matches('v')
+        .to_string();
+
+    let download_url = release["html_url"]
+        .as_str()
+        .ok_or("No html_url in release")?
+        .to_string();
+
+    // Use semantic versioning for proper version comparison
+    use semver::Version;
+    let current = Version::parse(CURRENT_VERSION)
+        .map_err(|e| format!("Invalid current version: {}", e))?;
+    let latest = Version::parse(&latest_version)
+        .map_err(|e| format!("Invalid latest version: {}", e))?;
+
+    // Update is available only if latest > current
+    let update_available = latest > current;
+
+    Ok(UpdateInfo {
+        current_version: CURRENT_VERSION.to_string(),
+        latest_version,
+        update_available,
+        download_url,
+    })
 }
 
 #[tauri::command]
@@ -594,9 +705,9 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
             .spawn()
             .map_err(|e| format!("Failed to launch terminal: {}", e))?;
 
-        // Hide the app window after launching terminal
+        // Minimize the app window after launching terminal
         if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.hide();
+            let _ = window.minimize();
         }
     }
 
@@ -622,9 +733,9 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
             .spawn()
             .map_err(|e| format!("Failed to launch terminal: {}", e))?;
 
-        // Hide the app window after launching terminal
+        // Minimize the app window after launching terminal
         if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.hide();
+            let _ = window.minimize();
         }
     }
 
@@ -650,9 +761,9 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
                 .spawn()
                 .is_ok()
             {
-                // Hide the app window after launching terminal
+                // Minimize the app window after launching terminal
                 if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.hide();
+                    let _ = window.minimize();
                 }
                 return Ok(());
             }
@@ -698,6 +809,8 @@ pub fn run() {
             export_profiles,
             import_profiles,
             save_profiles_to_file,
+            browse_ssh_key,
+            check_for_updates,
             connect_ssh
         ])
         .run(tauri::generate_context!())

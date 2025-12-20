@@ -1,6 +1,6 @@
 [package]
 name = "ssh-profile-manager"
-version = "0.1.2"
+version = "0.2.0"
 description = "SSH Profile Manager - A lightweight SSH client"
 authors = ["you"]
 license = ""
@@ -31,3 +31,6 @@ dirs = "5.0"
 shellexpand = "3.1"
 chrono = "0.4"
 rfd = "0.15"
+reqwest = { version = "0.11", features = ["json"] }
+semver = "1.0"
+tokio = { version = "1", features = ["time"] }
