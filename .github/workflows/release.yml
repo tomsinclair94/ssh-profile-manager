@@ -18,10 +18,11 @@ jobs:
             target: aarch64-apple-darwin
             bundle-type: dmg
             file-pattern: 'src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg'
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            bundle-type: msi
-            file-pattern: 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi'
+          # Windows build disabled during development
+          # - platform: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   bundle-type: msi
+          #   file-pattern: 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi'
 
     runs-on: ${{ matrix.platform }}
 

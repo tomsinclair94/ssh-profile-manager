@@ -93,7 +93,7 @@ The app uses GitHub Actions to automatically build and release installers when a
 
 **GitHub Actions Workflow:** `.github/workflows/release.yml`
 - Builds DMG for macOS (Apple Silicon only)
-- Builds MSI for Windows
+- Windows build currently disabled during development (commented out)
 - Creates GitHub release with installers attached
 - Requires `contents: write` permission to create releases
 
@@ -150,7 +150,22 @@ After GitHub Actions completes:
 - Release appears at: https://github.com/tomsinclair94/ssh-profile-manager/releases
 - Contains:
   - macOS DMG (Apple Silicon / ARM64)
-  - Windows MSI installer
+  - Windows MSI installer (currently disabled during development)
+
+### Known Release Issues
+
+**macOS "App is Damaged" Error:**
+- DMG files built by GitHub Actions show "damaged and can't be opened" error
+- This happens because the app is **not code-signed**
+- Local builds work fine because macOS doesn't quarantine locally-built apps
+- Downloaded apps require an Apple Developer certificate ($99/year) to avoid this
+
+**Solutions:**
+1. **For users:** Right-click app → "Open" (instead of double-click) to bypass Gatekeeper
+2. **Or run:** `xattr -cr "/Applications/SSH Profile Manager.app"` to remove quarantine flag
+3. **For production:** Need to add code signing to GitHub Actions workflow (requires Apple Developer account)
+
+**Current Status:** App works perfectly when built locally. GitHub releases require manual override by users.
 
 ## Data Storage
 
