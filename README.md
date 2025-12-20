@@ -1,6 +1,6 @@
 # SSH Profile Manager
 
-A lightweight, cross-platform SSH profile manager with a modern GUI. Manage your SSH connections without the bloat of traditional Electron-based terminal applications.
+A lightweight SSH profile manager for macOS and Windows with a modern GUI. Manage your SSH connections without the bloat of traditional Electron-based terminal applications.
 
 ## Why SSH Profile Manager?
 
@@ -39,7 +39,6 @@ Tired of memorizing SSH commands and digging through your bash history? Want a G
 - Works with native terminals:
   - macOS: Terminal.app
   - Windows: Windows Terminal / cmd
-  - Linux: gnome-terminal, konsole, xterm
 
 ## Screenshots
 
@@ -56,9 +55,6 @@ _Screenshots coming soon_
 1. Download the latest `.msi` installer from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 2. Run the installer
 3. Launch from Start Menu
-
-### Linux
-_Coming soon_
 
 ## Usage
 
@@ -98,7 +94,6 @@ _Coming soon_
 - Platform-specific dependencies:
   - **macOS:** Xcode Command Line Tools
   - **Windows:** Microsoft C++ Build Tools
-  - **Linux:** See [Tauri prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
 
 ### Setup
 ```bash
@@ -121,7 +116,6 @@ npm run build
 # Output locations:
 # macOS: src-tauri/target/release/bundle/macos/
 # Windows: src-tauri/target/release/bundle/msi/
-# Linux: src-tauri/target/release/bundle/appimage/
 ```
 
 ## Tech Stack
@@ -150,7 +144,6 @@ ssh-profile-manager/
 - **Profiles:** SQLite database in application data directory
   - macOS: `~/Library/Application Support/ssh-profile-manager/profiles.db`
   - Windows: `%APPDATA%\ssh-profile-manager\profiles.db`
-  - Linux: `~/.local/share/ssh-profile-manager/profiles.db`
 - **Passwords:** Stored securely in system keychain/credential manager
 
 ## Roadmap
@@ -168,7 +161,6 @@ ssh-profile-manager/
 ### Platform Support
 - [x] macOS (Intel & Apple Silicon)
 - [ ] Windows (untested, should work)
-- [ ] Linux (coming soon)
 
 ## Contributing
 
