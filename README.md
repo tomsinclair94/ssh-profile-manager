@@ -4,7 +4,7 @@ A lightweight SSH profile manager for macOS and Windows with a modern GUI. Manag
 
 ## Why SSH Profile Manager?
 
-Tired of memorizing SSH commands and digging through your bash history? Want a GUI for managing SSH connections but don't want to install a 100MB+ Electron app? SSH Profile Manager gives you the best of both worlds:
+Tired of memorising SSH commands and digging through your bash history? Want a GUI for managing SSH connections but don't want to install a 100MB+ Electron app? SSH Profile Manager gives you the best of both worlds:
 
 - **Lightweight:** ~3-5MB bundle size (vs 100MB+ for Electron apps)
 - **Fast:** Built with Tauri and Rust for native performance
@@ -16,7 +16,7 @@ Tired of memorizing SSH commands and digging through your bash history? Want a G
 
 ### Profile Management
 - Create, edit, delete, and duplicate SSH profiles
-- Organize profiles into collapsible groups
+- Organise profiles into collapsible groups
 - Search and filter profiles by name, host, or group
 - Three authentication methods:
   - SSH Key (with path to key file)
@@ -27,22 +27,18 @@ Tired of memorizing SSH commands and digging through your bash history? Want a G
 
 ### Modern UI/UX
 - Dark and Light themes with system preference detection
-- Color-coded action buttons for quick recognition
+- Colour-coded action buttons for quick recognition
 - Toast notifications for success/error feedback
 - Smooth animations and hover effects
 - Keyboard-friendly interface
 
 ### SSH Connection
 - One-click connect launches your system terminal
-- App automatically minimizes when connecting
+- App automatically minimises when connecting
 - Terminal gets focus automatically
 - Works with native terminals:
   - macOS: Terminal.app
   - Windows: Windows Terminal / cmd
-
-## Screenshots
-
-_Screenshots coming soon_
 
 ## Installation
 
@@ -50,6 +46,7 @@ _Screenshots coming soon_
 1. Download the latest `.dmg` from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 2. Open the DMG and drag "SSH Profile Manager" to Applications
 3. Launch from Applications folder
+4. **Important:** Right-click the app and select "Open" the first time to bypass Gatekeeper (or run `xattr -cr "/Applications/SSH Profile Manager.app"`)
 
 ### Windows
 1. Download the latest `.msi` installer from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
@@ -67,17 +64,17 @@ _Screenshots coming soon_
 3. Optional fields:
    - **Description:** Notes about this connection
    - **Port:** SSH port (defaults to 22)
-   - **Group:** Organize profiles into groups
+   - **Group:** Organise profiles into groups
    - **Auth Method:** Choose how to authenticate
 
 ### Connecting
 1. Find your profile in the list (use search if needed)
 2. Click the green "Connect" button
 3. Your system terminal will open with the SSH connection
-4. The app minimizes automatically
+4. The app minimises automatically
 
-### Organizing Profiles
-- Use the **Group** field to organize related profiles
+### Organising Profiles
+- Use the **Group** field to organise related profiles
 - Click the chevron (▶/▼) next to group names to collapse/expand
 - Use the search bar to filter profiles
 
@@ -146,34 +143,18 @@ ssh-profile-manager/
   - Windows: `%APPDATA%\ssh-profile-manager\profiles.db`
 - **Passwords:** Stored securely in system keychain/credential manager
 
-## Roadmap
+## Platform Support
 
-### Planned Features
-- [ ] Embedded terminal (xterm.js integration)
-- [ ] Recent connections list
-- [ ] Profile templates
-- [ ] Keyboard shortcuts
-- [ ] SFTP support
-- [ ] Port forwarding configuration
-- [ ] Jump host chains
-- [ ] Connection history and logs
-
-### Platform Support
-- [x] macOS (Apple Silicon / ARM64)
-- [ ] Windows (untested, should work)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- ✅ macOS (Apple Silicon / ARM64)
+- ⚠️ Windows (builds but untested)
 
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details
 
-## Acknowledgments
+## Acknowledgements
 
 Built with [Tauri](https://tauri.app/) - a framework for building tiny, fast binaries for all major platforms.
 
-## Support
-
-Found a bug or have a feature request? Please [open an issue](https://github.com/tomsinclair94/ssh-profile-manager/issues).
+**Author:** Tom Sinclair
+**AI Assistant:** Claude (Anthropic)

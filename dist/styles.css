@@ -70,9 +70,23 @@ body {
     height: 32px;
 }
 
+.header-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
 .app-header h1 {
     font-size: 20px;
     font-weight: 600;
+    margin: 0;
+}
+
+.version {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    opacity: 0.7;
 }
 
 .btn-settings {

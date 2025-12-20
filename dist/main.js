@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Use Tauri's injected API
 const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.tauri?.invoke;
+const shell = window.__TAURI__?.shell;
 
 // State
 let profiles = [];
@@ -371,6 +372,20 @@ function setupEventListeners() {
     deleteAllProfilesBtn.addEventListener('click', async () => {
         await deleteAllProfiles();
     });
+
+    // Handle external links (open in browser)
+    document.addEventListener('click', async (e) => {
+        const target = e.target.closest('a[target="_blank"]');
+        if (target && target.href) {
+            e.preventDefault();
+            try {
+                await shell.open(target.href);
+            } catch (error) {
+                console.error('Failed to open link:', error);
+                showToast('Failed to open link', 'error');
+            }
+        }
+    });
 }
 
 // Custom confirm dialog
@@ -593,7 +608,7 @@ function openModal(profile = null) {
         document.getElementById('profile-host').value = profile.host;
         document.getElementById('profile-port').value = profile.port || 22;
         document.getElementById('profile-username').value = profile.username;
-        document.getElementById('profile-auth-method').value = profile.auth_method || 'key';
+        document.getElementById('profile-auth-method').value = profile.auth_method || 'none';
         document.getElementById('profile-key-path').value = profile.key_path || '';
         document.getElementById('profile-group').value = profile.group || '';
         deleteProfileBtn.classList.remove('hidden');
@@ -601,7 +616,7 @@ function openModal(profile = null) {
         modalTitle.textContent = 'New Profile';
         profileForm.reset();
         document.getElementById('profile-port').value = 22;
-        document.getElementById('profile-auth-method').value = 'key';
+        document.getElementById('profile-auth-method').value = 'none';
         deleteProfileBtn.classList.add('hidden');
     }
 
@@ -695,7 +710,7 @@ function duplicateProfile(id) {
     document.getElementById('profile-host').value = duplicatedProfile.host;
     document.getElementById('profile-port').value = duplicatedProfile.port || 22;
     document.getElementById('profile-username').value = duplicatedProfile.username;
-    document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'key';
+    document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'none';
     document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
     document.getElementById('profile-password').value = ''; // Don't copy password for security
     document.getElementById('profile-group').value = duplicatedProfile.group || '';

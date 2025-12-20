@@ -85,7 +85,7 @@ npm run build
 
 ## Release Management
 
-### Current Version: 0.1.0
+### Current Version: 0.1.1
 
 ### Automated Release Process
 
@@ -106,10 +106,12 @@ The app uses GitHub Actions to automatically build and release installers when a
    - Follow semantic versioning: MAJOR.MINOR.PATCH
 
 2. **Update All Version References**
-   Update the version in these THREE locations:
+   Update the version in these FIVE locations:
    - `src-tauri/tauri.conf.json` (line 4: "version": "X.X.X")
+   - `src-tauri/Cargo.toml` (line 3: version = "X.X.X")
    - `package.json` (line 3: "version": "X.X.X")
-   - `dist/index.html` (line 175: `<span class="about-value">X.X.X</span>`)
+   - `dist/index.html` (line 17: `<span class="version">vX.X.X</span>` - header)
+   - `dist/index.html` (line 175: `<span class="about-value">X.X.X</span>` - About section)
 
 3. **Create Git Tag**
    After updating files, prepare the git commands but DON'T execute them:
@@ -131,17 +133,27 @@ The app uses GitHub Actions to automatically build and release installers when a
 
 1. **Tauri Config** (`src-tauri/tauri.conf.json`):
    ```json
-   "version": "0.1.0"
+   "version": "0.1.1"
    ```
 
-2. **Package.json** (`package.json`):
+2. **Cargo Manifest** (`src-tauri/Cargo.toml`):
+   ```toml
+   version = "0.1.1"
+   ```
+
+3. **Package.json** (`package.json`):
    ```json
-   "version": "0.1.0"
+   "version": "0.1.1"
    ```
 
-3. **About Section** (`dist/index.html`):
+4. **Header Version** (`dist/index.html`):
    ```html
-   <span class="about-value">0.1.0</span>
+   <span class="version">v0.1.1</span>
+   ```
+
+5. **About Section** (`dist/index.html`):
+   ```html
+   <span class="about-value">0.1.1</span>
    ```
 
 ### Release Output
@@ -297,12 +309,24 @@ CREATE TABLE profiles (
 
 - **Tauri config:** `src-tauri/tauri.conf.json`
 - **Bundle ID:** `com.sshprofilemanager.app` (currently ends with .app, warned by Tauri)
-- **App version:** 0.1.0
+- **App version:** 0.1.1
 - **Window size:** 800x600 (resizable)
 
 ## Recent Changes
 
-### Latest Session (December 2024 - Release Setup)
+### Latest Session (December 2024 - v0.1.1 Release)
+1. **GitHub Link Fix**: Added Tauri shell plugin to open external links in browser
+2. **Icon Quality**: Upgraded header icon from 32x32 to 128x128@2x for better resolution
+3. **Default Auth Method**: Changed from "SSH Key" to "None (Prompt on Connect)"
+4. **About Section**: Added author credits (Tom Sinclair) and AI assistant credit (Claude)
+5. **Tauri v2 Permissions**: Added required capabilities for shell:open and app:hide
+6. **Header Version Display**: Added version number (v0.1.1) to app header in smaller font
+7. **Version Updates**: Bumped to v0.1.1 in all 5 locations (2 in index.html, tauri.conf.json, Cargo.toml, package.json)
+8. **README Cleanup**: Converted to British English, removed Roadmap and Contributing sections for private use
+9. **CHANGELOG**: Created CHANGELOG.md following Keep a Changelog format with v0.1.0 and v0.1.1 entries
+10. **Shell Plugin**: Added tauri-plugin-shell dependency and registration in lib.rs
+
+### Previous Session (December 2024 - Release Setup)
 1. **Automated Releases**: Created GitHub Actions workflow for automatic DMG/MSI builds
 2. **Version Management**: Documented release process in CLAUDE.md
 3. **README Updates**: Removed all Linux references (macOS and Windows only)
