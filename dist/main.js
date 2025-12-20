@@ -176,7 +176,7 @@ function renderProfiles(filter = '') {
                         </div>
                         <div class="profile-info-item">
                             <span class="profile-info-label">Auth:</span>
-                            <span>${profile.auth_method || 'key'}</span>
+                            <span>${escapeHtml(profile.auth_method || 'key')}</span>
                         </div>
                     </div>
                     ${profile.description ? `<div class="profile-card-description">${escapeHtml(profile.description)}</div>` : ''}

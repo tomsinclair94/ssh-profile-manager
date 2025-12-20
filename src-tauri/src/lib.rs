@@ -21,6 +21,92 @@ pub struct Profile {
     pub group: Option<String>,
 }
 
+// Input validation functions
+fn validate_hostname(host: &str) -> Result<(), String> {
+    if host.is_empty() {
+        return Err("Hostname cannot be empty".to_string());
+    }
+    if host.len() > 253 {
+        return Err("Hostname too long (max 253 characters)".to_string());
+    }
+    // Check for dangerous characters that could break shell commands
+    if host.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>')) {
+        return Err("Hostname contains invalid characters".to_string());
+    }
+    // Basic hostname validation - alphanumeric, dots, hyphens only
+    if !host.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_') {
+        return Err("Hostname can only contain letters, numbers, dots, hyphens, and underscores".to_string());
+    }
+    Ok(())
+}
+
+fn validate_username(username: &str) -> Result<(), String> {
+    if username.is_empty() {
+        return Err("Username cannot be empty".to_string());
+    }
+    if username.len() > 32 {
+        return Err("Username too long (max 32 characters)".to_string());
+    }
+    // Check for dangerous characters
+    if username.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>' | ' ')) {
+        return Err("Username contains invalid characters".to_string());
+    }
+    // Allow alphanumeric, underscore, hyphen, dot (common in usernames)
+    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') {
+        return Err("Username can only contain letters, numbers, underscores, hyphens, and dots".to_string());
+    }
+    Ok(())
+}
+
+fn validate_profile_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Profile name cannot be empty".to_string());
+    }
+    if name.len() > 100 {
+        return Err("Profile name too long (max 100 characters)".to_string());
+    }
+    // Don't allow control characters or HTML special chars
+    if name.chars().any(|c| c.is_control() || matches!(c, '<' | '>' | '"' | '\'')) {
+        return Err("Profile name contains invalid characters".to_string());
+    }
+    Ok(())
+}
+
+fn validate_port(port: i32) -> Result<u16, String> {
+    if port < 1 || port > 65535 {
+        return Err("Port must be between 1 and 65535".to_string());
+    }
+    Ok(port as u16)
+}
+
+fn validate_key_path(path: &str) -> Result<PathBuf, String> {
+    if path.is_empty() {
+        return Err("Key path cannot be empty".to_string());
+    }
+
+    let expanded = shellexpand::tilde(path);
+    let path_buf = PathBuf::from(expanded.as_ref());
+
+    // Check if file exists
+    if !path_buf.exists() {
+        return Err(format!("Key file does not exist: {}", path));
+    }
+
+    // Get canonical path to resolve symlinks and relative paths
+    let canonical = std::fs::canonicalize(&path_buf)
+        .map_err(|e| format!("Invalid key path: {}", e))?;
+
+    // Ensure it's in a safe location (home directory or .ssh)
+    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
+    let ssh_dir = home.join(".ssh");
+
+    if !canonical.starts_with(&ssh_dir) && !canonical.starts_with(&home) {
+        return Err("Key path must be within your home directory".to_string());
+    }
+
+    Ok(canonical)
+}
+
 // Database wrapper
 pub struct Database {
     conn: Mutex<Connection>,
@@ -223,6 +309,22 @@ struct CreateProfileInput {
 
 #[tauri::command]
 fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<String, String> {
+    // Validate all inputs
+    validate_profile_name(&profile.name)?;
+    validate_hostname(&profile.host)?;
+    validate_username(&profile.username)?;
+
+    let port = validate_port(profile.port.unwrap_or(22))? as i32;
+
+    // Validate key path if using key authentication
+    if profile.auth_method == "key" {
+        if let Some(ref key_path) = profile.key_path {
+            if !key_path.is_empty() {
+                validate_key_path(key_path)?;
+            }
+        }
+    }
+
     let id = Uuid::new_v4().to_string();
 
     let new_profile = Profile {
@@ -230,7 +332,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         name: profile.name,
         description: profile.description,
         host: profile.host,
-        port: profile.port.unwrap_or(22),
+        port,
         username: profile.username,
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
@@ -243,7 +345,9 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
     // Store password in keychain if provided
     if profile.auth_method == "password" {
         if let Some(password) = profile.password {
-            store_password(&id, &password)?;
+            if !password.is_empty() {
+                store_password(&id, &password)?;
+            }
         }
     }
 
@@ -266,12 +370,28 @@ struct UpdateProfileInput {
 
 #[tauri::command]
 fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<(), String> {
+    // Validate all inputs
+    validate_profile_name(&profile.name)?;
+    validate_hostname(&profile.host)?;
+    validate_username(&profile.username)?;
+
+    let port = validate_port(profile.port.unwrap_or(22))? as i32;
+
+    // Validate key path if using key authentication
+    if profile.auth_method == "key" {
+        if let Some(ref key_path) = profile.key_path {
+            if !key_path.is_empty() {
+                validate_key_path(key_path)?;
+            }
+        }
+    }
+
     let updated_profile = Profile {
         id: profile.id.clone(),
         name: profile.name,
         description: profile.description,
         host: profile.host,
-        port: profile.port.unwrap_or(22),
+        port,
         username: profile.username,
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
@@ -290,7 +410,8 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         }
     } else {
         // Delete password from keychain if auth method changed
-        let _ = delete_password(&profile.id);
+        delete_password(&profile.id)
+            .map_err(|e| format!("Failed to remove old password: {}", e))?;
     }
 
     Ok(())
@@ -417,39 +538,57 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
         .map_err(|e| format!("Failed to get profile: {}", e))?
         .ok_or_else(|| "Profile not found".to_string())?;
 
-    // Build SSH command
-    let mut ssh_command = Command::new("ssh");
+    // Validate inputs before connecting (defense in depth)
+    validate_hostname(&profile.host)?;
+    validate_username(&profile.username)?;
+    validate_port(profile.port)?;
+
+    // Build SSH command arguments safely
+    let mut ssh_args: Vec<String> = vec![];
 
     // Add port if not default
     if profile.port != 22 {
-        ssh_command.arg("-p").arg(profile.port.to_string());
+        ssh_args.push("-p".to_string());
+        ssh_args.push(profile.port.to_string());
     }
 
-    // Add key path if specified
+    // Add key path if specified and validated
     if profile.auth_method == "key" {
         if let Some(key_path) = &profile.key_path {
-            let expanded_path = shellexpand::tilde(key_path);
-            ssh_command.arg("-i").arg(expanded_path.as_ref());
+            if !key_path.is_empty() {
+                let validated_path = validate_key_path(key_path)?;
+                ssh_args.push("-i".to_string());
+                ssh_args.push(validated_path.to_string_lossy().to_string());
+            }
         }
     }
 
-    // Build connection string
+    // Build connection string (already validated above)
     let connection = format!("{}@{}", profile.username, profile.host);
-    ssh_command.arg(connection);
+    ssh_args.push(connection);
 
     // Open in system terminal
     #[cfg(target_os = "macos")]
     {
-        let ssh_cmd_str = format!("ssh {}",
-            ssh_command.get_args()
-                .map(|s| s.to_string_lossy().to_string())
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
+        // Properly escape the SSH command for AppleScript
+        // Each argument must be shell-escaped to prevent injection
+        fn shell_escape(s: &str) -> String {
+            // Replace single quotes with '\'' and wrap in single quotes
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+
+        // Build the escaped SSH command
+        let escaped_args: Vec<String> = ssh_args.iter()
+            .map(|arg| shell_escape(arg))
+            .collect();
+        let ssh_cmd_str = format!("ssh {}", escaped_args.join(" "));
+
+        // Escape the entire command for AppleScript (use backslash escaping for quotes)
+        let applescript_escaped = ssh_cmd_str.replace('\\', "\\\\").replace('"', "\\\"");
 
         Command::new("osascript")
             .arg("-e")
-            .arg(format!("tell application \"Terminal\" to do script \"{}\"", ssh_cmd_str))
+            .arg(format!("tell application \"Terminal\" to do script \"{}\"", applescript_escaped))
             .arg("-e")
             .arg("tell application \"Terminal\" to activate")
             .spawn()
@@ -463,17 +602,23 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
 
     #[cfg(target_os = "windows")]
     {
+        // Windows cmd escaping: escape quotes and special characters
+        fn cmd_escape(s: &str) -> String {
+            // For Windows, wrap in quotes and escape internal quotes
+            format!("\"{}\"", s.replace('"', "\"\""))
+        }
+
+        let escaped_args: Vec<String> = ssh_args.iter()
+            .map(|arg| cmd_escape(arg))
+            .collect();
+        let ssh_cmd = format!("ssh {}", escaped_args.join(" "));
+
         Command::new("cmd")
             .arg("/c")
             .arg("start")
             .arg("cmd")
             .arg("/k")
-            .arg(&format!("ssh {}",
-                ssh_command.get_args()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            ))
+            .arg(ssh_cmd)
             .spawn()
             .map_err(|e| format!("Failed to launch terminal: {}", e))?;
 
@@ -485,19 +630,23 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
 
     #[cfg(target_os = "linux")]
     {
+        // For Linux, we can safely use shell_escape similar to macOS
+        fn shell_escape(s: &str) -> String {
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+
+        let escaped_args: Vec<String> = ssh_args.iter()
+            .map(|arg| shell_escape(arg))
+            .collect();
+        let ssh_cmd = format!("ssh {}", escaped_args.join(" "));
+
         // Try common terminal emulators
         let terminals = vec!["gnome-terminal", "konsole", "xterm"];
-        let ssh_cmd_str = format!("ssh {}",
-            ssh_command.get_args()
-                .map(|s| s.to_string_lossy().to_string())
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
 
         for terminal in terminals {
             if Command::new(terminal)
                 .arg("-e")
-                .arg(&ssh_cmd_str)
+                .arg(&ssh_cmd)
                 .spawn()
                 .is_ok()
             {

@@ -85,7 +85,7 @@ npm run build
 
 ## Release Management
 
-### Current Version: 0.1.1
+### Current Version: 0.1.2
 
 ### Automated Release Process
 
@@ -133,27 +133,27 @@ The app uses GitHub Actions to automatically build and release installers when a
 
 1. **Tauri Config** (`src-tauri/tauri.conf.json`):
    ```json
-   "version": "0.1.1"
+   "version": "0.1.2"
    ```
 
 2. **Cargo Manifest** (`src-tauri/Cargo.toml`):
    ```toml
-   version = "0.1.1"
+   version = "0.1.2"
    ```
 
 3. **Package.json** (`package.json`):
    ```json
-   "version": "0.1.1"
+   "version": "0.1.2"
    ```
 
 4. **Header Version** (`dist/index.html`):
    ```html
-   <span class="version">v0.1.1</span>
+   <span class="version">v0.1.2</span>
    ```
 
 5. **About Section** (`dist/index.html`):
    ```html
-   <span class="about-value">0.1.1</span>
+   <span class="about-value">0.1.2</span>
    ```
 
 ### Release Output
@@ -309,12 +309,28 @@ CREATE TABLE profiles (
 
 - **Tauri config:** `src-tauri/tauri.conf.json`
 - **Bundle ID:** `com.sshprofilemanager.app` (currently ends with .app, warned by Tauri)
-- **App version:** 0.1.1
+- **App version:** 0.1.2
 - **Window size:** 800x600 (resizable)
 
 ## Recent Changes
 
-### Latest Session (December 2024 - v0.1.1 Release)
+### Latest Session (December 2024 - v0.1.2 Security Fixes)
+1. **Code Review**: Comprehensive code review identified 2 critical, 3 high, and 5 medium security vulnerabilities
+2. **SEC-001 Fixed**: Command injection vulnerability in SSH connection handler - CRITICAL
+   - Added input validation for hostname, username, port
+   - Implemented proper shell escaping for all platforms (macOS, Windows, Linux)
+3. **SEC-002 Fixed**: Input validation for all profile fields - CRITICAL
+   - Added validate_hostname(), validate_username(), validate_profile_name(), validate_port(), validate_key_path()
+4. **SEC-003 Fixed**: Path traversal vulnerability in SSH key paths - HIGH
+   - Key paths now restricted to home directory
+5. **SEC-004 Fixed**: Backend port validation - HIGH
+6. **SEC-005 Fixed**: Password deletion error handling - HIGH
+7. **SEC-007 Fixed**: Consistent HTML escaping - MEDIUM
+8. **SEC-010 Fixed**: Content Security Policy enabled - MEDIUM
+9. **Version Updates**: Bumped to v0.1.2 in all 5 locations
+10. **CHANGELOG**: Updated with comprehensive v0.1.2 security fixes
+
+### Previous Session (December 2024 - v0.1.1 Release)
 1. **GitHub Link Fix**: Added Tauri shell plugin to open external links in browser
 2. **Icon Quality**: Upgraded header icon from 32x32 to 128x128@2x for better resolution
 3. **Default Auth Method**: Changed from "SSH Key" to "None (Prompt on Connect)"

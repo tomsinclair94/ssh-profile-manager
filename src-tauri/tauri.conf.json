@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SSH Profile Manager",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.sshprofilemanager.app",
   "build": {
     "frontendDist": "../dist"
@@ -18,7 +18,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;",
       "capabilities": [
         {
           "identifier": "main-capability",
