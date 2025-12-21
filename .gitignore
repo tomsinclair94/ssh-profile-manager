@@ -41,6 +41,9 @@ Desktop.ini
 *.swo
 *~
 
+# Development notes (local only)
+CLAUDE.md
+
 # Logs
 *.log
 npm-debug.log*
