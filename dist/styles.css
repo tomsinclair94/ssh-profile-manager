@@ -65,6 +65,29 @@ body {
     gap: 12px;
 }
 
+.profile-counter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-counter-label {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.profile-count-badge {
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 12px;
+    min-width: 24px;
+    text-align: center;
+}
+
 .app-logo {
     width: 32px;
     height: 32px;
@@ -142,7 +165,8 @@ body {
     height: auto;
 }
 
-#expand-collapse-btn {
+#expand-collapse-btn,
+#filter-btn {
     min-width: 150px;
 }
 
@@ -274,12 +298,15 @@ body {
     letter-spacing: 0.5px;
 }
 
-.group-count {
-    font-size: 12px;
-    color: var(--text-muted);
-    background-color: var(--bg-color);
-    padding: 4px 8px;
-    border-radius: 12px;
+.group-count-badge {
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
 }
 
 .profile-group-content {
@@ -462,6 +489,10 @@ body {
     z-index: 1000;
 }
 
+#confirm-modal {
+    z-index: 1500;
+}
+
 .modal.hidden {
     display: none;
 }
@@ -474,6 +505,7 @@ body {
     max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .confirm-modal-content {
@@ -561,6 +593,7 @@ form {
 
 .form-group {
     margin-bottom: 20px;
+    position: relative;
 }
 
 .form-group label {
@@ -678,6 +711,11 @@ form {
     margin-bottom: 12px;
 }
 
+.settings-actions .btn {
+    flex: 1;
+    min-width: 0;
+}
+
 .settings-help {
     font-size: 13px;
     color: var(--text-muted);
@@ -689,7 +727,6 @@ form {
 .checkbox-label {
     display: flex;
     align-items: center;
-    gap: 8px;
     cursor: pointer;
     user-select: none;
 }
@@ -703,6 +740,7 @@ form {
 .checkbox-label span {
     font-size: 14px;
     color: var(--text-color);
+    margin-left: 8px;
 }
 
 /* About Section */
@@ -733,6 +771,18 @@ form {
 
 .about-value {
     color: var(--text-color);
+}
+
+.version-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.version-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
 }
 
 .about-link {
@@ -818,4 +868,94 @@ form {
 
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
+}
+
+/* ========================================
+   Input Validation & Tooltips
+   ======================================== */
+
+/* Tooltip positioning */
+.input-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    margin-top: 4px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+}
+
+/* Show on focus */
+.form-group input:focus + .input-tooltip,
+.form-group select:focus + .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Tooltip content */
+.tooltip-content {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    min-width: 250px;
+    max-width: 350px;
+}
+
+.tooltip-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 6px;
+}
+
+.tooltip-rules {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tooltip-rules li {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 2px 0;
+    padding-left: 16px;
+    position: relative;
+}
+
+.tooltip-rules li::before {
+    content: '•';
+    position: absolute;
+    left: 4px;
+    color: var(--primary-color);
+}
+
+/* Error state for invalid fields */
+.form-group input.validation-error,
+.form-group select.validation-error {
+    border-color: var(--danger-color);
+    background-color: rgba(232, 17, 35, 0.05);
+}
+
+.form-group input.validation-error:focus,
+.form-group select.validation-error:focus {
+    border-color: var(--danger-color);
+    box-shadow: 0 0 0 2px rgba(232, 17, 35, 0.2);
+}
+
+/* Character counter */
+.char-counter {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 4px;
+}
+
+.char-counter.over-limit {
+    color: var(--danger-color);
+    font-weight: 600;
 }

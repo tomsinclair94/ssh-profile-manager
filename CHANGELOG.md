@@ -5,6 +5,58 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2024-12-21
+
+### Added
+- **Settings Backup/Restore**: New unified backup system that can optionally include profiles
+  - "Include Profiles" checkbox (default enabled) to include all profiles in settings backup
+  - Smart backup: only includes filtered/collapsed groups when profiles are included
+  - Cross-platform JSON format compatible between Mac and Windows
+  - Default filename: `sshpm-settings-YYYY-MM-DD.json`
+  - Confirmation dialog adapts based on whether backup contains profiles
+  - Settings apply immediately after restore (no app restart needed)
+- **Reset Settings**: New button to reset all settings to defaults with confirmation dialog
+  - Resets: theme (system), auto-update (enabled), filtered groups (cleared), collapsed groups (cleared)
+  - Profiles are not affected by reset
+  - Red danger button with Yes/No confirmation
+- **Profile Counter**: Total profiles count displayed in header with blue badge
+- **Group Counter Badges**: Each collapsible group header now shows profile count in blue badge style
+- **Version Link**: Version number in About section now links to GitHub release page
+- **Collapsed Groups Persistence**: Group collapse state now persists across app restarts
+- **Include Profiles Preference**: "Include Profiles" checkbox state persists in localStorage
+
+### Changed
+- **File Naming**: Updated export filenames to use `sshpm-` prefix for consistency
+  - Profile exports: `sshpm-profiles-YYYY-MM-DD.json`
+  - Settings exports: `sshpm-settings-YYYY-MM-DD.json`
+- **Export Versioning**: Both profile and settings exports now include app version (e.g., "0.3.0") instead of format version
+- **Button Alignment**: All settings buttons now have equal width for clean layout
+  - Profile Management: Export, Import, Delete All (3 buttons)
+  - Settings Management: Backup, Restore, Reset (3 buttons)
+- **Filter Groups Button**: Now has same minimum width (150px) as Expand/Collapse button for alignment
+- **Confirmation Dialogs**: Standardized to use Yes/No buttons with No as default (safer)
+  - Delete All Profiles: Yes/No with red Yes button
+  - Reset Settings: Yes/No with red Yes button
+  - Restore Settings: Restore/Cancel with blue Restore button
+- **Modal Z-Index**: Confirmation dialogs now appear above settings modal (z-index: 1500 vs 1000)
+- **Bundle Identifier**: Updated from `com.sshprofilemanager.app` to `com.tomsinclair.sshprofilemanager`
+
+### Fixed
+- **Settings Modal Behavior**: Confirmation dialogs no longer close settings window when user clicks No/Cancel
+- **Settings Import Validation**: Group names in settings import now validated using same rules as profile creation
+  - Prevents XSS attacks via malicious group names
+  - Validates character set (alphanumeric + space - _ ( ) . [ ])
+  - Enforces 32 character maximum
+- **Profile Restore Error Handling**: Settings restore with profiles now handles individual profile failures gracefully
+  - Shows warning toast listing failed profiles by name
+  - Successful profiles are still restored even if some fail
+  - Does not abort entire restore on single profile error
+- **Checkbox Spacing**: Improved spacing between checkboxes and labels (8px margin)
+
+### Security
+- **Input Validation**: Settings import now validates group names to prevent XSS (MED-001)
+- **Error Handling**: Profile creation during settings restore now properly catches and reports errors (MED-002)
+
 ## [0.2.1] - 2024-12-21
 
 ### Fixed

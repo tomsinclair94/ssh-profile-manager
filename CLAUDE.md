@@ -20,12 +20,21 @@ A lightweight, cross-platform SSH profile manager built with Tauri. Provides a m
 - ✅ Unique profile names (case-insensitive validation)
 - ✅ Three authentication methods: SSH Key, Password (keychain), None (Keyboard-Interactive)
 - ✅ SSH Key file browser with OS-specific hidden file hints
-- ✅ Collapsible groups for organization
+- ✅ Collapsible groups for organization (state persists across restarts)
 - ✅ Expand/Collapse all groups button (dynamic text based on state)
+- ✅ Profile counter badge showing total number of profiles
+- ✅ Group counter badges (blue style) showing profiles per group
 - ✅ Search/filter profiles
 - ✅ Group filtering (show/hide groups with persistent state)
 - ✅ Export/Import profiles to JSON (with passwords)
 - ✅ Delete all profiles with confirmation
+
+### Settings Management
+- ✅ Settings Backup/Restore with optional profile inclusion
+- ✅ "Include Profiles" checkbox (default enabled, state persists)
+- ✅ Smart backup: only includes filtered/collapsed groups when profiles included
+- ✅ Reset Settings button to restore all settings to defaults
+- ✅ Cross-platform JSON format (Mac ↔ Windows compatible)
 
 ### UI/UX
 - ✅ Dark/Light theme with system preference detection
@@ -35,6 +44,9 @@ A lightweight, cross-platform SSH profile manager built with Tauri. Provides a m
 - ✅ Spell check disabled on technical fields
 - ✅ Update checker with auto-check on launch (toggleable in settings)
 - ✅ Settings modal with About section
+- ✅ Clickable version number (links to GitHub release)
+- ✅ Equal-width buttons in settings sections for clean alignment
+- ✅ Standardized Yes/No confirmation dialogs (No as default)
 
 ### SSH Connection
 - ✅ One-click connect launches system terminal
@@ -66,7 +78,7 @@ npm run build    # Build production app
 
 ## Release Management
 
-### Current Version: 0.2.1 (Released)
+### Current Version: 0.3.0 (Released)
 
 ### Creating a New Release
 
@@ -197,6 +209,13 @@ CREATE TABLE profiles (
 **Node:** @tauri-apps/cli, @tauri-apps/api
 
 ## Recent Changes
+
+### v0.3.0 (Released - 2024-12-21) - Settings Backup/Restore & UX Polish
+- **New**: Unified settings backup with optional profile inclusion, Reset Settings button, Profile counter badge, Group counter badges, Clickable version link, Collapsed groups persistence
+- **Enhanced**: Smart backup logic (only includes group filters when profiles included), Include Profiles checkbox preference persists
+- **Security**: Fixed XSS vulnerability in settings import (MED-001), Added error handling for profile restore (MED-002)
+- **UX**: Equal-width buttons, Standardized Yes/No dialogs, Fixed modal z-index, Improved checkbox spacing
+- **Changed**: Updated bundle identifier, sshpm- filename prefix, App version in exports
 
 ### v0.2.1 (Released - 2024-12-21) - Code Quality & Bug Fixes
 - Fixed 10 deferred issues from v0.2.0 code review (4 medium, 6 low priority)

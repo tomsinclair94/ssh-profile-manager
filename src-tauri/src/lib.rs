@@ -29,8 +29,8 @@ fn validate_hostname(host: &str) -> Result<(), String> {
     if host.is_empty() {
         return Err("Hostname cannot be empty".to_string());
     }
-    if host.len() > 253 {
-        return Err("Hostname too long (max 253 characters)".to_string());
+    if host.len() > 128 {
+        return Err("Hostname too long (max 128 characters)".to_string());
     }
     // Check for dangerous characters that could break shell commands
     if host.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>')) {
@@ -65,11 +65,11 @@ fn validate_profile_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Profile name cannot be empty".to_string());
     }
-    if name.len() > 100 {
-        return Err("Profile name too long (max 100 characters)".to_string());
+    if name.len() > 64 {
+        return Err("Profile name too long (max 64 characters)".to_string());
     }
-    // Don't allow control characters or HTML special chars
-    if name.chars().any(|c| c.is_control() || matches!(c, '<' | '>' | '"' | '\'')) {
+    // Allow alphanumeric, spaces, and specific special characters: - _ ( ) . [ ]
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']')) {
         return Err("Profile name contains invalid characters".to_string());
     }
     Ok(())
@@ -85,6 +85,90 @@ fn validate_port(port: i32) -> Result<u16, String> {
     // Safe to cast: we've verified port is in valid u16 range [1, 65535]
     debug_assert!(port >= 1 && port <= 65535, "Port validation failed");
     Ok(port as u16)
+}
+
+fn validate_ipv4(ip: &str) -> Result<(), String> {
+    let parts: Vec<&str> = ip.split('.').collect();
+    if parts.len() != 4 {
+        return Err("Invalid IPv4 format".to_string());
+    }
+
+    for part in parts {
+        match part.parse::<u8>() {
+            Ok(_) => {}, // Valid octet (0-255)
+            Err(_) => return Err("IPv4 octets must be 0-255".to_string()),
+        }
+    }
+    Ok(())
+}
+
+fn validate_host_or_ip(host: &str) -> Result<(), String> {
+    if host.is_empty() {
+        return Err("Hostname/IP cannot be empty".to_string());
+    }
+
+    // Check if it looks like an IPv4 address (contains only digits and dots)
+    if host.chars().all(|c| c.is_numeric() || c == '.') {
+        return validate_ipv4(host);
+    }
+
+    // Otherwise validate as hostname
+    validate_hostname(host)
+}
+
+fn validate_description(desc: &str) -> Result<(), String> {
+    if desc.len() > 128 {
+        return Err("Description too long (max 128 characters)".to_string());
+    }
+    if desc.chars().any(|c| matches!(c, '<' | '>')) {
+        return Err("Description cannot contain < or >".to_string());
+    }
+    Ok(())
+}
+
+fn validate_group(group: &str) -> Result<(), String> {
+    if group.is_empty() {
+        return Ok(()); // Group is optional
+    }
+    if group.len() > 32 {
+        return Err("Group name too long (max 32 characters)".to_string());
+    }
+    // Same pattern as profile name but shorter
+    if !group.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']')) {
+        return Err("Group name contains invalid characters".to_string());
+    }
+    Ok(())
+}
+
+fn validate_settings(settings: &SettingsData) -> Result<(), String> {
+    // Validate theme
+    if !matches!(settings.theme.as_str(), "system" | "dark" | "light") {
+        return Err(format!("Invalid theme value: {}", settings.theme));
+    }
+
+    // Validate filtered_groups if present
+    if let Some(filtered_groups) = &settings.filtered_groups {
+        for group in filtered_groups {
+            if group.is_empty() {
+                return Err("Empty group name in filtered_groups".to_string());
+            }
+            validate_group(group)
+                .map_err(|e| format!("Invalid filtered group: {}", e))?;
+        }
+    }
+
+    // Validate collapsed_groups if present
+    if let Some(collapsed_groups) = &settings.collapsed_groups {
+        for group in collapsed_groups {
+            if group.is_empty() {
+                return Err("Empty group name in collapsed_groups".to_string());
+            }
+            validate_group(group)
+                .map_err(|e| format!("Invalid collapsed group: {}", e))?;
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_key_path(path: &str) -> Result<PathBuf, String> {
@@ -295,6 +379,39 @@ struct ImportData {
     profiles: Vec<ProfileExport>,
 }
 
+// Settings export/import structures
+#[derive(Debug, Serialize, Deserialize)]
+struct SettingsData {
+    theme: String,
+    auto_update_check: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filtered_groups: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    collapsed_groups: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SettingsExport {
+    version: String,
+    exported_at: String,
+    settings: SettingsData,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profiles: Option<Vec<ProfileExport>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SettingsImport {
+    settings: SettingsData,
+    #[serde(default)]
+    profiles: Option<Vec<ProfileExport>>,
+}
+
+#[derive(Debug, Serialize)]
+struct SettingsImportResult {
+    settings: SettingsData,
+    profiles: Option<Vec<ProfileExport>>,
+}
+
 // Tauri commands
 #[tauri::command]
 fn get_profiles(db: State<Database>) -> Result<Vec<Profile>, String> {
@@ -319,8 +436,18 @@ struct CreateProfileInput {
 fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<String, String> {
     // Validate all inputs
     validate_profile_name(&profile.name)?;
-    validate_hostname(&profile.host)?;
+    validate_host_or_ip(&profile.host)?;
     validate_username(&profile.username)?;
+
+    // Validate description if provided
+    if let Some(ref desc) = profile.description {
+        validate_description(desc)?;
+    }
+
+    // Validate group if provided
+    if let Some(ref group) = profile.group {
+        validate_group(group)?;
+    }
 
     let port = validate_port(profile.port.unwrap_or(22))? as i32;
 
@@ -380,8 +507,18 @@ struct UpdateProfileInput {
 fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<(), String> {
     // Validate all inputs
     validate_profile_name(&profile.name)?;
-    validate_hostname(&profile.host)?;
+    validate_host_or_ip(&profile.host)?;
     validate_username(&profile.username)?;
+
+    // Validate description if provided
+    if let Some(ref desc) = profile.description {
+        validate_description(desc)?;
+    }
+
+    // Validate group if provided
+    if let Some(ref group) = profile.group {
+        validate_group(group)?;
+    }
 
     let port = validate_port(profile.port.unwrap_or(22))? as i32;
 
@@ -456,7 +593,7 @@ fn export_profiles(db: State<Database>) -> Result<String, String> {
     }
 
     let export_data = ExportData {
-        version: "1.0".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
         exported_at: chrono::Utc::now().to_rfc3339(),
         profiles: export_profiles,
     };
@@ -541,6 +678,73 @@ async fn save_profiles_to_file(
         }
         None => Ok(false), // User cancelled
     }
+}
+
+#[tauri::command]
+fn export_settings(
+    theme: String,
+    auto_update_check: bool,
+    filtered_groups: Option<Vec<String>>,
+    collapsed_groups: Option<Vec<String>>,
+    include_profiles: bool,
+    db: State<Database>,
+) -> Result<String, String> {
+    let settings_data = SettingsData {
+        theme,
+        auto_update_check,
+        filtered_groups,
+        collapsed_groups,
+    };
+
+    // Validate before exporting
+    validate_settings(&settings_data)?;
+
+    // Get profiles if include_profiles is true
+    let profiles_data = if include_profiles {
+        let all_profiles = db.get_all_profiles()
+            .map_err(|e| format!("Failed to get profiles: {}", e))?;
+        let mut profile_exports = Vec::new();
+
+        for profile in all_profiles {
+            let password = match &profile.auth_method as &str {
+                "password" => get_password(&profile.id).ok(),
+                _ => None,
+            };
+
+            profile_exports.push(ProfileExport {
+                profile,
+                password,
+            });
+        }
+
+        Some(profile_exports)
+    } else {
+        None
+    };
+
+    let export_data = SettingsExport {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        settings: settings_data,
+        profiles: profiles_data,
+    };
+
+    serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))
+}
+
+#[tauri::command]
+fn import_settings(data: String) -> Result<SettingsImportResult, String> {
+    let import_data: SettingsImport = serde_json::from_str(&data)
+        .map_err(|e| format!("Failed to parse settings data: {}", e))?;
+
+    // Validate imported settings
+    validate_settings(&import_data.settings)?;
+
+    Ok(SettingsImportResult {
+        settings: import_data.settings,
+        profiles: import_data.profiles,
+    })
 }
 
 #[tauri::command]
@@ -843,7 +1047,9 @@ pub fn run() {
             save_profiles_to_file,
             browse_ssh_key,
             check_for_updates,
-            connect_ssh
+            connect_ssh,
+            export_settings,
+            import_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

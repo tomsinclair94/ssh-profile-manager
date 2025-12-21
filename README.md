@@ -9,9 +9,9 @@
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
-### [📥 Download Latest Release (v0.2.1)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
+### [📥 Download Latest Release (v0.3.0)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
 <sub>**macOS 14.0+ | Windows 10+ | ~3-5 MB | Native Performance**</sub>
 
@@ -35,7 +35,9 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 
 ### Profile Management
 - Create, edit, delete, and duplicate SSH profiles
-- Organise profiles into collapsible groups
+- Organise profiles into collapsible groups with persistent state
+- Profile counter badge showing total number of profiles
+- Group counter badges showing profiles per group
 - Search and filter profiles by name, host, or group
 - Group filtering with persistent state
 - Three authentication methods:
@@ -45,14 +47,22 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 - Export profiles to JSON for team sharing
 - Import profiles from JSON
 
+### Settings Management
+- **Backup & Restore:** Unified backup system for settings and profiles
+  - Option to include or exclude profiles in backup
+  - Cross-platform JSON format (Mac ↔ Windows compatible)
+  - Smart backup: only includes group filters when profiles are included
+- **Reset Settings:** Reset all settings to defaults with one click
+- **Auto-update Checker:** Toggle automatic update checks on launch
+
 ### Modern UI/UX
 - Dark and Light themes with system preference detection
 - Colour-coded action buttons for quick recognition
 - Toast notifications for success/error feedback
 - Smooth animations and hover effects
 - Keyboard-friendly interface
-- Minimum window size enforcement
-- Auto-update checker (toggleable)
+- Minimum window size enforcement (600x450)
+- Clickable version number linking to GitHub releases
 
 ### SSH Connection
 - One-click connect launches your system terminal
@@ -103,10 +113,17 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 - Use the filter dropdown to show/hide specific groups
 - Use the search bar to filter profiles
 
-### Import/Export
-- **Export:** Click Settings → Export Profiles to save all profiles to JSON
-- **Import:** Click Settings → Import Profiles to load profiles from JSON
-- Note: Importing replaces all existing profiles
+### Backup & Restore
+- **Settings Backup:** Click Settings → Backup Settings to save settings (and optionally profiles) to JSON
+  - Check "Include Profiles" to backup everything in one file
+  - Uncheck to backup only settings (theme, preferences, filters)
+- **Settings Restore:** Click Settings → Restore Settings to load from a backup
+  - Automatically detects if backup includes profiles
+  - Shows confirmation before replacing existing data
+- **Profile Export/Import:** Separate options for profiles only
+  - Export Profiles: Save all profiles to JSON for sharing
+  - Import Profiles: Load profiles from JSON (replaces existing)
+- **Reset Settings:** Click Settings → Reset Settings to restore defaults
 
 ## Development
 

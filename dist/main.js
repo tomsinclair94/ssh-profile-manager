@@ -23,6 +23,45 @@ const TOAST_DURATION_LONG = 4000;   // 4 seconds
 const TOAST_DURATION_LOADING = 10000; // 10 seconds (for loading states)
 const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
+// Validation patterns and rules
+const VALIDATION = {
+    name: {
+        pattern: /^[a-zA-Z0-9\s\-_().\[\]]+$/,
+        maxLength: 64,
+        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] allowed'
+    },
+    description: {
+        pattern: /^[^<>]*$/,
+        maxLength: 128,
+        message: 'Cannot contain < or > characters'
+    },
+    hostname: {
+        pattern: /^[a-zA-Z0-9.\-_]+$/,
+        maxLength: 128,
+        message: 'Only letters, numbers, dots, hyphens, underscores allowed'
+    },
+    ipv4: {
+        pattern: /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
+        message: 'Must be valid IPv4 (e.g., 192.168.1.1)'
+    },
+    port: {
+        pattern: /^\d+$/,
+        min: 1,
+        max: 65535,
+        message: 'Must be between 1 and 65535'
+    },
+    username: {
+        pattern: /^[a-zA-Z0-9_\-.]+$/,
+        maxLength: 32,
+        message: 'Only letters, numbers, underscores, hyphens, dots allowed'
+    },
+    group: {
+        pattern: /^[a-zA-Z0-9\s\-_().\[\]]+$/,
+        maxLength: 32,
+        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] allowed'
+    }
+};
+
 // State
 let profiles = [];
 let editingProfileId = null;
@@ -38,6 +77,233 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
     };
+}
+
+// Validation Functions
+
+// IPv4 octet range validator
+function isValidIPv4(ip) {
+    const match = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!match) return false;
+    for (let i = 1; i <= 4; i++) {
+        const octet = parseInt(match[i], 10);
+        if (octet < 0 || octet > 255) return false;
+    }
+    return true;
+}
+
+// Field-specific validators
+function validateName(name) {
+    if (name.length === 0) {
+        return { valid: false, error: 'Profile name is required' };
+    }
+    if (name.length > VALIDATION.name.maxLength) {
+        return { valid: false, error: `Maximum ${VALIDATION.name.maxLength} characters` };
+    }
+    if (!VALIDATION.name.pattern.test(name)) {
+        return { valid: false, error: VALIDATION.name.message };
+    }
+    return { valid: true };
+}
+
+function validateDescription(description) {
+    if (description.length > VALIDATION.description.maxLength) {
+        return { valid: false, error: `Maximum ${VALIDATION.description.maxLength} characters` };
+    }
+    if (!VALIDATION.description.pattern.test(description)) {
+        return { valid: false, error: VALIDATION.description.message };
+    }
+    return { valid: true };
+}
+
+function validateHostOrIp(host) {
+    if (host.length === 0) {
+        return { valid: false, error: 'Hostname or IP is required' };
+    }
+
+    // Check if it looks like an IPv4 address
+    if (VALIDATION.ipv4.pattern.test(host)) {
+        if (!isValidIPv4(host)) {
+            return { valid: false, error: VALIDATION.ipv4.message };
+        }
+        return { valid: true };
+    }
+
+    // Validate as hostname
+    if (host.length > VALIDATION.hostname.maxLength) {
+        return { valid: false, error: `Maximum ${VALIDATION.hostname.maxLength} characters` };
+    }
+    if (!VALIDATION.hostname.pattern.test(host)) {
+        return { valid: false, error: VALIDATION.hostname.message };
+    }
+    return { valid: true };
+}
+
+function validatePortField(port) {
+    const portNum = parseInt(port, 10);
+    if (isNaN(portNum)) {
+        return { valid: false, error: 'Port must be a number' };
+    }
+    if (portNum < VALIDATION.port.min || portNum > VALIDATION.port.max) {
+        return { valid: false, error: VALIDATION.port.message };
+    }
+    return { valid: true };
+}
+
+function validateUsernameField(username) {
+    if (username.length === 0) {
+        return { valid: false, error: 'Username is required' };
+    }
+    if (username.length > VALIDATION.username.maxLength) {
+        return { valid: false, error: `Maximum ${VALIDATION.username.maxLength} characters` };
+    }
+    if (!VALIDATION.username.pattern.test(username)) {
+        return { valid: false, error: VALIDATION.username.message };
+    }
+    return { valid: true };
+}
+
+function validateGroup(group) {
+    if (group.length === 0) {
+        return { valid: true }; // Group is optional
+    }
+    if (group.length > VALIDATION.group.maxLength) {
+        return { valid: false, error: `Maximum ${VALIDATION.group.maxLength} characters` };
+    }
+    if (!VALIDATION.group.pattern.test(group)) {
+        return { valid: false, error: VALIDATION.group.message };
+    }
+    return { valid: true };
+}
+
+// Master validator
+function validateField(fieldId, value) {
+    const trimmedValue = value.trim();
+
+    switch (fieldId) {
+        case 'profile-name':
+            return validateName(trimmedValue);
+        case 'profile-description':
+            return validateDescription(value); // Don't trim
+        case 'profile-host':
+            return validateHostOrIp(trimmedValue);
+        case 'profile-port':
+            return validatePortField(value);
+        case 'profile-username':
+            return validateUsernameField(trimmedValue);
+        case 'profile-group':
+            return validateGroup(trimmedValue);
+        default:
+            return { valid: true };
+    }
+}
+
+// Real-time validation (on input)
+function handleRealtimeValidation(fieldId, value) {
+    const field = document.getElementById(fieldId);
+    const result = validateField(fieldId, value);
+
+    if (result.valid) {
+        field.classList.remove('validation-error');
+    } else {
+        field.classList.add('validation-error');
+    }
+}
+
+// Character counter updater
+function updateCharCounter(fieldId, value) {
+    const counter = document.getElementById(`${fieldId}-counter`);
+    if (!counter) return;
+
+    // Map field IDs to validation config keys
+    const fieldName = fieldId.replace('profile-', '');
+    const configKey = fieldName === 'host' ? 'hostname' : fieldName;
+    const config = VALIDATION[configKey];
+    if (!config || !config.maxLength) return;
+
+    const currentLength = value.length;
+    const maxLength = config.maxLength;
+
+    counter.textContent = `${currentLength} / ${maxLength}`;
+
+    if (currentLength > maxLength) {
+        counter.classList.add('over-limit');
+    } else {
+        counter.classList.remove('over-limit');
+    }
+}
+
+// Initialize all character counters based on current field values
+function initializeCharCounters() {
+    const fieldsWithCounters = [
+        'profile-name',
+        'profile-description',
+        'profile-host',
+        'profile-username',
+        'profile-group'
+    ];
+
+    fieldsWithCounters.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            updateCharCounter(fieldId, field.value);
+        }
+    });
+}
+
+// Pre-save validation
+function validateAllFields() {
+    const fieldsToValidate = [
+        'profile-name',
+        'profile-description',
+        'profile-host',
+        'profile-port',
+        'profile-username',
+        'profile-group'
+    ];
+
+    // Field name mapping for user-friendly error messages
+    const fieldNames = {
+        'profile-name': 'Profile Name',
+        'profile-description': 'Description',
+        'profile-host': 'Hostname / IP Address',
+        'profile-port': 'Port',
+        'profile-username': 'Username',
+        'profile-group': 'Group'
+    };
+
+    let firstInvalidField = null;
+    const errors = [];
+
+    fieldsToValidate.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        const value = field.value;
+        const result = validateField(fieldId, value);
+
+        if (!result.valid) {
+            field.classList.add('validation-error');
+            errors.push({
+                field: fieldId,
+                fieldName: fieldNames[fieldId],
+                message: result.error
+            });
+
+            if (!firstInvalidField) {
+                firstInvalidField = field;
+            }
+        } else {
+            field.classList.remove('validation-error');
+        }
+    });
+
+    if (errors.length > 0) {
+        firstInvalidField.focus();
+        const errorMessage = `${errors[0].fieldName}: ${errors[0].message}`;
+        showToast(errorMessage, TOAST_DURATION_LONG, 'error');
+        return false;
+    }
+
+    return true;
 }
 
 // DOM Elements
@@ -78,6 +344,12 @@ let filterGroupsList;
 let clearFiltersBtn;
 let filterBadge;
 let expandCollapseBtn;
+let backupSettingsBtn;
+let restoreSettingsBtn;
+let restoreSettingsInput;
+let resetSettingsBtn;
+let includeProfilesCheck;
+let profileCountBadge;
 
 // Confirmation promise resolver
 let confirmResolver = null;
@@ -124,6 +396,12 @@ async function init() {
     clearFiltersBtn = document.getElementById('clear-filters-btn');
     filterBadge = document.getElementById('filter-badge');
     expandCollapseBtn = document.getElementById('expand-collapse-btn');
+    backupSettingsBtn = document.getElementById('backup-settings-btn');
+    restoreSettingsBtn = document.getElementById('restore-settings-btn');
+    restoreSettingsInput = document.getElementById('restore-settings-input');
+    resetSettingsBtn = document.getElementById('reset-settings-btn');
+    includeProfilesCheck = document.getElementById('include-profiles-check');
+    profileCountBadge = document.getElementById('profile-count-badge');
 
     console.log('DOM elements retrieved');
 
@@ -133,7 +411,9 @@ async function init() {
     await loadProfiles();
     loadThemePreference();
     loadAutoUpdatePreference();
+    loadIncludeProfilesPreference();
     loadFilterState();
+    loadCollapsedState();
     setupEventListeners();
 
     // Check for updates on launch if enabled
@@ -167,12 +447,19 @@ function setBrowseHint() {
 async function loadProfiles() {
     try {
         profiles = await invoke('get_profiles');
+        updateProfileCount();
         renderProfiles();
     } catch (error) {
         console.error('Failed to load profiles:', error);
         profiles = [];
+        updateProfileCount();
         renderProfiles();
     }
+}
+
+// Update profile count badge
+function updateProfileCount() {
+    profileCountBadge.textContent = profiles.length;
 }
 
 // Render profiles in the UI with collapsible groups
@@ -227,7 +514,7 @@ function renderProfiles(filter = '') {
                 <div class="profile-group-header" data-group="${escapeHtml(groupName)}">
                     <span class="group-chevron">${chevron}</span>
                     <span class="group-name">${escapeHtml(groupName)}</span>
-                    <span class="group-count">${grouped[groupName].length}</span>
+                    <span class="group-count-badge">${grouped[groupName].length}</span>
                 </div>
                 <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
         `;
@@ -290,6 +577,7 @@ function toggleGroup(groupName) {
     } else {
         collapsedGroups.add(groupName);
     }
+    saveCollapsedState();
     renderProfiles(searchInput.value);
 }
 
@@ -310,6 +598,7 @@ function updateExpandCollapseButton() {
 // Expand all groups
 function expandAllGroups() {
     collapsedGroups.clear();
+    saveCollapsedState();
     renderProfiles(searchInput.value);
 }
 
@@ -317,6 +606,7 @@ function expandAllGroups() {
 function collapseAllGroups() {
     const allGroups = getAllGroups();
     allGroups.forEach(group => collapsedGroups.add(group));
+    saveCollapsedState();
     renderProfiles(searchInput.value);
 }
 
@@ -410,6 +700,22 @@ function setupEventListeners() {
     authMethodSelect.addEventListener('change', () => {
         updateAuthMethodVisibility();
         checkFormChanged();
+    });
+
+    // Real-time validation listeners
+    const validatedFields = [
+        'profile-name', 'profile-description', 'profile-host',
+        'profile-port', 'profile-username', 'profile-group'
+    ];
+
+    validatedFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('input', (e) => {
+                handleRealtimeValidation(fieldId, e.target.value);
+                updateCharCounter(fieldId, e.target.value);
+            });
+        }
     });
 
     // Listen for changes on all form fields to enable/disable Save button
@@ -514,6 +820,10 @@ function setupEventListeners() {
         saveAutoUpdatePreference();
     });
 
+    includeProfilesCheck.addEventListener('change', () => {
+        saveIncludeProfilesPreference();
+    });
+
     // Expand/collapse all groups button
     expandCollapseBtn.addEventListener('click', () => {
         toggleExpandCollapseAll();
@@ -527,6 +837,26 @@ function setupEventListeners() {
 
     clearFiltersBtn.addEventListener('click', () => {
         clearGroupFilters();
+    });
+
+    // Settings backup/restore
+    backupSettingsBtn.addEventListener('click', async () => {
+        await backupSettings();
+    });
+
+    restoreSettingsBtn.addEventListener('click', () => {
+        restoreSettingsInput.click();
+    });
+
+    restoreSettingsInput.addEventListener('change', async (e) => {
+        if (e.target.files && e.target.files[0]) {
+            await restoreSettings(e.target.files[0]);
+            e.target.value = '';
+        }
+    });
+
+    resetSettingsBtn.addEventListener('click', async () => {
+        await resetSettings();
     });
 
     // Close filter popup when clicking outside
@@ -621,8 +951,23 @@ function loadAutoUpdatePreference() {
     }
 }
 
+function loadIncludeProfilesPreference() {
+    const includeProfiles = localStorage.getItem('includeProfiles');
+    // Default to true (checked) if not set
+    if (includeProfiles === null) {
+        includeProfilesCheck.checked = true;
+        saveIncludeProfilesPreference();
+    } else {
+        includeProfilesCheck.checked = includeProfiles === 'true';
+    }
+}
+
 function saveAutoUpdatePreference() {
     localStorage.setItem('autoUpdateCheck', autoUpdateCheck.checked);
+}
+
+function saveIncludeProfilesPreference() {
+    localStorage.setItem('includeProfiles', includeProfilesCheck.checked);
 }
 
 async function checkForUpdates(silent = false) {
@@ -690,6 +1035,41 @@ function saveFilterState() {
     const filtersArray = Array.from(filteredGroups);
     localStorage.setItem('filteredGroups', JSON.stringify(filtersArray));
     updateFilterBadge();
+}
+
+function loadCollapsedState() {
+    const savedCollapsed = localStorage.getItem('collapsedGroups');
+    if (savedCollapsed) {
+        try {
+            const collapsedArray = JSON.parse(savedCollapsed);
+
+            // Validate data structure
+            if (!Array.isArray(collapsedArray)) {
+                throw new Error('Invalid collapsed groups data structure');
+            }
+
+            // Validate each item is a string
+            if (!collapsedArray.every(item => typeof item === 'string')) {
+                throw new Error('Invalid collapsed group names');
+            }
+
+            collapsedGroups = new Set(collapsedArray);
+        } catch (error) {
+            console.error('Failed to load collapsed state:', error);
+            collapsedGroups = new Set();
+
+            // Clear corrupted data
+            localStorage.removeItem('collapsedGroups');
+
+            // Notify user
+            showToast('Collapsed groups state was reset due to corrupted data', TOAST_DURATION_LONG, 'error');
+        }
+    }
+}
+
+function saveCollapsedState() {
+    const collapsedArray = Array.from(collapsedGroups);
+    localStorage.setItem('collapsedGroups', JSON.stringify(collapsedArray));
 }
 
 function updateFilterBadge() {
@@ -820,7 +1200,7 @@ async function exportProfiles() {
         showToast('Exporting profiles...', TOAST_DURATION_LOADING);
 
         const data = await invoke('export_profiles');
-        const defaultFilename = `ssh-profiles-${new Date().toISOString().split('T')[0]}.json`;
+        const defaultFilename = `sshpm-profiles-${new Date().toISOString().split('T')[0]}.json`;
 
         // Call Tauri backend to show save dialog and write file
         const success = await invoke('save_profiles_to_file', {
@@ -913,9 +1293,6 @@ async function deleteAllProfiles() {
         return;
     }
 
-    // Close settings modal first
-    closeSettings();
-
     const count = profiles.length;
     const profileText = count === 1 ? 'profile' : 'profiles';
 
@@ -938,6 +1315,9 @@ async function deleteAllProfiles() {
         return;
     }
 
+    // Close settings modal after confirmation
+    closeSettings();
+
     try {
         // Delete all profiles
         for (const profile of profiles) {
@@ -950,6 +1330,240 @@ async function deleteAllProfiles() {
     } catch (error) {
         console.error('Failed to delete all profiles:', error);
         showToast('Failed to delete all profiles: ' + error, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Backup settings to JSON file
+async function backupSettings() {
+    try {
+        showToast('Backing up settings...', TOAST_DURATION_LOADING);
+
+        const theme = localStorage.getItem('theme') || 'system';
+        const autoUpdateCheck = localStorage.getItem('autoUpdateCheck') === 'true';
+        const includeProfiles = includeProfilesCheck.checked;
+
+        // Only include filtered/collapsed groups if profiles are included
+        let filteredGroups = null;
+        let collapsedGroups = null;
+
+        if (includeProfiles) {
+            const filteredGroupsData = localStorage.getItem('filteredGroups') || '[]';
+            const collapsedGroupsData = localStorage.getItem('collapsedGroups') || '[]';
+            filteredGroups = JSON.parse(filteredGroupsData);
+            collapsedGroups = JSON.parse(collapsedGroupsData);
+        }
+
+        const data = await invoke('export_settings', {
+            theme,
+            autoUpdateCheck,
+            filteredGroups,
+            collapsedGroups,
+            includeProfiles
+        });
+
+        const defaultFilename = `sshpm-settings-${new Date().toISOString().split('T')[0]}.json`;
+
+        const success = await invoke('save_profiles_to_file', {
+            data: data,
+            defaultFilename: defaultFilename
+        });
+
+        if (success) {
+            showToast('Settings backed up successfully!');
+            console.log('Settings backed up successfully');
+        } else {
+            toastElement.classList.add('hidden');
+            console.log('User cancelled backup dialog');
+        }
+    } catch (error) {
+        console.error('Failed to backup settings:', error);
+        showToast('Failed to backup settings: ' + error, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Restore settings from JSON file
+async function restoreSettings(file) {
+    try {
+        showToast('Reading settings file...', TOAST_DURATION_LOADING);
+
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        closeSettings();
+
+        const result = await invoke('import_settings', { data: text });
+        const includesProfiles = result.profiles && result.profiles.length > 0;
+
+        // Check if we have existing settings or profiles
+        const hasSettings = localStorage.getItem('theme') ||
+                          localStorage.getItem('autoUpdateCheck') ||
+                          localStorage.getItem('filteredGroups') ||
+                          localStorage.getItem('collapsedGroups');
+        const hasProfiles = profiles.length > 0;
+
+        if (hasSettings || (includesProfiles && hasProfiles)) {
+            toastElement.classList.add('hidden');
+
+            let confirmMessage;
+            if (includesProfiles) {
+                const importCount = result.profiles.length;
+                const profileText = importCount === 1 ? 'profile' : 'profiles';
+                confirmMessage = `
+                    <div>This backup contains <span class="profile-name">${importCount} ${profileText}</span>.</div>
+                    <div class="warning">Restoring will replace all your current settings${hasProfiles ? ' and profiles' : ''}.</div>
+                    <div style="margin-top: 12px;">Do you want to continue?</div>
+                `;
+            } else {
+                confirmMessage = `
+                    <div>You have existing settings configured.</div>
+                    <div class="warning">Restoring will replace all your current settings.</div>
+                    <div style="margin-top: 12px;">Do you want to continue?</div>
+                `;
+            }
+
+            const confirmRestore = await customConfirm(confirmMessage, {
+                title: 'Confirm Restore',
+                okText: 'Restore',
+                cancelText: 'Cancel',
+                okClass: 'btn-primary'
+            });
+
+            if (!confirmRestore) {
+                console.log('User cancelled restore');
+                return;
+            }
+        }
+
+        showToast('Restoring settings...', TOAST_DURATION_LOADING);
+
+        // Restore settings
+        localStorage.setItem('theme', result.settings.theme);
+        localStorage.setItem('autoUpdateCheck', result.settings.auto_update_check.toString());
+
+        // Only restore filtered/collapsed groups if they exist
+        if (result.settings.filtered_groups) {
+            localStorage.setItem('filteredGroups', JSON.stringify(result.settings.filtered_groups));
+        }
+        if (result.settings.collapsed_groups) {
+            localStorage.setItem('collapsedGroups', JSON.stringify(result.settings.collapsed_groups));
+        }
+
+        themeSelect.value = result.settings.theme;
+        applyTheme(result.settings.theme);
+
+        autoUpdateCheck.checked = result.settings.auto_update_check;
+
+        // Restore profiles if included
+        if (includesProfiles) {
+            // Delete all existing profiles first
+            for (const profile of profiles) {
+                await invoke('delete_profile', { id: profile.id });
+            }
+
+            // Import the profiles
+            let successCount = 0;
+            let failedProfiles = [];
+
+            for (const profileExport of result.profiles) {
+                try {
+                    // Profile fields are flattened, not nested
+                    const profileInput = {
+                        name: profileExport.name,
+                        description: profileExport.description || null,
+                        host: profileExport.host,
+                        port: profileExport.port,
+                        username: profileExport.username,
+                        auth_method: profileExport.auth_method,
+                        key_path: profileExport.key_path || null,
+                        password: profileExport.password || null,
+                        group: profileExport.group || null
+                    };
+
+                    await invoke('create_profile', { profile: profileInput });
+                    successCount++;
+                } catch (error) {
+                    console.error(`Failed to restore profile "${profileExport.name}":`, error);
+                    failedProfiles.push(profileExport.name);
+                }
+            }
+
+            // Show warning if some profiles failed
+            if (failedProfiles.length > 0) {
+                const failedNames = failedProfiles.join(', ');
+                showToast(`Warning: ${failedProfiles.length} profile(s) failed to restore: ${failedNames}`, TOAST_DURATION_LONG, 'error');
+            }
+        }
+
+        loadFilterState();
+        loadCollapsedState();
+
+        await loadProfiles();
+
+        const successMessage = includesProfiles
+            ? `Settings and ${result.profiles.length} ${result.profiles.length === 1 ? 'profile' : 'profiles'} restored successfully!`
+            : 'Settings restored successfully!';
+        showToast(successMessage);
+        console.log('Settings restored successfully');
+    } catch (error) {
+        console.error('Failed to restore settings:', error);
+        showToast('Failed to restore settings: ' + error, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reset all settings to defaults
+async function resetSettings() {
+    try {
+        const confirmMessage = `
+            <div class="warning">This will reset all settings to their default values:</div>
+            <ul style="text-align: left; margin: 12px 0; padding-left: 24px;">
+                <li>Theme: System</li>
+                <li>Auto-update check: Enabled</li>
+                <li>Filtered groups: Cleared</li>
+                <li>Collapsed groups: Cleared</li>
+            </ul>
+            <div style="margin-top: 12px;">Profiles will not be affected.</div>
+            <div style="margin-top: 12px;">Are you sure you want to continue?</div>
+        `;
+
+        const confirmReset = await customConfirm(confirmMessage, {
+            title: 'Reset Settings',
+            okText: 'Yes',
+            cancelText: 'No',
+            okClass: 'btn-danger'
+        });
+
+        if (!confirmReset) {
+            console.log('User cancelled reset');
+            return;
+        }
+
+        // Close settings modal after confirmation
+        closeSettings();
+
+        showToast('Resetting settings...', TOAST_DURATION_LOADING);
+
+        // Reset to defaults
+        localStorage.setItem('theme', 'system');
+        localStorage.setItem('autoUpdateCheck', 'true');
+        localStorage.setItem('filteredGroups', '[]');
+        localStorage.setItem('collapsedGroups', '[]');
+
+        // Apply defaults to UI
+        themeSelect.value = 'system';
+        applyTheme('system');
+        autoUpdateCheck.checked = true;
+
+        // Reload states
+        loadFilterState();
+        loadCollapsedState();
+
+        await loadProfiles();
+
+        showToast('Settings reset to defaults!');
+        console.log('Settings reset successfully');
+    } catch (error) {
+        console.error('Failed to reset settings:', error);
+        showToast('Failed to reset settings: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -996,6 +1610,9 @@ function openModal(profile = null) {
 
     updateAuthMethodVisibility();
     profileModal.classList.remove('hidden');
+
+    // Initialize character counters based on current field values
+    initializeCharCounters();
 
     // Capture original form values and reset Save button state
     captureFormValues();
@@ -1058,6 +1675,11 @@ function closeModal() {
 // Save profile (create or update)
 async function saveProfile() {
     console.log('saveProfile called, editingProfileId:', editingProfileId);
+
+    // Validate all fields before proceeding
+    if (!validateAllFields()) {
+        return; // Stop if validation fails
+    }
 
     const profileName = document.getElementById('profile-name').value.trim();
 
