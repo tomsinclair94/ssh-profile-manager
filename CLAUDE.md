@@ -198,58 +198,23 @@ CREATE TABLE profiles (
 
 ## Recent Changes
 
-### v0.2.1 (Ready for Release) - Code Quality & Bug Fixes
-1. **Bug Fixes**:
-   - Linux SSH connection: Now reports which terminal emulators were tried and why they failed
-   - Update checker: Added comprehensive validation for version format from GitHub API
-   - Port validation: Added explicit documentation and debug assertions for safe casting
-   - Filter badge: Changed to show HIDDEN groups instead of selected groups (clearer UX)
-2. **Code Quality**:
-   - Standardized error handling across all platforms
-   - Eliminated duplicate code in form value capture
-   - Implemented smart duplicate naming (strips existing "(duplicate)" suffixes)
-   - Added loading toast notifications during import/export
-   - Replaced all hardcoded magic numbers with named constants
-   - Added browser compatibility documentation
-3. **UI Enhancements**:
-   - Reduced spacing in About section for more compact layout
-   - Added minimum window size constraints (600x450)
+### v0.2.1 (Released - 2024-12-21) - Code Quality & Bug Fixes
+- Fixed 10 deferred issues from v0.2.0 code review (4 medium, 6 low priority)
+- **Key Fixes**: Linux SSH error reporting, update validation, filter badge UX, smart duplicate naming
+- **Code Quality**: Standardized error handling, eliminated duplicates, replaced magic numbers with constants
+- **UI**: Compact About section, minimum window size (600x450)
 
-### v0.2.0 (Released) - UX Improvements & Bug Fixes
-1. **Bug Fixes**:
-   - Window restoration: Changed `window.hide()` to `window.minimize()`
-   - Password deletion: Fixed error when editing non-password auth profiles
-   - Update checker: Changed from blocking to async HTTP (prevents UI freezing)
-   - Filter state: Added debouncing to prevent race conditions
-   - Memory leak: Implemented event delegation for profile card buttons
-   - File dialogs: Added 2-minute timeout to prevent indefinite hangs
-   - Filter state: Added validation and user notification for corrupted localStorage data
-2. **New Features**:
-   - Group filtering: Show/hide groups with dropdown filter button next to search
-   - Expand/Collapse all groups button with dynamic text
-   - Update checker: Manual check button + auto-check on launch (toggleable)
-   - SSH Key file browser with Browse button (opens in ~/.ssh, OS-specific hidden file hints)
-3. **UX Enhancements**:
-   - Smart Save button: Disabled until changes detected when editing
-   - Notification improvements: "Created" vs "Updated" messages
-   - Spell check disabled on technical fields (hostname, username, port, key path, password, group)
-   - Auth method renamed to "None (Keyboard-Interactive)"
-   - Filter badge shows number of selected groups (hidden when all selected)
-   - Persistent filter state across app restarts
+### v0.2.0 (Released - 2024-12-20) - UX Improvements & Features
+- **New**: Group filtering, Expand/Collapse all, Update checker, SSH Key browser
+- **Fixed**: Window restoration, password deletion, memory leak, file dialog timeout
+- **UX**: Smart Save button, loading feedback, persistent filters
 
-### v0.1.2 (Released) - Security Fixes
-- Fixed critical command injection vulnerability (SEC-001)
-- Added comprehensive input validation for all profile fields (SEC-002)
-- Fixed path traversal vulnerability in SSH key paths (SEC-003)
-- Backend port validation (SEC-004)
-- Password deletion error handling (SEC-005)
-- Content Security Policy enabled (SEC-010)
+### v0.1.2 (Released - 2024-12-20) - Security Fixes
+- Fixed critical command injection and path traversal vulnerabilities
+- Added comprehensive input validation and Content Security Policy
 
-### v0.1.1 (Released) - Initial Release
-- Initial public release with core functionality
-- Profile management, theming, export/import
-- macOS and Windows support
-- GitHub Actions automated releases
+### v0.1.1 (Released - 2024-12-20) - Initial Release
+- Core profile management, theming, export/import, macOS/Windows support
 
 ## Contact & Resources
 
