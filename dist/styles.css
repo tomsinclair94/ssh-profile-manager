@@ -715,7 +715,7 @@ form {
 .about-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
 .about-item {

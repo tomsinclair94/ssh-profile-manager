@@ -5,6 +5,61 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2024-12-21
+
+### Fixed
+
+#### Medium Priority Issues
+- **Error Reporting (Linux)**: Improved error handling in SSH connection for Linux - now reports which terminal emulators were tried and why they failed
+- **Update Validation**: Added comprehensive validation for update version format from GitHub API, including empty string checks and better error messages
+- **Port Validation**: Added explicit documentation and debug assertions for port validation to ensure safe i32 to u16 casting
+- **Filter Badge UX**: Changed filter badge to show number of HIDDEN groups instead of selected groups for clearer user experience
+
+#### Low Priority Issues
+- **Error Handling**: Standardized error handling across all platforms (macOS, Windows, Linux) for SSH connections
+- **Code Quality**: Eliminated duplicate code in form value capture by creating `getCurrentFormValues()` helper function
+- **Smart Duplicates**: Implemented smart duplicate naming that strips existing "(duplicate)" suffixes to prevent nested duplicates like "Profile (duplicate) (duplicate)"
+- **User Feedback**: Added loading toast notifications during import/export operations ("Reading import file...", "Importing profiles...", "Exporting profiles...")
+- **Code Maintainability**: Replaced all hardcoded magic numbers with named constants:
+  - `TOAST_DURATION_SHORT` (3000ms)
+  - `TOAST_DURATION_LONG` (4000ms)
+  - `TOAST_DURATION_LOADING` (10000ms)
+  - `DEBOUNCE_DELAY` (100ms)
+  - `FILE_DIALOG_TIMEOUT_SECS` (120s)
+- **Documentation**: Added comment explaining `file.text()` browser compatibility (not an issue for Tauri apps using modern WebViews)
+
+### Changed
+- **UI Refinement**: Reduced spacing in About section (Settings modal) from 12px to 8px for a more compact layout
+- **Window Constraints**: Added minimum window size constraints (600x450) to prevent UI from becoming unusable when resized too small
+
+## [0.2.0] - 2024-12-20
+
+### Added
+- **Group Filtering**: Dropdown filter button to show/hide specific groups with persistent state across app restarts
+- **Expand/Collapse All**: Button to expand or collapse all groups at once with dynamic text based on current state
+- **Update Checker**: Manual update check button + auto-check on launch (toggleable in settings)
+- **SSH Key Browser**: Browse button for SSH key selection with OS-specific hints for showing hidden files
+  - Opens directly in ~/.ssh directory
+  - macOS hint: "Press Cmd+Shift+. to show hidden files"
+  - Windows hint: "Enable 'Show hidden files' in File Explorer settings"
+
+### Fixed
+- **Window Restoration**: Changed `window.hide()` to `window.minimize()` for proper dock/taskbar restoration
+- **Password Deletion**: Fixed error when editing profiles with non-password authentication methods
+- **Update Checker**: Changed from blocking to async HTTP to prevent UI freezing during update checks
+- **Filter State**: Added debouncing to filter state updates to prevent race conditions
+- **Memory Leak**: Implemented event delegation for profile card buttons to prevent memory leaks
+- **File Dialogs**: Added 2-minute timeout to file dialogs to prevent indefinite hangs
+- **Filter State Validation**: Added validation and user notification for corrupted localStorage filter data
+
+### Changed
+- **Smart Save Button**: Disabled until changes detected when editing existing profiles
+- **Better Notifications**: Differentiated "Created" vs "Updated" messages for profiles
+- **Spell Check**: Disabled on technical fields (hostname, username, port, key path, password, group)
+- **Auth Method Rename**: Changed "None" to "None (Keyboard-Interactive)" for clarity
+- **Filter Badge**: Shows number of selected groups (hidden when all groups selected)
+- **Persistent Filters**: Group filter state persists across app restarts
+
 ## [0.1.2] - 2024-12-20
 
 ### Security

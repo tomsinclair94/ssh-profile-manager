@@ -7,6 +7,9 @@ use std::sync::Mutex;
 use tauri::{Manager, State};
 use uuid::Uuid;
 
+// Constants
+const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
+
 // Profile structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
@@ -73,9 +76,14 @@ fn validate_profile_name(name: &str) -> Result<(), String> {
 }
 
 fn validate_port(port: i32) -> Result<u16, String> {
+    // Validate port is within valid u16 range (1-65535)
+    // Note: We accept i32 from frontend for compatibility, but validate range before casting
     if port < 1 || port > 65535 {
         return Err("Port must be between 1 and 65535".to_string());
     }
+
+    // Safe to cast: we've verified port is in valid u16 range [1, 65535]
+    debug_assert!(port >= 1 && port <= 65535, "Port validation failed");
     Ok(port as u16)
 }
 
@@ -509,7 +517,7 @@ async fn save_profiles_to_file(
 
     // Show save dialog in a blocking context with 2-minute timeout
     let result = timeout(
-        std::time::Duration::from_secs(120),
+        std::time::Duration::from_secs(FILE_DIALOG_TIMEOUT_SECS),
         spawn_blocking(move || {
             // Use rfd (native file dialog) which works well with Tauri
             let file_path = rfd::FileDialog::new()
@@ -555,7 +563,7 @@ async fn browse_ssh_key() -> Result<Option<String>, String> {
 
     // Show open file dialog in a blocking context with 2-minute timeout
     let result = timeout(
-        std::time::Duration::from_secs(120),
+        std::time::Duration::from_secs(FILE_DIALOG_TIMEOUT_SECS),
         spawn_blocking(move || {
             // Use rfd (native file dialog) which works well with Tauri
             let file_path = rfd::FileDialog::new()
@@ -613,23 +621,39 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
         .await
         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
-    let latest_version = release["tag_name"]
+    // Validate and extract tag_name
+    let tag_name = release["tag_name"]
         .as_str()
-        .ok_or("No tag_name in release")?
-        .trim_start_matches('v')
-        .to_string();
+        .ok_or("No tag_name in release")?;
 
+    // Validate tag_name format (should be vX.X.X or X.X.X)
+    if tag_name.is_empty() {
+        return Err("Empty tag_name in release".to_string());
+    }
+
+    let latest_version = tag_name.trim_start_matches('v').to_string();
+
+    // Ensure version string is not empty after trimming
+    if latest_version.is_empty() {
+        return Err("Invalid version format in tag_name".to_string());
+    }
+
+    // Validate download URL exists
     let download_url = release["html_url"]
         .as_str()
         .ok_or("No html_url in release")?
         .to_string();
+
+    if download_url.is_empty() {
+        return Err("Empty html_url in release".to_string());
+    }
 
     // Use semantic versioning for proper version comparison
     use semver::Version;
     let current = Version::parse(CURRENT_VERSION)
         .map_err(|e| format!("Invalid current version: {}", e))?;
     let latest = Version::parse(&latest_version)
-        .map_err(|e| format!("Invalid latest version: {}", e))?;
+        .map_err(|e| format!("Invalid latest version '{}': {}", latest_version, e))?;
 
     // Update is available only if latest > current
     let update_available = latest > current;
@@ -753,23 +777,31 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
 
         // Try common terminal emulators
         let terminals = vec!["gnome-terminal", "konsole", "xterm"];
+        let mut tried_terminals = Vec::new();
 
         for terminal in terminals {
-            if Command::new(terminal)
+            match Command::new(terminal)
                 .arg("-e")
                 .arg(&ssh_cmd)
                 .spawn()
-                .is_ok()
             {
-                // Minimize the app window after launching terminal
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.minimize();
+                Ok(_) => {
+                    // Minimize the app window after launching terminal
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.minimize();
+                    }
+                    return Ok(());
                 }
-                return Ok(());
+                Err(e) => {
+                    tried_terminals.push(format!("{} ({})", terminal, e));
+                }
             }
         }
 
-        return Err("No terminal emulator found".to_string());
+        return Err(format!(
+            "No terminal emulator found. Tried: {}",
+            tried_terminals.join(", ")
+        ));
     }
 
     Ok(())

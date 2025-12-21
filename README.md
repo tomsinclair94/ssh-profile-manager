@@ -1,6 +1,25 @@
+<div align="center">
+
 # SSH Profile Manager
 
-A lightweight SSH profile manager for macOS and Windows with a modern GUI. Manage your SSH connections without the bloat of traditional Electron-based terminal applications.
+**A lightweight, native SSH profile manager built with Tauri and Rust**
+
+[![macOS](https://img.shields.io/badge/macOS-14.0+-000000?style=flat&logo=apple&logoColor=white)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Windows](https://img.shields.io/badge/Windows-10+-0078D6?style=flat&logo=windows&logoColor=white)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+
+### [📥 Download Latest Release (v0.2.1)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
+
+<sub>**macOS 14.0+ | Windows 10+ | ~3-5 MB | Native Performance**</sub>
+
+<sub>⚠️ **macOS Note:** Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app)</sub>
+
+</div>
+
+---
 
 ## Why SSH Profile Manager?
 
@@ -18,10 +37,11 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 - Create, edit, delete, and duplicate SSH profiles
 - Organise profiles into collapsible groups
 - Search and filter profiles by name, host, or group
+- Group filtering with persistent state
 - Three authentication methods:
-  - SSH Key (with path to key file)
+  - SSH Key (with file browser)
   - Password (securely stored in system keychain)
-  - None (prompt on connect)
+  - None (Keyboard-Interactive prompt)
 - Export profiles to JSON for team sharing
 - Import profiles from JSON
 
@@ -31,6 +51,8 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 - Toast notifications for success/error feedback
 - Smooth animations and hover effects
 - Keyboard-friendly interface
+- Minimum window size enforcement
+- Auto-update checker (toggleable)
 
 ### SSH Connection
 - One-click connect launches your system terminal
@@ -39,6 +61,7 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 - Works with native terminals:
   - macOS: Terminal.app
   - Windows: Windows Terminal / cmd
+  - Linux: gnome-terminal / konsole / xterm
 
 ## Installation
 
@@ -56,7 +79,7 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 ## Usage
 
 ### Creating a Profile
-1. Click the "Add Profile" button
+1. Click the "New Profile" button
 2. Fill in the required fields:
    - **Name:** A unique identifier for this profile
    - **Host:** The SSH server address
@@ -76,6 +99,8 @@ Tired of memorising SSH commands and digging through your bash history? Want a G
 ### Organising Profiles
 - Use the **Group** field to organise related profiles
 - Click the chevron (▶/▼) next to group names to collapse/expand
+- Use the "Expand/Collapse Groups" button to toggle all groups at once
+- Use the filter dropdown to show/hide specific groups
 - Use the search bar to filter profiles
 
 ### Import/Export
@@ -146,7 +171,8 @@ ssh-profile-manager/
 ## Platform Support
 
 - ✅ macOS (Apple Silicon / ARM64)
-- ⚠️ Windows (builds but untested)
+- ✅ Windows (builds via GitHub Actions)
+- ⚠️ Linux (untested)
 
 ## License
 
@@ -156,5 +182,13 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 Built with [Tauri](https://tauri.app/) - a framework for building tiny, fast binaries for all major platforms.
 
+---
+
+<div align="center">
+
 **Author:** Tom Sinclair
 **AI Assistant:** Claude (Anthropic)
+
+[Report Issues](https://github.com/tomsinclair94/ssh-profile-manager/issues) • [View Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+
+</div>

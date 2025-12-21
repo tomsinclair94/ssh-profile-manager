@@ -66,7 +66,7 @@ npm run build    # Build production app
 
 ## Release Management
 
-### Current Version: 0.2.0 (Released)
+### Current Version: 0.2.1 (Ready for Release)
 
 ### Creating a New Release
 
@@ -135,26 +135,15 @@ npm run build    # Build production app
 ### Current
 - None
 
-### Deferred to v0.2.1 (From Code Review)
-
-**Medium Priority:**
-- **MED-001**: Inconsistent error handling in SSH connection (Linux branch doesn't report which terminal failed)
-- **MED-002**: No validation for update version format from GitHub API
-- **MED-003**: Potential integer overflow in port validation (uses i32 input, casts to u16)
-- **MED-004**: Filter badge logic may be confusing (shows selected count instead of hidden count)
-
-**Low Priority:**
-- **LOW-001**: Inconsistent error handling in SSH connection across platforms
-- **LOW-002**: Duplicate code in form value capture (getCurrentFormValues used in two places)
-- **LOW-003**: Missing smart duplicate naming (creates nested "(duplicate)" suffixes)
-- **LOW-004**: No user feedback during long import/export operations
-- **LOW-005**: Hardcoded magic numbers (toast durations, debounce delays)
-- **LOW-006**: Browser compatibility - file.text() method (minor, Tauri-only app)
+### Very Low Priority (From v0.2.1 Code Review)
+- **VLP-001**: Debounce function doesn't preserve `this` context - not currently an issue as only used with arrow functions, but could use `.apply(this, args)` for future-proofing
+- **VLP-002**: Linux error messages show OS-level errors (e.g., "No such file or directory") - could simplify to "not installed" for better UX
+- **VLP-003**: Port validation debug assertion is redundant with validation check above it - consider removing or making message more specific
+- **VLP-004**: Toast hiding on export cancel is abrupt - could use existing toast hiding mechanism for consistency
 
 ## Pending Tasks (Next Session)
 
 - [ ] Add limitations and syntax checking to the profile editor
-- [ ] Tweak UI on the settings page
 
 ## Future Feature Ideas
 
@@ -208,6 +197,23 @@ CREATE TABLE profiles (
 **Node:** @tauri-apps/cli, @tauri-apps/api
 
 ## Recent Changes
+
+### v0.2.1 (Ready for Release) - Code Quality & Bug Fixes
+1. **Bug Fixes**:
+   - Linux SSH connection: Now reports which terminal emulators were tried and why they failed
+   - Update checker: Added comprehensive validation for version format from GitHub API
+   - Port validation: Added explicit documentation and debug assertions for safe casting
+   - Filter badge: Changed to show HIDDEN groups instead of selected groups (clearer UX)
+2. **Code Quality**:
+   - Standardized error handling across all platforms
+   - Eliminated duplicate code in form value capture
+   - Implemented smart duplicate naming (strips existing "(duplicate)" suffixes)
+   - Added loading toast notifications during import/export
+   - Replaced all hardcoded magic numbers with named constants
+   - Added browser compatibility documentation
+3. **UI Enhancements**:
+   - Reduced spacing in About section for more compact layout
+   - Added minimum window size constraints (600x450)
 
 ### v0.2.0 (Released) - UX Improvements & Bug Fixes
 1. **Bug Fixes**:

@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', function() {
 const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.tauri?.invoke;
 const shell = window.__TAURI__?.shell;
 
+// Constants
+const TOAST_DURATION_SHORT = 3000;  // 3 seconds
+const TOAST_DURATION_LONG = 4000;   // 4 seconds
+const TOAST_DURATION_LOADING = 10000; // 10 seconds (for loading states)
+const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
+
 // State
 let profiles = [];
 let editingProfileId = null;
@@ -570,7 +576,7 @@ function customConfirm(message, options = {}) {
 }
 
 // Toast notification
-function showToast(message, duration = 3000, type = 'success') {
+function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
     toastMessage.textContent = message;
     toastElement.classList.remove('hidden', 'toast-error', 'toast-success');
 
@@ -643,7 +649,7 @@ async function checkForUpdates(silent = false) {
     } catch (error) {
         console.error('Failed to check for updates:', error);
         if (!silent) {
-            showToast('Failed to check for updates: ' + error, 4000, 'error');
+            showToast('Failed to check for updates: ' + error, TOAST_DURATION_LONG, 'error');
         }
     }
 }
@@ -675,7 +681,7 @@ function loadFilterState() {
             localStorage.removeItem('filteredGroups');
 
             // Notify user
-            showToast('Filter preferences were reset due to corrupted data', 4000, 'error');
+            showToast('Filter preferences were reset due to corrupted data', TOAST_DURATION_LONG, 'error');
         }
     }
 }
@@ -688,15 +694,15 @@ function saveFilterState() {
 
 function updateFilterBadge() {
     const allGroups = getAllGroups();
-    const selectedGroups = allGroups.length - filteredGroups.size;
+    const hiddenGroups = filteredGroups.size;
 
-    // Show badge unless all groups are selected
-    if (selectedGroups === allGroups.length && allGroups.length > 0) {
-        // All groups selected - hide badge
+    // Only show badge when some groups are hidden
+    if (hiddenGroups === 0) {
+        // No groups hidden - hide badge
         filterBadge.classList.add('hidden');
     } else {
-        // Show number of selected groups (including 0)
-        filterBadge.textContent = selectedGroups;
+        // Show number of hidden groups
+        filterBadge.textContent = hiddenGroups;
         filterBadge.classList.remove('hidden');
     }
 }
@@ -742,7 +748,7 @@ function buildFilterGroupsList() {
     const updateFilters = debounce(() => {
         saveFilterState();
         renderProfiles(searchInput.value);
-    }, 100);
+    }, DEBOUNCE_DELAY);
 
     // Add event listeners to checkboxes
     document.querySelectorAll('.filter-group-checkbox').forEach(checkbox => {
@@ -810,6 +816,9 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 // Export profiles to JSON
 async function exportProfiles() {
     try {
+        // Show loading feedback
+        showToast('Exporting profiles...', TOAST_DURATION_LOADING);
+
         const data = await invoke('export_profiles');
         const defaultFilename = `ssh-profiles-${new Date().toISOString().split('T')[0]}.json`;
 
@@ -823,17 +832,24 @@ async function exportProfiles() {
             showToast('Profiles exported successfully!');
             console.log('Profiles exported successfully');
         } else {
+            // Hide the loading toast
+            toastElement.classList.add('hidden');
             console.log('User cancelled save dialog');
         }
     } catch (error) {
         console.error('Failed to export profiles:', error);
-        showToast('Failed to export profiles: ' + error, 4000, 'error');
+        showToast('Failed to export profiles: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
 // Import profiles from JSON
 async function importProfiles(file) {
     try {
+        // Show loading feedback
+        showToast('Reading import file...', TOAST_DURATION_LOADING);
+
+        // Note: file.text() is a modern File API method (not supported in older browsers)
+        // This is fine for Tauri apps as they use a modern WebView (WKWebView on macOS, WebView2 on Windows)
         const text = await file.text();
         const data = JSON.parse(text);
 
@@ -842,6 +858,9 @@ async function importProfiles(file) {
 
         // Check if we have existing profiles
         if (profiles.length > 0) {
+            // Hide loading toast while showing confirmation
+            toastElement.classList.add('hidden');
+
             const existingCount = profiles.length;
             const importCount = data.profiles?.length || 0;
             const existingText = existingCount === 1 ? 'existing profile' : 'existing profiles';
@@ -866,6 +885,9 @@ async function importProfiles(file) {
             }
         }
 
+        // Show importing feedback
+        showToast('Importing profiles...', TOAST_DURATION_LOADING);
+
         // Import profiles via backend
         await invoke('import_profiles', { data: text });
 
@@ -880,14 +902,14 @@ async function importProfiles(file) {
         console.log('Profiles imported successfully');
     } catch (error) {
         console.error('Failed to import profiles:', error);
-        showToast('Failed to import profiles: ' + error, 4000, 'error');
+        showToast('Failed to import profiles: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
 // Delete all profiles
 async function deleteAllProfiles() {
     if (profiles.length === 0) {
-        showToast('No profiles to delete!', 3000, 'error');
+        showToast('No profiles to delete!', TOAST_DURATION_SHORT, 'error');
         return;
     }
 
@@ -927,7 +949,7 @@ async function deleteAllProfiles() {
         console.log('All profiles deleted');
     } catch (error) {
         console.error('Failed to delete all profiles:', error);
-        showToast('Failed to delete all profiles: ' + error, 4000, 'error');
+        showToast('Failed to delete all profiles: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -944,7 +966,7 @@ async function browseSshKey() {
         // If result is null, user cancelled - do nothing
     } catch (error) {
         console.error('Failed to browse for SSH key:', error);
-        showToast('Failed to open file browser: ' + error, 4000, 'error');
+        showToast('Failed to open file browser: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -986,9 +1008,9 @@ function openModal(profile = null) {
     }
 }
 
-// Capture current form values (for tracking changes)
-function captureFormValues() {
-    originalFormValues = {
+// Get current form values as an object
+function getCurrentFormValues() {
+    return {
         name: document.getElementById('profile-name').value,
         description: document.getElementById('profile-description').value,
         host: document.getElementById('profile-host').value,
@@ -1001,6 +1023,11 @@ function captureFormValues() {
     };
 }
 
+// Capture current form values (for tracking changes)
+function captureFormValues() {
+    originalFormValues = getCurrentFormValues();
+}
+
 // Check if form has changed from original values
 function checkFormChanged() {
     // If creating a new profile, always keep Save button enabled
@@ -1010,17 +1037,7 @@ function checkFormChanged() {
     }
 
     // Compare current values with original values
-    const currentValues = {
-        name: document.getElementById('profile-name').value,
-        description: document.getElementById('profile-description').value,
-        host: document.getElementById('profile-host').value,
-        port: document.getElementById('profile-port').value,
-        username: document.getElementById('profile-username').value,
-        auth_method: document.getElementById('profile-auth-method').value,
-        key_path: document.getElementById('profile-key-path').value,
-        password: document.getElementById('profile-password').value,
-        group: document.getElementById('profile-group').value
-    };
+    const currentValues = getCurrentFormValues();
 
     // Check if any field has changed
     const hasChanged = Object.keys(originalFormValues).some(key =>
@@ -1051,7 +1068,7 @@ async function saveProfile() {
     );
 
     if (duplicateProfile) {
-        showToast(`A profile named "${profileName}" already exists. Please choose a different name.`, 4000, 'error');
+        showToast(`A profile named "${profileName}" already exists. Please choose a different name.`, TOAST_DURATION_LONG, 'error');
         return;
     }
 
@@ -1085,7 +1102,7 @@ async function saveProfile() {
         showToast(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
     } catch (error) {
         console.error('Failed to save profile:', error);
-        showToast('Failed to save profile: ' + error, 4000, 'error');
+        showToast('Failed to save profile: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -1102,11 +1119,18 @@ function duplicateProfile(id) {
     const profile = profiles.find(p => p.id === id);
     if (!profile) return;
 
-    // Create a copy of the profile with (duplicate) appended to name
+    // Strip existing " (duplicate)" suffix if present to avoid nested duplicates
+    let baseName = profile.name;
+    const duplicateSuffix = ' (duplicate)';
+    if (baseName.endsWith(duplicateSuffix)) {
+        baseName = baseName.slice(0, -duplicateSuffix.length);
+    }
+
+    // Create a copy of the profile with (duplicate) appended to base name
     const duplicatedProfile = {
         ...profile,
         id: null, // Clear ID so it creates a new profile
-        name: profile.name + ' (duplicate)'
+        name: baseName + duplicateSuffix
     };
 
     // Open modal in "new profile" mode with duplicated data
@@ -1170,7 +1194,7 @@ async function deleteProfile(id) {
         return true;
     } catch (error) {
         console.error('Failed to delete profile:', error);
-        showToast('Failed to delete profile: ' + error, 4000, 'error');
+        showToast('Failed to delete profile: ' + error, TOAST_DURATION_LONG, 'error');
         return false;
     }
 }
@@ -1184,7 +1208,7 @@ async function connectToProfile(id) {
         await invoke('connect_ssh', { profileId: id });
     } catch (error) {
         console.error('Failed to connect:', error);
-        showToast('Failed to connect: ' + error, 4000, 'error');
+        showToast('Failed to connect: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 

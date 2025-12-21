@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SSH Profile Manager",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "com.sshprofilemanager.app",
   "build": {
     "frontendDist": "../dist"
@@ -12,6 +12,8 @@
         "title": "SSH Profile Manager",
         "width": 800,
         "height": 600,
+        "minWidth": 600,
+        "minHeight": 450,
         "resizable": true,
         "fullscreen": false,
         "devtools": true
