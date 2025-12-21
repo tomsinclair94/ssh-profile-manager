@@ -66,7 +66,7 @@ npm run build    # Build production app
 
 ## Release Management
 
-### Current Version: 0.2.1 (Ready for Release)
+### Current Version: 0.2.1 (Released)
 
 ### Creating a New Release
 
