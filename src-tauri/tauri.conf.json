@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SSH Profile Manager",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "identifier": "com.tomsinclair.sshprofilemanager",
   "build": {
     "frontendDist": "../dist"
@@ -30,6 +30,8 @@
             "core:default",
             "core:window:allow-hide",
             "core:window:allow-show",
+            "core:window:allow-inner-size",
+            "core:window:allow-set-size",
             "core:app:allow-app-hide",
             "core:app:allow-app-show",
             "shell:allow-open"

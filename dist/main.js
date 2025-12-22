@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Use Tauri's injected API
 const invoke = window.__TAURI__?.core?.invoke || window.__TAURI__?.tauri?.invoke;
 const shell = window.__TAURI__?.shell;
+const { getCurrentWindow, LogicalSize } = window.__TAURI__?.window;
 
 // Constants
 const TOAST_DURATION_SHORT = 3000;  // 3 seconds
@@ -350,6 +351,10 @@ let restoreSettingsInput;
 let resetSettingsBtn;
 let includeProfilesCheck;
 let profileCountBadge;
+let terminalSelect;
+let customTerminalGroup;
+let customTerminalPath;
+let browseTerminalBtn;
 
 // Confirmation promise resolver
 let confirmResolver = null;
@@ -402,6 +407,10 @@ async function init() {
     resetSettingsBtn = document.getElementById('reset-settings-btn');
     includeProfilesCheck = document.getElementById('include-profiles-check');
     profileCountBadge = document.getElementById('profile-count-badge');
+    terminalSelect = document.getElementById('terminal-select');
+    customTerminalGroup = document.getElementById('custom-terminal-group');
+    customTerminalPath = document.getElementById('custom-terminal-path');
+    browseTerminalBtn = document.getElementById('browse-terminal-btn');
 
     console.log('DOM elements retrieved');
 
@@ -412,8 +421,12 @@ async function init() {
     loadThemePreference();
     loadAutoUpdatePreference();
     loadIncludeProfilesPreference();
+    populateTerminalOptions();
+    loadTerminalPreference();
     loadFilterState();
     loadCollapsedState();
+    await loadWindowState();
+    await setupWindowListeners();
     setupEventListeners();
 
     // Check for updates on launch if enabled
@@ -523,7 +536,7 @@ function renderProfiles(filter = '') {
             html += `
                 <div class="profile-card" data-id="${profile.id}">
                     <div class="profile-card-header">
-                        <div class="profile-card-title">${escapeHtml(profile.name)}</div>
+                        <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
                     </div>
                     <div class="profile-card-info">
                         <div class="profile-info-item">
@@ -539,7 +552,7 @@ function renderProfiles(filter = '') {
                             <span>${escapeHtml(profile.auth_method || 'key')}</span>
                         </div>
                     </div>
-                    ${profile.description ? `<div class="profile-card-description">${escapeHtml(profile.description)}</div>` : ''}
+                    ${profile.description ? `<div class="profile-card-description" title="${escapeHtml(profile.description)}">${escapeHtml(profile.description)}</div>` : ''}
                     <div class="profile-card-actions">
                         <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
                         <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
@@ -859,6 +872,16 @@ function setupEventListeners() {
         await resetSettings();
     });
 
+    // Terminal preference
+    terminalSelect.addEventListener('change', () => {
+        updateTerminalVisibility();
+        saveTerminalPreference();
+    });
+
+    browseTerminalBtn.addEventListener('click', async () => {
+        await browseTerminalApp();
+    });
+
     // Close filter popup when clicking outside
     document.addEventListener('click', (e) => {
         if (!filterPopup.classList.contains('hidden') &&
@@ -933,6 +956,12 @@ function updateAuthMethodVisibility() {
 // Settings modal functions
 function openSettings() {
     settingsModal.classList.remove('hidden');
+
+    // Scroll to top of modal content
+    const modalContent = settingsModal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
 }
 
 function closeSettings() {
@@ -1165,6 +1194,88 @@ function clearGroupFilters() {
     renderProfiles(searchInput.value);
 }
 
+// Window state functions
+async function loadWindowState() {
+    try {
+        const savedWidth = localStorage.getItem('windowWidth');
+        const savedHeight = localStorage.getItem('windowHeight');
+
+        // Only restore if we have saved values, otherwise use defaults (800x600)
+        if (savedWidth && savedHeight) {
+            const MIN_WIDTH = 600;
+            const MIN_HEIGHT = 450;
+            const MAX_WIDTH = 4000;
+            const MAX_HEIGHT = 3000;
+
+            let width = parseInt(savedWidth);
+            let height = parseInt(savedHeight);
+
+            // Validate and clamp to valid range
+            if (isNaN(width) || isNaN(height) ||
+                width < MIN_WIDTH || width > MAX_WIDTH ||
+                height < MIN_HEIGHT || height > MAX_HEIGHT) {
+                console.warn('Invalid window dimensions in storage, using defaults');
+                await resetWindowState();
+                return;
+            }
+
+            const window = getCurrentWindow();
+            const size = new LogicalSize(width, height);
+            await window.setSize(size);
+        }
+    } catch (error) {
+        console.error('Error loading window state:', error);
+        // Fall back to defaults on error
+        await resetWindowState();
+    }
+}
+
+async function saveWindowState() {
+    try {
+        const window = getCurrentWindow();
+
+        // Fetch size and scale factor concurrently to avoid race conditions
+        const [size, scale] = await Promise.all([
+            window.innerSize(),
+            window.scaleFactor()
+        ]);
+
+        // Use logical size (not physical pixels) - important for Retina displays
+        const logicalSize = size.toLogical(scale);
+
+        localStorage.setItem('windowWidth', Math.round(logicalSize.width));
+        localStorage.setItem('windowHeight', Math.round(logicalSize.height));
+    } catch (error) {
+        console.error('Error saving window state:', error);
+    }
+}
+
+async function resetWindowState() {
+    try {
+        // Reset to defaults (800x600)
+        localStorage.setItem('windowWidth', '800');
+        localStorage.setItem('windowHeight', '600');
+
+        const window = getCurrentWindow();
+        const size = new LogicalSize(800, 600);
+        await window.setSize(size);
+    } catch (error) {
+        console.error('Error resetting window state:', error);
+    }
+}
+
+// Setup window resize listener
+async function setupWindowListeners() {
+    try {
+        const window = getCurrentWindow();
+        await window.listen('tauri://resize', async () => {
+            await saveWindowState();
+        });
+    } catch (error) {
+        console.error('Error setting up window listeners:', error);
+    }
+}
+
 // Theme functions
 function loadThemePreference() {
     const savedTheme = localStorage.getItem('theme') || 'system';
@@ -1192,6 +1303,82 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
         document.body.classList.toggle('light-mode', !e.matches);
     }
 });
+
+// Terminal preference functions
+function getOS() {
+    const platform = navigator.platform.toLowerCase();
+    const userAgent = navigator.userAgent.toLowerCase();
+
+    if (platform.includes('mac') || userAgent.includes('mac')) {
+        return 'macos';
+    } else if (platform.includes('win') || userAgent.includes('win')) {
+        return 'windows';
+    }
+    return 'unknown';
+}
+
+function populateTerminalOptions() {
+    const os = getOS();
+    terminalSelect.innerHTML = ''; // Clear existing options
+
+    if (os === 'macos') {
+        terminalSelect.innerHTML = `
+            <option value="default">Default (Terminal.app)</option>
+            <option value="custom">Custom Terminal</option>
+            <option value="embedded" disabled>Embedded Terminal (Coming Soon)</option>
+        `;
+    } else if (os === 'windows') {
+        terminalSelect.innerHTML = `
+            <option value="default">Default (System Default)</option>
+            <option value="cmd">Command Prompt</option>
+            <option value="powershell">PowerShell</option>
+            <option value="windows_terminal">Windows Terminal</option>
+            <option value="custom">Custom Terminal</option>
+            <option value="embedded" disabled>Embedded Terminal (Coming Soon)</option>
+        `;
+    } else {
+        // Unknown OS - show minimal options
+        terminalSelect.innerHTML = `
+            <option value="default">Default Terminal</option>
+        `;
+    }
+}
+
+function loadTerminalPreference() {
+    const savedPreference = localStorage.getItem('terminalPreference') || 'default';
+    const savedCustomPath = localStorage.getItem('customTerminalPath') || '';
+
+    terminalSelect.value = savedPreference;
+    customTerminalPath.value = savedCustomPath;
+
+    // Show/hide custom terminal path input
+    updateTerminalVisibility();
+}
+
+function saveTerminalPreference() {
+    localStorage.setItem('terminalPreference', terminalSelect.value);
+    localStorage.setItem('customTerminalPath', customTerminalPath.value);
+}
+
+function updateTerminalVisibility() {
+    const isCustom = terminalSelect.value === 'custom';
+    customTerminalGroup.classList.toggle('hidden', !isCustom);
+}
+
+async function browseTerminalApp() {
+    try {
+        const result = await invoke('browse_terminal_app');
+        if (result) {
+            // User selected a terminal app
+            customTerminalPath.value = result;
+            saveTerminalPreference();
+        }
+        // If result is null, user cancelled - do nothing
+    } catch (error) {
+        console.error('Failed to browse for terminal app:', error);
+        showToast('Failed to open application browser: ' + error, TOAST_DURATION_LONG, 'error');
+    }
+}
 
 // Export profiles to JSON
 async function exportProfiles() {
@@ -1249,13 +1436,13 @@ async function importProfiles(file) {
             const confirmMessage = `
                 <div>You have <span class="profile-name">${existingCount} ${existingText}</span>.</div>
                 <div class="host-info">Importing will add ${importCount} ${importText} and override all existing profiles.</div>
-                <div class="warning">Do you want to continue?</div>
+                <div style="margin-top: 12px;">Are you sure you want to import these profiles?</div>
             `;
 
             const confirmImport = await customConfirm(confirmMessage, {
                 title: 'Confirm Import',
-                okText: 'Yes',
-                cancelText: 'No',
+                okText: 'Import',
+                cancelText: 'Cancel',
                 okClass: 'btn-primary'
             });
 
@@ -1300,13 +1487,13 @@ async function deleteAllProfiles() {
         <div>You currently have <span class="profile-name">${count} ${profileText}</span>.</div>
         <div class="warning">This will permanently delete all profiles and their stored passwords.</div>
         <div class="warning">This action cannot be undone.</div>
-        <div style="margin-top: 12px;">Are you sure you want to continue?</div>
+        <div style="margin-top: 12px;">Are you sure you want to delete all profiles?</div>
     `;
 
     const confirmed = await customConfirm(confirmMessage, {
         title: 'Delete All Profiles',
-        okText: 'Yes',
-        cancelText: 'No',
+        okText: 'Delete All',
+        cancelText: 'Cancel',
         okClass: 'btn-danger'
     });
 
@@ -1341,6 +1528,11 @@ async function backupSettings() {
         const theme = localStorage.getItem('theme') || 'system';
         const autoUpdateCheck = localStorage.getItem('autoUpdateCheck') === 'true';
         const includeProfiles = includeProfilesCheck.checked;
+        const windowWidth = parseInt(localStorage.getItem('windowWidth') || '800');
+        const windowHeight = parseInt(localStorage.getItem('windowHeight') || '600');
+
+        // Always include terminal preference (OS-specific setting, will be tagged with OS)
+        const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -1358,7 +1550,10 @@ async function backupSettings() {
             autoUpdateCheck,
             filteredGroups,
             collapsedGroups,
-            includeProfiles
+            terminalPreference: terminalPreference,
+            includeProfiles,
+            windowWidth,
+            windowHeight
         });
 
         const defaultFilename = `sshpm-settings-${new Date().toISOString().split('T')[0]}.json`;
@@ -1394,6 +1589,11 @@ async function restoreSettings(file) {
         const result = await invoke('import_settings', { data: text });
         const includesProfiles = result.profiles && result.profiles.length > 0;
 
+        // Check if backup OS matches current OS
+        const backupOS = data.os || 'unknown';
+        const currentOS = getOS();
+        const osMatches = backupOS === currentOS;
+
         // Check if we have existing settings or profiles
         const hasSettings = localStorage.getItem('theme') ||
                           localStorage.getItem('autoUpdateCheck') ||
@@ -1401,7 +1601,7 @@ async function restoreSettings(file) {
                           localStorage.getItem('collapsedGroups');
         const hasProfiles = profiles.length > 0;
 
-        if (hasSettings || (includesProfiles && hasProfiles)) {
+        if (hasSettings || (includesProfiles && hasProfiles) || !osMatches) {
             toastElement.classList.add('hidden');
 
             let confirmMessage;
@@ -1411,14 +1611,32 @@ async function restoreSettings(file) {
                 confirmMessage = `
                     <div>This backup contains <span class="profile-name">${importCount} ${profileText}</span>.</div>
                     <div class="warning">Restoring will replace all your current settings${hasProfiles ? ' and profiles' : ''}.</div>
-                    <div style="margin-top: 12px;">Do you want to continue?</div>
                 `;
+
+                // Add OS mismatch warning
+                if (!osMatches) {
+                    const osNames = { 'macos': 'macOS', 'windows': 'Windows', 'unknown': 'Unknown OS' };
+                    confirmMessage += `
+                        <div class="warning" style="margin-top: 8px;">This backup is from ${osNames[backupOS] || backupOS}. OS-specific settings will use ${osNames[currentOS] || currentOS} defaults.</div>
+                    `;
+                }
+
+                confirmMessage += `<div style="margin-top: 12px;">Are you sure you want to restore this backup?</div>`;
             } else {
                 confirmMessage = `
                     <div>You have existing settings configured.</div>
                     <div class="warning">Restoring will replace all your current settings.</div>
-                    <div style="margin-top: 12px;">Do you want to continue?</div>
                 `;
+
+                // Add OS mismatch warning
+                if (!osMatches) {
+                    const osNames = { 'macos': 'macOS', 'windows': 'Windows', 'unknown': 'Unknown OS' };
+                    confirmMessage += `
+                        <div class="warning" style="margin-top: 8px;">This backup is from ${osNames[backupOS] || backupOS}. OS-specific settings will use ${osNames[currentOS] || currentOS} defaults.</div>
+                    `;
+                }
+
+                confirmMessage += `<div style="margin-top: 12px;">Are you sure you want to restore this backup?</div>`;
             }
 
             const confirmRestore = await customConfirm(confirmMessage, {
@@ -1440,6 +1658,28 @@ async function restoreSettings(file) {
         localStorage.setItem('theme', result.settings.theme);
         localStorage.setItem('autoUpdateCheck', result.settings.auto_update_check.toString());
 
+        // Restore OS-specific settings if present (backend filters cross-platform backups)
+        if (result.settings_os_specific && result.settings_os_specific.terminal_preference) {
+            localStorage.setItem('terminalPreference', result.settings_os_specific.terminal_preference);
+        } else {
+            // No OS-specific settings in backup (different OS or old format) - use default
+            localStorage.setItem('terminalPreference', 'default');
+        }
+
+        // Restore window state if available
+        if (result.settings.window_width && result.settings.window_height) {
+            localStorage.setItem('windowWidth', result.settings.window_width.toString());
+            localStorage.setItem('windowHeight', result.settings.window_height.toString());
+
+            try {
+                const window = getCurrentWindow();
+                const size = new LogicalSize(result.settings.window_width, result.settings.window_height);
+                await window.setSize(size);
+            } catch (error) {
+                console.error('Error restoring window size:', error);
+            }
+        }
+
         // Only restore filtered/collapsed groups if they exist
         if (result.settings.filtered_groups) {
             localStorage.setItem('filteredGroups', JSON.stringify(result.settings.filtered_groups));
@@ -1452,6 +1692,9 @@ async function restoreSettings(file) {
         applyTheme(result.settings.theme);
 
         autoUpdateCheck.checked = result.settings.auto_update_check;
+
+        // Reload terminal preference UI
+        loadTerminalPreference();
 
         // Restore profiles if included
         if (includesProfiles) {
@@ -1517,18 +1760,20 @@ async function resetSettings() {
             <div class="warning">This will reset all settings to their default values:</div>
             <ul style="text-align: left; margin: 12px 0; padding-left: 24px;">
                 <li>Theme: System</li>
+                <li>Terminal: Default</li>
                 <li>Auto-update check: Enabled</li>
+                <li>Window size: 800 × 600</li>
                 <li>Filtered groups: Cleared</li>
                 <li>Collapsed groups: Cleared</li>
             </ul>
             <div style="margin-top: 12px;">Profiles will not be affected.</div>
-            <div style="margin-top: 12px;">Are you sure you want to continue?</div>
+            <div style="margin-top: 12px;">Are you sure you want to reset all settings?</div>
         `;
 
         const confirmReset = await customConfirm(confirmMessage, {
             title: 'Reset Settings',
-            okText: 'Yes',
-            cancelText: 'No',
+            okText: 'Reset',
+            cancelText: 'Cancel',
             okClass: 'btn-danger'
         });
 
@@ -1547,11 +1792,19 @@ async function resetSettings() {
         localStorage.setItem('autoUpdateCheck', 'true');
         localStorage.setItem('filteredGroups', '[]');
         localStorage.setItem('collapsedGroups', '[]');
+        localStorage.setItem('terminalPreference', 'default');
+        localStorage.setItem('customTerminalPath', '');
+
+        // Reset window to default size
+        await resetWindowState();
 
         // Apply defaults to UI
         themeSelect.value = 'system';
         applyTheme('system');
         autoUpdateCheck.checked = true;
+
+        // Reset terminal preference UI
+        loadTerminalPreference();
 
         // Reload states
         loadFilterState();
@@ -1610,6 +1863,12 @@ function openModal(profile = null) {
 
     updateAuthMethodVisibility();
     profileModal.classList.remove('hidden');
+
+    // Scroll to top of modal content
+    const modalContent = profileModal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
 
     // Initialize character counters based on current field values
     initializeCharCounters();
@@ -1789,9 +2048,10 @@ async function deleteProfile(id) {
     console.log('Found profile to delete:', profile);
 
     const confirmMessage = `
-        <div>Are you sure you want to delete <span class="profile-name">"${escapeHtml(profile.name)}"</span>?</div>
+        <div>Profile: <span class="profile-name">"${escapeHtml(profile.name)}"</span></div>
         <div class="host-info">Host: ${escapeHtml(profile.username)}@${escapeHtml(profile.host)}</div>
         <div class="warning">This action cannot be undone.</div>
+        <div style="margin-top: 12px;">Are you sure you want to delete this profile?</div>
     `;
 
     const confirmDelete = await customConfirm(confirmMessage, {
@@ -1827,7 +2087,15 @@ async function connectToProfile(id) {
     if (!profile) return;
 
     try {
-        await invoke('connect_ssh', { profileId: id });
+        // Get terminal preference from localStorage
+        const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
+        const customTerminalPath = localStorage.getItem('customTerminalPath') || null;
+
+        await invoke('connect_ssh', {
+            profileId: id,
+            terminalPreference: terminalPreference,
+            customTerminalPath: customTerminalPath
+        });
     } catch (error) {
         console.error('Failed to connect:', error);
         showToast('Failed to connect: ' + error, TOAST_DURATION_LONG, 'error');

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="dist/128x128@2x.png" alt="SSH Profile Manager Logo" width="128" height="128">
+
 # SSH Profile Manager
 
 **A lightweight, native SSH profile manager built with Tauri and Rust**
@@ -9,7 +11,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
 ### [📥 Download Latest Release (v0.3.0)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
@@ -23,116 +25,82 @@
 
 ## Why SSH Profile Manager?
 
-Tired of memorising SSH commands and digging through your bash history? Want a GUI for managing SSH connections but don't want to install a 100MB+ Electron app? SSH Profile Manager gives you the best of both worlds:
+Manage SSH connection profiles with a clean GUI and launch them in your native terminal. No more memorizing commands or bloated Electron apps.
 
-- **Lightweight:** ~3-5MB bundle size (vs 100MB+ for Electron apps)
-- **Fast:** Built with Tauri and Rust for native performance
-- **Secure:** Passwords stored in your system's keychain (macOS Keychain, Windows Credential Manager)
-- **Simple:** Clean interface focused on managing and connecting to SSH hosts
-- **Native:** Uses your system's terminal for actual SSH connections
+✨ **~3-5 MB** (vs 100MB+ Electron) • 🚀 **Native Performance** (Tauri + Rust) • 🔒 **Secure** (system keychain) • 🎯 **Simple** (clean, focused UI)
 
 ## Features
 
-### Profile Management
-- Create, edit, delete, and duplicate SSH profiles
-- Organise profiles into collapsible groups with persistent state
-- Profile counter badge showing total number of profiles
-- Group counter badges showing profiles per group
-- Search and filter profiles by name, host, or group
-- Group filtering with persistent state
-- Three authentication methods:
-  - SSH Key (with file browser)
-  - Password (securely stored in system keychain)
-  - None (Keyboard-Interactive prompt)
-- Export profiles to JSON for team sharing
-- Import profiles from JSON
+**Profile Management**
+- ✅ Create, edit, delete, and duplicate profiles with validation
+- 📁 Organize into collapsible groups with search & filtering
+- 🔑 Three auth methods: SSH Key, Password (keychain), Keyboard-Interactive
+- 📤 Export/Import profiles as JSON for team sharing
 
-### Settings Management
-- **Backup & Restore:** Unified backup system for settings and profiles
-  - Option to include or exclude profiles in backup
-  - Cross-platform JSON format (Mac ↔ Windows compatible)
-  - Smart backup: only includes group filters when profiles are included
-- **Reset Settings:** Reset all settings to defaults with one click
-- **Auto-update Checker:** Toggle automatic update checks on launch
+**Settings & Backup**
+- 💾 Backup & restore settings/profiles in cross-platform JSON format
+- 🔄 Reset to defaults • Auto-update checker
 
-### Modern UI/UX
-- Dark and Light themes with system preference detection
-- Colour-coded action buttons for quick recognition
-- Toast notifications for success/error feedback
-- Smooth animations and hover effects
-- Keyboard-friendly interface
-- Minimum window size enforcement (600x450)
-- Clickable version number linking to GitHub releases
+**Modern UI**
+- 🌓 Dark/Light themes with system preference detection
+- 🎨 Color-coded buttons • Toast notifications • Smooth animations
+- 📱 Responsive layout (NEW in v0.4.0)
 
-### SSH Connection
-- One-click connect launches your system terminal
-- App automatically minimises when connecting
-- Terminal gets focus automatically
-- Works with native terminals:
-  - macOS: Terminal.app
-  - Windows: Windows Terminal / cmd
-  - Linux: gnome-terminal / konsole / xterm
+**SSH Connection**
+- ⚡ One-click connect launches SSH in your native terminal
+- 🖥️ Works with Terminal.app (macOS) and Windows Terminal/cmd
+- 🪟 App auto-minimizes when connecting
+
+## Screenshots
+
+<div align="center">
+
+### Main Interface
+<img src="screenshots/main-page.png" alt="Main Interface" width="800">
+
+*Profile list with groups, search, and filtering*
+
+### Settings Modal
+<img src="screenshots/settings-modal.png" alt="Settings Modal" width="800">
+
+*Dark/Light theme, backup/restore, and preferences*
+
+### Profile Editor
+<img src="screenshots/profile-editor.png" alt="Profile Editor" width="800">
+
+*Create/edit profiles with validation and tooltips*
+
+</div>
 
 ## Installation
 
-### macOS
+**macOS**
 1. Download the latest `.dmg` from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
-2. Open the DMG and drag "SSH Profile Manager" to Applications
-3. Launch from Applications folder
-4. **Important:** Right-click the app and select "Open" the first time to bypass Gatekeeper (or run `xattr -cr "/Applications/SSH Profile Manager.app"`)
+2. Drag "SSH Profile Manager" to Applications
+3. **First launch:** Right-click → "Open" to bypass Gatekeeper (unsigned app)
 
-### Windows
-1. Download the latest `.msi` installer from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+**Windows**
+1. Download the latest `.msi` from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 2. Run the installer
 3. Launch from Start Menu
 
-## Usage
+## Quick Start
 
-### Creating a Profile
-1. Click the "New Profile" button
-2. Fill in the required fields:
-   - **Name:** A unique identifier for this profile
-   - **Host:** The SSH server address
-   - **Username:** Your username on the remote server
-3. Optional fields:
-   - **Description:** Notes about this connection
-   - **Port:** SSH port (defaults to 22)
-   - **Group:** Organise profiles into groups
-   - **Auth Method:** Choose how to authenticate
+**Create a Profile:** Click "New Profile" → Fill in Name, Host, Username → Choose auth method → Save
 
-### Connecting
-1. Find your profile in the list (use search if needed)
-2. Click the green "Connect" button
-3. Your system terminal will open with the SSH connection
-4. The app minimises automatically
+**Connect:** Click the green "Connect" button → Terminal opens automatically → App minimizes
 
-### Organising Profiles
-- Use the **Group** field to organise related profiles
-- Click the chevron (▶/▼) next to group names to collapse/expand
-- Use the "Expand/Collapse Groups" button to toggle all groups at once
-- Use the filter dropdown to show/hide specific groups
-- Use the search bar to filter profiles
+**Organize:** Group profiles → Collapse/expand groups → Use search & filters
 
-### Backup & Restore
-- **Settings Backup:** Click Settings → Backup Settings to save settings (and optionally profiles) to JSON
-  - Check "Include Profiles" to backup everything in one file
-  - Uncheck to backup only settings (theme, preferences, filters)
-- **Settings Restore:** Click Settings → Restore Settings to load from a backup
-  - Automatically detects if backup includes profiles
-  - Shows confirmation before replacing existing data
-- **Profile Export/Import:** Separate options for profiles only
-  - Export Profiles: Save all profiles to JSON for sharing
-  - Import Profiles: Load profiles from JSON (replaces existing)
-- **Reset Settings:** Click Settings → Reset Settings to restore defaults
+**Backup:** Settings → Backup Settings → Toggle "Include Profiles" for full backup → Export → Restore anytime
 
 ## Development
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v16 or later)
+- [Node.js](https://nodejs.org/) (v16+)
 - [Rust](https://www.rust-lang.org/tools/install)
-- Platform-specific dependencies:
-  - **macOS:** Xcode Command Line Tools
-  - **Windows:** Microsoft C++ Build Tools
+- **macOS:** Xcode Command Line Tools
+- **Windows:** Microsoft C++ Build Tools
 
 ### Setup
 ```bash
@@ -187,9 +155,8 @@ ssh-profile-manager/
 
 ## Platform Support
 
-- ✅ macOS (Apple Silicon / ARM64)
-- ✅ Windows (builds via GitHub Actions)
-- ⚠️ Linux (untested)
+- ✅ macOS 14.0+ (Apple Silicon / ARM64)
+- ✅ Windows 10+
 
 ## License
 

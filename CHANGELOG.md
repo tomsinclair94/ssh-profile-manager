@@ -5,6 +5,79 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2024-12-22
+
+### Added
+- **Terminal Preferences**: Choose your preferred terminal application for SSH connections
+  - **macOS**: Default (Terminal.app), Custom (.app bundles), Embedded (coming soon)
+  - **Windows**: Default (system default), Command Prompt, PowerShell, Windows Terminal, Custom (.exe), Embedded (coming soon)
+  - Custom terminal browser with native file picker for selecting applications
+  - OS-specific terminal options automatically shown based on platform
+  - Terminal preference included in settings backup/restore with OS filtering
+- **Window State Persistence**: Window size now saved between app launches
+  - Size persisted in localStorage and included in settings backup/restore
+  - Defaults to 800×600 on first launch
+  - Validation ensures window dimensions stay within safe bounds (600-4000 × 450-3000)
+  - Retina display support with logical pixel handling
+- **OS-Specific Settings Architecture**: Settings backup/restore now handles OS-specific settings intelligently
+  - Top-level `os` field identifies backup platform ("macos" or "windows")
+  - Separate `settings_os_specific` section for OS-dependent settings
+  - Cross-platform restore automatically ignores incompatible settings
+  - Warning dialog shown when restoring backup from different OS
+- **Responsive Profile Layout**: Profile cards adapt to window width
+  - Buttons move to right side of cards at ≥800px for better space utilization
+  - Actions stack vertically on narrow windows (<800px)
+- **Responsive Header**: Header layout adapts to narrow windows
+  - Version number stays inline with title
+  - Profile counter wraps to new line when needed
+- **Windows Build Support**: GitHub Actions now builds Windows MSI installers automatically on release
+
+### Changed
+- **Confirmation Dialog Pattern**: All user prompts now use context-specific action buttons
+  - Delete profile: "Delete" / "Cancel" (was "Yes" / "No")
+  - Delete all profiles: "Delete All" / "Cancel" (was "Yes" / "No")
+  - Import profiles: "Import" / "Cancel" (was "Yes" / "No")
+  - Reset settings: "Reset" / "Cancel" (was "Yes" / "No")
+  - Restore backup: "Restore" / "Cancel"
+  - All prompts end with "Are you sure you want to [action]?" for clarity
+  - Reduces cognitive load and prevents errors
+- **Modal Scroll Position**: Settings and Profile modals now always open scrolled to top
+- **Authentication Label**: Changed "Authentication" to "Auth" in profile cards for better fit on narrow layouts
+- **Minimum Window Width**: Reduced from 700px to 600px for better compatibility
+- **Default Window Size**: Changed from fixed to 800×600 (was not configurable)
+
+### Fixed
+- **Window Size on Retina Displays**: Window dimensions now correctly use logical pixels instead of physical pixels
+  - Fixes issue where saved size was 2x larger than intended on Retina displays
+  - Window restore now validates bounds and resets to defaults if corrupted
+- **Profile Card Text Truncation**: Long profile names and descriptions now truncate properly with ellipsis
+  - Prevents layout breaking on narrow windows
+  - Uses CSS text-overflow for clean presentation
+- **Sticky Modal Headers**: Settings and Profile modal headers remain visible when scrolling
+  - Improves UX for long forms/settings lists
+  - Headers use position: sticky with proper z-index
+
+### Security
+- **CRITICAL**: Fixed command injection vulnerability in custom terminal handling (macOS)
+  - Added proper AppleScript string escaping for terminal paths and commands
+  - Terminal app names now escaped to prevent shell injection
+  - Custom terminal paths validated (must be .app bundles on macOS)
+- **CRITICAL**: Fixed race condition in window size persistence
+  - Window scale factor now fetched once and reused for both dimensions
+  - Prevents inconsistent sizes when window moves between displays during save
+- **HIGH**: Improved Windows command escaping
+  - PowerShell commands now use proper single-quote escaping
+  - Removed incorrect double-quote escaping that didn't work with cmd.exe
+  - Windows Terminal uses direct argument passing (safest method)
+- **HIGH**: Added terminal path validation
+  - macOS custom terminals must be .app bundles
+  - Windows custom terminals must be .exe files
+  - Paths validated for existence before execution
+- **MEDIUM**: Added window dimension validation on restore
+  - Settings restore now validates window width/height before applying
+  - Invalid or corrupted dimensions trigger fallback to defaults
+  - Prevents unusable window sizes (too small/large)
+
 ## [0.3.0] - 2024-12-21
 
 ### Added

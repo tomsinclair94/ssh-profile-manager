@@ -12,16 +12,14 @@
         <header class="app-header">
             <div class="header-left">
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
-                <div class="header-title">
-                    <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.3.0</span>
-                </div>
+                <h1>SSH Profile Manager</h1>
             </div>
-            <div class="header-right">
-                <div class="profile-counter">
-                    <span class="profile-counter-label">Total Profiles:</span>
-                    <span id="profile-count-badge" class="profile-count-badge">0</span>
-                </div>
+            <span class="version">v0.4.0</span>
+            <div class="profile-counter">
+                <span class="profile-counter-label">Total Profiles:</span>
+                <span id="profile-count-badge" class="profile-count-badge">0</span>
+            </div>
+            <div class="header-buttons">
                 <button id="new-profile-btn" class="btn btn-primary">+ New Profile</button>
                 <button id="settings-btn" class="btn btn-settings">Settings</button>
             </div>
@@ -245,6 +243,25 @@
                         </div>
                     </div>
 
+                    <!-- Terminal Settings -->
+                    <div class="settings-section">
+                        <h3>Terminal</h3>
+                        <div class="form-group">
+                            <label for="terminal-select">Terminal Application</label>
+                            <select id="terminal-select">
+                                <!-- Options will be populated by JavaScript based on OS -->
+                            </select>
+                        </div>
+                        <div class="form-group hidden" id="custom-terminal-group">
+                            <label for="custom-terminal-path">Custom Terminal Path</label>
+                            <div class="input-group">
+                                <input type="text" id="custom-terminal-path" placeholder="Select terminal application..." readonly spellcheck="false" autocorrect="off" autocapitalize="off">
+                                <button type="button" class="btn btn-secondary btn-browse" id="browse-terminal-btn">Browse</button>
+                            </div>
+                        </div>
+                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles.</p>
+                    </div>
+
                     <!-- Import/Export Settings -->
                     <div class="settings-section">
                         <h3>Profile Management</h3>
@@ -300,7 +317,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.3.0" target="_blank" class="about-value version-link">0.3.0</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.4.0" target="_blank" class="about-value version-link">0.4.0</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>

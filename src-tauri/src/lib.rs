@@ -146,6 +146,14 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
         return Err(format!("Invalid theme value: {}", settings.theme));
     }
 
+    // Validate window dimensions
+    if settings.window_width < 600 || settings.window_width > 4000 {
+        return Err(format!("Invalid window width: {} (must be between 600-4000)", settings.window_width));
+    }
+    if settings.window_height < 450 || settings.window_height > 3000 {
+        return Err(format!("Invalid window height: {} (must be between 450-3000)", settings.window_height));
+    }
+
     // Validate filtered_groups if present
     if let Some(filtered_groups) = &settings.filtered_groups {
         for group in filtered_groups {
@@ -166,6 +174,18 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
             validate_group(group)
                 .map_err(|e| format!("Invalid collapsed group: {}", e))?;
         }
+    }
+
+    Ok(())
+}
+
+fn validate_settings_os_specific(settings_os: &SettingsOsSpecific) -> Result<(), String> {
+    // Validate terminal_preference
+    // Valid values for macOS: default, custom, embedded
+    // Valid values for Windows: default, cmd, powershell, windows_terminal, custom, embedded
+    let valid_prefs = ["default", "cmd", "powershell", "windows_terminal", "custom", "embedded"];
+    if !valid_prefs.contains(&settings_os.terminal_preference.as_str()) {
+        return Err(format!("Invalid terminal_preference value: {}", settings_os.terminal_preference));
     }
 
     Ok(())
@@ -384,6 +404,8 @@ struct ImportData {
 struct SettingsData {
     theme: String,
     auto_update_check: bool,
+    window_width: i32,
+    window_height: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     filtered_groups: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -391,17 +413,28 @@ struct SettingsData {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct SettingsOsSpecific {
+    terminal_preference: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct SettingsExport {
     version: String,
+    os: String,
     exported_at: String,
     settings: SettingsData,
+    settings_os_specific: SettingsOsSpecific,
     #[serde(skip_serializing_if = "Option::is_none")]
     profiles: Option<Vec<ProfileExport>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct SettingsImport {
+    #[serde(default)]
+    os: Option<String>,
     settings: SettingsData,
+    #[serde(default)]
+    settings_os_specific: Option<SettingsOsSpecific>,
     #[serde(default)]
     profiles: Option<Vec<ProfileExport>>,
 }
@@ -409,6 +442,7 @@ struct SettingsImport {
 #[derive(Debug, Serialize)]
 struct SettingsImportResult {
     settings: SettingsData,
+    settings_os_specific: Option<SettingsOsSpecific>,
     profiles: Option<Vec<ProfileExport>>,
 }
 
@@ -684,20 +718,40 @@ async fn save_profiles_to_file(
 fn export_settings(
     theme: String,
     auto_update_check: bool,
+    window_width: i32,
+    window_height: i32,
     filtered_groups: Option<Vec<String>>,
     collapsed_groups: Option<Vec<String>>,
+    terminal_preference: String,
     include_profiles: bool,
     db: State<Database>,
 ) -> Result<String, String> {
+    // Detect current OS
+    let current_os = {
+        #[cfg(target_os = "macos")]
+        { "macos".to_string() }
+        #[cfg(target_os = "windows")]
+        { "windows".to_string() }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        { "unknown".to_string() }
+    };
+
     let settings_data = SettingsData {
         theme,
         auto_update_check,
+        window_width,
+        window_height,
         filtered_groups,
         collapsed_groups,
     };
 
+    let settings_os_specific = SettingsOsSpecific {
+        terminal_preference,
+    };
+
     // Validate before exporting
     validate_settings(&settings_data)?;
+    validate_settings_os_specific(&settings_os_specific)?;
 
     // Get profiles if include_profiles is true
     let profiles_data = if include_profiles {
@@ -724,8 +778,10 @@ fn export_settings(
 
     let export_data = SettingsExport {
         version: env!("CARGO_PKG_VERSION").to_string(),
+        os: current_os,
         exported_at: chrono::Utc::now().to_rfc3339(),
         settings: settings_data,
+        settings_os_specific,
         profiles: profiles_data,
     };
 
@@ -738,11 +794,42 @@ fn import_settings(data: String) -> Result<SettingsImportResult, String> {
     let import_data: SettingsImport = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse settings data: {}", e))?;
 
+    let settings = import_data.settings;
+
+    // Determine current OS
+    let current_os = {
+        #[cfg(target_os = "macos")]
+        { "macos" }
+        #[cfg(target_os = "windows")]
+        { "windows" }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        { "unknown" }
+    };
+
+    // Handle OS-specific settings
+    // Only apply if the backup OS matches current OS
+    let settings_os_specific = if let Some(backup_os) = import_data.os {
+        if backup_os == current_os {
+            // OS matches - use the imported OS-specific settings
+            import_data.settings_os_specific
+        } else {
+            // Different OS - ignore OS-specific settings, will use platform defaults
+            None
+        }
+    } else {
+        // No OS field in backup (old format) - ignore OS-specific settings
+        None
+    };
+
     // Validate imported settings
-    validate_settings(&import_data.settings)?;
+    validate_settings(&settings)?;
+    if let Some(ref os_settings) = settings_os_specific {
+        validate_settings_os_specific(os_settings)?;
+    }
 
     Ok(SettingsImportResult {
-        settings: import_data.settings,
+        settings,
+        settings_os_specific,
         profiles: import_data.profiles,
     })
 }
@@ -776,6 +863,76 @@ async fn browse_ssh_key() -> Result<Option<String>, String> {
                 .pick_file();
 
             file_path
+        })
+    )
+    .await
+    .map_err(|_| "File dialog timed out".to_string())?
+    .map_err(|e| format!("Failed to show dialog: {}", e))?;
+
+    match result {
+        Some(path) => Ok(Some(path.to_string_lossy().to_string())),
+        None => Ok(None), // User cancelled
+    }
+}
+
+#[tauri::command]
+async fn browse_terminal_app() -> Result<Option<String>, String> {
+    use tauri::async_runtime::spawn_blocking;
+    use tokio::time::timeout;
+
+    // Show open file dialog in a blocking context with 2-minute timeout
+    let result = timeout(
+        std::time::Duration::from_secs(FILE_DIALOG_TIMEOUT_SECS),
+        spawn_blocking(move || {
+            #[cfg(target_os = "macos")]
+            {
+                // macOS: Look for .app bundles in /Applications
+                // Note: .app bundles are directories, but macOS treats them as applications
+                let applications_dir = std::path::PathBuf::from("/Applications");
+
+                // Use NSOpenPanel directly via osascript for better .app bundle selection
+                let script = format!(
+                    r#"tell application "System Events"
+                        activate
+                        set appPath to POSIX path of (choose file of type {{"app"}} with prompt "Select Terminal Application" default location "{}")
+                        return appPath
+                    end tell"#,
+                    applications_dir.to_string_lossy()
+                );
+
+                let output = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(script)
+                    .output();
+
+                match output {
+                    Ok(result) if result.status.success() => {
+                        let path_str = String::from_utf8_lossy(&result.stdout).trim().to_string();
+                        if path_str.is_empty() {
+                            None // User cancelled
+                        } else {
+                            Some(std::path::PathBuf::from(path_str))
+                        }
+                    },
+                    _ => None // Error or cancelled
+                }
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                // Windows: Look for .exe files
+                let file_path = rfd::FileDialog::new()
+                    .set_title("Select Terminal Application")
+                    .add_filter("Executable", &["exe"])
+                    .pick_file();
+
+                file_path
+            }
+
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                None
+            }
         })
     )
     .await
@@ -871,7 +1028,13 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
 }
 
 #[tauri::command]
-fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+fn connect_ssh(
+    db: State<Database>,
+    profile_id: String,
+    terminal_preference: Option<String>,
+    custom_terminal_path: Option<String>,
+    app_handle: tauri::AppHandle
+) -> Result<(), String> {
     let profile = db
         .get_profile_by_id(&profile_id)
         .map_err(|e| format!("Failed to get profile: {}", e))?
@@ -906,14 +1069,30 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
     let connection = format!("{}@{}", profile.username, profile.host);
     ssh_args.push(connection);
 
+    // Default to "default" if no preference specified
+    let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
+
     // Open in system terminal
     #[cfg(target_os = "macos")]
     {
-        // Properly escape the SSH command for AppleScript
+        // Check for embedded terminal (not yet implemented)
+        if terminal_pref == "embedded" {
+            return Err("Embedded terminal is not yet available. Coming soon!".to_string());
+        }
+
+        // Properly escape the SSH command for shell
         // Each argument must be shell-escaped to prevent injection
         fn shell_escape(s: &str) -> String {
             // Replace single quotes with '\'' and wrap in single quotes
             format!("'{}'", s.replace('\'', "'\\''"))
+        }
+
+        // Properly escape strings for AppleScript
+        fn applescript_escape(s: &str) -> String {
+            s.replace('\\', "\\\\")
+             .replace('"', "\\\"")
+             .replace('\n', "\\n")
+             .replace('\r', "\\r")
         }
 
         // Build the escaped SSH command
@@ -922,16 +1101,69 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
             .collect();
         let ssh_cmd_str = format!("ssh {}", escaped_args.join(" "));
 
-        // Escape the entire command for AppleScript (use backslash escaping for quotes)
-        let applescript_escaped = ssh_cmd_str.replace('\\', "\\\\").replace('"', "\\\"");
+        match terminal_pref.as_str() {
+            "custom" => {
+                // Use custom terminal app
+                if let Some(custom_path) = custom_terminal_path {
+                    // Validate the custom terminal path
+                    let path_buf = std::path::PathBuf::from(&custom_path);
 
-        Command::new("osascript")
-            .arg("-e")
-            .arg(format!("tell application \"Terminal\" to do script \"{}\"", applescript_escaped))
-            .arg("-e")
-            .arg("tell application \"Terminal\" to activate")
-            .spawn()
-            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+                    // Check if file exists
+                    if !path_buf.exists() {
+                        return Err(format!("Terminal application not found: {}", custom_path));
+                    }
+
+                    // Ensure it's an .app bundle
+                    if !custom_path.ends_with(".app") {
+                        return Err("macOS terminal must be an .app bundle".to_string());
+                    }
+
+                    // Escape the SSH command for AppleScript
+                    let applescript_escaped = applescript_escape(&ssh_cmd_str);
+
+                    // Get app name from path and escape it for AppleScript
+                    let app_name = path_buf
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .ok_or_else(|| "Invalid terminal application path".to_string())?;
+
+                    let app_name_escaped = applescript_escape(app_name);
+
+                    // First open the app
+                    Command::new("open")
+                        .arg("-a")
+                        .arg(&custom_path)
+                        .spawn()
+                        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+
+                    // Small delay to let the app open
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+
+                    // Send the SSH command with properly escaped app name
+                    Command::new("osascript")
+                        .arg("-e")
+                        .arg(format!("tell application \"{}\" to do script \"{}\"", app_name_escaped, applescript_escaped))
+                        .arg("-e")
+                        .arg(format!("tell application \"{}\" to activate", app_name_escaped))
+                        .spawn()
+                        .map_err(|e| format!("Failed to execute SSH command in custom terminal: {}", e))?;
+                } else {
+                    return Err("Custom terminal selected but no path provided".to_string());
+                }
+            },
+            "default" | _ => {
+                // Use default Terminal.app
+                let applescript_escaped = applescript_escape(&ssh_cmd_str);
+
+                Command::new("osascript")
+                    .arg("-e")
+                    .arg(format!("tell application \"Terminal\" to do script \"{}\"", applescript_escaped))
+                    .arg("-e")
+                    .arg("tell application \"Terminal\" to activate")
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            }
+        }
 
         // Minimize the app window after launching terminal
         if let Some(window) = app_handle.get_webview_window("main") {
@@ -941,25 +1173,124 @@ fn connect_ssh(db: State<Database>, profile_id: String, app_handle: tauri::AppHa
 
     #[cfg(target_os = "windows")]
     {
-        // Windows cmd escaping: escape quotes and special characters
-        fn cmd_escape(s: &str) -> String {
-            // For Windows, wrap in quotes and escape internal quotes
-            format!("\"{}\"", s.replace('"', "\"\""))
+        // Check for embedded terminal (not yet implemented)
+        if terminal_pref == "embedded" {
+            return Err("Embedded terminal is not yet available. Coming soon!".to_string());
         }
 
-        let escaped_args: Vec<String> = ssh_args.iter()
-            .map(|arg| cmd_escape(arg))
-            .collect();
-        let ssh_cmd = format!("ssh {}", escaped_args.join(" "));
+        match terminal_pref.as_str() {
+            "cmd" => {
+                // Use Command Prompt - pass args directly to avoid shell escaping issues
+                let mut cmd_args = vec!["ssh".to_string()];
+                cmd_args.extend(ssh_args);
 
-        Command::new("cmd")
-            .arg("/c")
-            .arg("start")
-            .arg("cmd")
-            .arg("/k")
-            .arg(ssh_cmd)
-            .spawn()
-            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+                Command::new("cmd")
+                    .arg("/c")
+                    .arg("start")
+                    .arg("cmd")
+                    .arg("/k")
+                    .raw_arg(cmd_args.join(" "))
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+            },
+            "powershell" => {
+                // Use PowerShell - pass args directly
+                let mut ps_args = vec!["ssh".to_string()];
+                ps_args.extend(ssh_args.clone());
+
+                let ssh_command = ps_args.iter()
+                    .map(|arg| {
+                        // PowerShell escaping: wrap in single quotes and escape single quotes
+                        if arg.contains(' ') || arg.contains('\'') {
+                            format!("'{}'", arg.replace('\'', "''"))
+                        } else {
+                            arg.clone()
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join(" ");
+
+                Command::new("cmd")
+                    .arg("/c")
+                    .arg("start")
+                    .arg("powershell")
+                    .arg("-NoExit")
+                    .arg("-Command")
+                    .arg(&ssh_command)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
+            },
+            "windows_terminal" => {
+                // Use Windows Terminal (wt.exe) - pass args directly (safest method)
+                match Command::new("wt")
+                    .arg("new-tab")
+                    .arg("--title")
+                    .arg(&profile.name)
+                    .arg("ssh")
+                    .args(&ssh_args)
+                    .spawn()
+                {
+                    Ok(_) => {},
+                    Err(_) => {
+                        // Windows Terminal not found
+                        return Err("Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string());
+                    }
+                }
+            },
+            "custom" => {
+                // Use custom terminal
+                if let Some(custom_path) = custom_terminal_path {
+                    // Validate the custom terminal path
+                    let path_buf = std::path::PathBuf::from(&custom_path);
+
+                    // Check if file exists
+                    if !path_buf.exists() {
+                        return Err(format!("Terminal application not found: {}", custom_path));
+                    }
+
+                    // Ensure it's an .exe file
+                    if !custom_path.ends_with(".exe") {
+                        return Err("Windows terminal must be an .exe file".to_string());
+                    }
+
+                    // Build SSH command string for custom terminal
+                    let mut cmd_args = vec!["ssh".to_string()];
+                    cmd_args.extend(ssh_args);
+
+                    Command::new(&custom_path)
+                        .arg("/k")
+                        .raw_arg(cmd_args.join(" "))
+                        .spawn()
+                        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+                } else {
+                    return Err("Custom terminal selected but no path provided".to_string());
+                }
+            },
+            "default" | _ => {
+                // Default: Try Windows Terminal first, fall back to cmd
+                match Command::new("wt")
+                    .arg("new-tab")
+                    .arg("--title")
+                    .arg(&profile.name)
+                    .arg("ssh")
+                    .args(&ssh_args)
+                    .spawn()
+                {
+                    Ok(_) => {},
+                    Err(_) => {
+                        // Windows Terminal not found, fall back to cmd.exe
+                        Command::new("cmd")
+                            .arg("/c")
+                            .arg("start")
+                            .arg("cmd")
+                            .arg("/k")
+                            .arg(&ssh_cmd)
+                            .spawn()
+                            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+                    }
+                }
+            }
+        }
 
         // Minimize the app window after launching terminal
         if let Some(window) = app_handle.get_webview_window("main") {
@@ -1046,6 +1377,7 @@ pub fn run() {
             import_profiles,
             save_profiles_to_file,
             browse_ssh_key,
+            browse_terminal_app,
             check_for_updates,
             connect_ssh,
             export_settings,
