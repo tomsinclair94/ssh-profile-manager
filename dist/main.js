@@ -456,6 +456,27 @@ function setBrowseHint() {
     }
 }
 
+// Update scrollbar width CSS variable for search-bar alignment
+function updateScrollbarWidth() {
+    const BASE_PADDING = 24; // Match .search-bar base padding
+    const profilesContainer = document.getElementById('profiles-list');
+    if (!profilesContainer) return;
+
+    try {
+        // Calculate scrollbar width: offsetWidth (includes scrollbar) - clientWidth (excludes scrollbar)
+        const scrollbarWidth = profilesContainer.offsetWidth - profilesContainer.clientWidth;
+
+        // Validate scrollbar width is reasonable (0-30px typical range for most systems)
+        const safeScrollbarWidth = (isNaN(scrollbarWidth) || scrollbarWidth < 0 || scrollbarWidth > 30) ? 0 : scrollbarWidth;
+
+        document.documentElement.style.setProperty('--scrollbar-width', `${BASE_PADDING + safeScrollbarWidth}px`);
+    } catch (error) {
+        console.warn('Failed to update scrollbar width:', error);
+        // Fallback to base padding
+        document.documentElement.style.setProperty('--scrollbar-width', `${BASE_PADDING}px`);
+    }
+}
+
 // Load profiles from backend
 async function loadProfiles() {
     try {
@@ -581,6 +602,11 @@ function renderProfiles(filter = '') {
 
     // Update expand/collapse button text
     updateExpandCollapseButton();
+
+    // Update scrollbar width after DOM is rendered
+    requestAnimationFrame(() => {
+        updateScrollbarWidth();
+    });
 }
 
 // Toggle group collapse state

@@ -5,6 +5,35 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2024-12-23
+
+### Changed
+- **Header Logo Size**: Increased app logo from 32px to 56px for better visibility
+- **Header Layout**: Moved version number underneath title instead of inline
+  - Creates cleaner visual hierarchy
+  - Reduces horizontal space pressure in header
+- **Total Profiles Location**: Moved profile counter from header to search bar area
+  - Positioned to right of "Filter Groups" button
+  - Styled to match surrounding buttons but non-clickable
+  - Better visual grouping with search/filter controls
+- **Responsive Button Layout**: Improved button behaviour at narrow widths (<800px)
+  - Search input moves to separate row below buttons
+  - Three buttons (Expand Groups, Filter Groups, Total Profiles) scale dynamically with equal width
+  - Prevents UI crushing on smaller window sizes
+
+### Fixed
+- **Scrollbar Alignment**: Total Profiles button right edge now aligns with profile boxes
+  - Dynamic calculation accounts for scrollbar presence
+  - Works correctly on both macOS and Windows (different scrollbar widths)
+  - JavaScript function calculates scrollbar width and updates CSS variable
+  - Includes validation and error handling for edge cases
+- **Code Quality**: Enhanced scrollbar width calculation function
+  - Added input validation (0-30px range for scrollbar width)
+  - Added error handling with fallback to base padding
+  - Uses named constant for base padding value
+  - Prevents layout breaking from invalid calculations
+- **CSS Cleanup**: Removed duplicate .app-logo rule definition
+
 ## [0.4.1] - 2024-12-23
 
 ### Changed
