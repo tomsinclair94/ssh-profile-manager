@@ -45,6 +45,7 @@ jobs:
 
       - name: Extract release notes from tag
         id: release_notes
+        shell: bash
         run: |
           # Get the tag annotation message
           git fetch --tags --force
