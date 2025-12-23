@@ -11,9 +11,9 @@
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.2-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Version](https://img.shields.io/badge/version-0.4.3-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
-### [📥 Download Latest Release (v0.4.2)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
+### [📥 Download Latest Release (v0.4.3)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
 <sub>**macOS 14.0+ | Windows 10+ | ~3-5 MB | Native Performance**</sub>
 

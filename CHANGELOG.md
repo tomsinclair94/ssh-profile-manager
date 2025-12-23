@@ -5,6 +5,69 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2024-12-23
+
+### Added
+- **ResizeObserver**: Dynamic scrollbar width updates on window resize and content changes
+  - Automatically adjusts search bar alignment when scrollbar appears/disappears
+  - Monitors profile container size changes for optimal layout
+- **Content Security Policy**: Strengthened XSS protection with meta tag and Tauri config
+  - Restricted script sources to 'self' only
+  - Added connect-src whitelist (GitHub API only)
+  - Added base-uri, form-action, and frame-ancestors restrictions
+- **Security Warnings**: Export functionality now warns about plaintext passwords
+  - Warning in Profile Management section
+  - Warning in Settings Backup section (when profiles included)
+  - Recommends secure file storage and filesystem encryption
+- **Custom Terminal Validation**: Terminal paths validated on app load
+  - Falls back to default terminal if saved path no longer valid
+  - Shows user-friendly notification when path becomes invalid
+
+### Changed
+- **Badge Styling**: Standardised all badge sizes with shared `.badge` class
+  - Profile count badge, filter badge, and group count badge now consistent
+  - Unified padding (2px 6px), font size (11px), and styling
+- **Modal Headings**: Increased font size from 18px to 24px
+  - Settings and Profile modals more prominent
+  - Better visual hierarchy
+- **Minimum Window Size**: Reduced from 600x450 to 560x420
+  - Maintains 4:3 aspect ratio
+  - Better support for smaller displays
+- **Responsive Layout**: Search bar moves below buttons on narrow screens (<800px)
+  - Buttons appear first for better mobile UX
+  - Search input takes full width on second row
+
+### Fixed
+- **Filter Group Checkboxes**: Large gap between checkbox and text resolved
+  - Removed flex constraints causing layout issues
+  - Fixed CSS selector specificity (`.search-bar input[type="text"]`)
+  - Native OS checkbox spacing now works correctly
+- **Accessibility**: Removed CSS `order` properties violating WCAG 2.1
+  - HTML restructured to match visual order
+  - Screen readers now follow correct reading order
+  - Keyboard navigation improved
+- **Window Resize Race Condition**: Debounced save to prevent data corruption
+  - 250ms debounce prevents multiple rapid localStorage writes
+  - Fixes potential race conditions during window dragging
+- **Scrollbar Calculation**: More robust error handling and validation
+
+### Security
+- **Terminal Path Validation**: Comprehensive security for custom terminal paths
+  - Path canonicalization resolves symlinks and `..` components
+  - Platform-specific whitelisting (Applications directories on macOS, Program Files on Windows)
+  - File extension validation (.app for macOS, .exe for Windows)
+  - App bundle structure validation on macOS
+  - TOCTOU race condition fixed: re-validation immediately before terminal execution
+- **macOS Terminal Whitelist**: Expanded to include legitimate terminal locations
+  - Added `/System/Library/CoreServices/Applications` (default Terminal.app location)
+  - Added `/usr/local` (Homebrew)
+  - Added `/opt/homebrew` (Apple Silicon Homebrew)
+  - Added `/opt/local` (MacPorts)
+  - Added `~/Applications` (user-installed apps)
+- **Removed Linux Support**: Cleaned up unsupported platform code
+  - App officially supports macOS and Windows only
+  - Prevents confusion and reduces attack surface
+
 ## [0.4.2] - 2024-12-23
 
 ### Changed

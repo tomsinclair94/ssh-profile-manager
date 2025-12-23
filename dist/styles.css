@@ -29,8 +29,9 @@ body.light-mode {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
         sans-serif;
     background-color: var(--bg-color);
     color: var(--text-color);
@@ -58,7 +59,6 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    order: 1;
     flex-shrink: 0;
 }
 
@@ -85,35 +85,18 @@ body {
     flex-shrink: 0;
 }
 
-.profile-counter {
-    white-space: nowrap;
-    flex-shrink: 0;
-    order: 3;
-}
-
 .header-buttons {
     display: flex;
     align-items: center;
     gap: 12px;
-    order: 4;
     flex-shrink: 0;
     margin-left: auto;
 }
 
-/* Narrow screens: Profile counter wraps below, buttons stay on top row */
+/* Narrow screens: Reduce gap for better spacing */
 @media (max-width: 750px) {
     .app-header {
         gap: 4px 12px;
-    }
-
-    .profile-counter {
-        order: 5;
-        width: 100%;
-        flex-basis: 100%;
-    }
-
-    .header-buttons {
-        order: 3;
     }
 }
 
@@ -135,7 +118,8 @@ body {
     font-weight: 500;
 }
 
-.profile-count-badge {
+/* Shared badge styling for consistent appearance */
+.badge {
     background-color: var(--primary-color);
     color: white;
     font-size: 11px;
@@ -144,6 +128,10 @@ body {
     border-radius: 10px;
     min-width: 18px;
     text-align: center;
+}
+
+.profile-count-badge {
+    /* Inherits from .badge class */
 }
 
 .profile-counter-display {
@@ -214,7 +202,7 @@ body {
     flex-wrap: wrap;
 }
 
-.search-bar input {
+.search-bar input[type="text"] {
     flex: 1;
     padding: 10px 16px;
     background-color: var(--surface-color);
@@ -227,9 +215,9 @@ body {
 
 /* Narrow screens: search input on separate row, buttons grow dynamically */
 @media (max-width: 799px) {
-    .search-bar input {
+    .search-bar input[type="text"] {
         flex-basis: 100%;
-        order: 10;
+        order: 2;
     }
 
     #expand-collapse-btn,
@@ -240,7 +228,7 @@ body {
     }
 }
 
-.search-bar input:focus {
+.search-bar input[type="text"]:focus {
     outline: none;
     border-color: var(--primary-color);
 }
@@ -264,14 +252,7 @@ body {
 }
 
 .filter-badge {
-    background-color: var(--primary-color);
-    color: white;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 10px;
-    min-width: 18px;
-    text-align: center;
+    /* Inherits from .badge class */
 }
 
 /* Filter Popup */
@@ -313,7 +294,6 @@ body {
 .filter-group-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     padding: 5px 2px;
 }
@@ -323,8 +303,6 @@ body {
     align-items: center;
     cursor: pointer;
     user-select: none;
-    flex-shrink: 0;
-    flex-grow: 0;
 }
 
 .filter-group-item input[type="checkbox"] {
@@ -333,7 +311,6 @@ body {
     height: 18px;
     margin: 0;
     padding: 0;
-    flex-shrink: 0;
 }
 
 .filter-group-name {
@@ -341,7 +318,6 @@ body {
     color: var(--text-color);
     white-space: nowrap;
     margin-left: 8px;
-    flex-shrink: 0;
 }
 
 .filter-group-count {
@@ -400,14 +376,7 @@ body {
 }
 
 .group-count-badge {
-    background-color: var(--primary-color);
-    color: white;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 7px;
-    border-radius: 10px;
-    min-width: 20px;
-    text-align: center;
+    /* Inherits from .badge class */
 }
 
 .profile-group-content {
@@ -743,7 +712,7 @@ body {
 }
 
 .modal-header h2 {
-    font-size: 18px;
+    font-size: 24px;
     font-weight: 600;
 }
 
@@ -994,7 +963,9 @@ form {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     z-index: 2000;
     opacity: 1;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition:
+        opacity 0.3s ease,
+        transform 0.3s ease;
     transform: translateY(0);
 }
 
@@ -1063,7 +1034,9 @@ form {
     margin-top: 4px;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s ease;
+    transition:
+        opacity 0.2s ease,
+        visibility 0.2s ease;
     pointer-events: none;
 }
 
@@ -1107,7 +1080,7 @@ form {
 }
 
 .tooltip-rules li::before {
-    content: '•';
+    content: "•";
     position: absolute;
     left: 4px;
     color: var(--primary-color);

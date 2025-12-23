@@ -434,6 +434,9 @@ async function init() {
         checkForUpdates(true); // silent check
     }
 
+    // Setup ResizeObserver to update scrollbar width dynamically
+    setupScrollbarObserver();
+
     console.log('App initialized');
 }
 
@@ -475,6 +478,23 @@ function updateScrollbarWidth() {
         // Fallback to base padding
         document.documentElement.style.setProperty('--scrollbar-width', `${BASE_PADDING}px`);
     }
+}
+
+// Setup ResizeObserver to dynamically update scrollbar width
+function setupScrollbarObserver() {
+    const profilesContainer = document.getElementById('profiles-list');
+    if (!profilesContainer) return;
+
+    // Create ResizeObserver to watch for size changes
+    const resizeObserver = new ResizeObserver(() => {
+        updateScrollbarWidth();
+    });
+
+    // Start observing the profiles container
+    resizeObserver.observe(profilesContainer);
+
+    // Also update on window resize
+    window.addEventListener('resize', updateScrollbarWidth);
 }
 
 // Load profiles from backend
@@ -548,7 +568,7 @@ function renderProfiles(filter = '') {
                 <div class="profile-group-header" data-group="${escapeHtml(groupName)}">
                     <span class="group-chevron">${chevron}</span>
                     <span class="group-name">${escapeHtml(groupName)}</span>
-                    <span class="group-count-badge">${grouped[groupName].length}</span>
+                    <span class="badge group-count-badge">${grouped[groupName].length}</span>
                 </div>
                 <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
         `;
@@ -1292,12 +1312,15 @@ async function resetWindowState() {
     }
 }
 
-// Setup window resize listener
+// Setup window resize listener with debouncing to prevent race conditions
 async function setupWindowListeners() {
     try {
         const window = getCurrentWindow();
+        // Debounce save to prevent multiple rapid async writes during window dragging
+        const debouncedSaveWindowState = debounce(saveWindowState, 250);
+
         await window.listen('tauri://resize', async () => {
-            await saveWindowState();
+            await debouncedSaveWindowState();
         });
     } catch (error) {
         console.error('Error setting up window listeners:', error);
@@ -1372,12 +1395,31 @@ function populateTerminalOptions() {
     }
 }
 
-function loadTerminalPreference() {
+async function loadTerminalPreference() {
     const savedPreference = localStorage.getItem('terminalPreference') || 'default';
     const savedCustomPath = localStorage.getItem('customTerminalPath') || '';
 
-    terminalSelect.value = savedPreference;
-    customTerminalPath.value = savedCustomPath;
+    // If custom terminal was selected, validate the path still exists and is valid
+    if (savedPreference === 'custom' && savedCustomPath) {
+        try {
+            // Validate the saved custom path
+            await invoke('validate_custom_terminal', { path: savedCustomPath });
+            // Path is valid, use saved preferences
+            terminalSelect.value = savedPreference;
+            customTerminalPath.value = savedCustomPath;
+        } catch (error) {
+            // Path is no longer valid, fall back to default
+            console.warn('Saved custom terminal path is no longer valid:', error);
+            terminalSelect.value = 'default';
+            customTerminalPath.value = '';
+            localStorage.setItem('terminalPreference', 'default');
+            localStorage.removeItem('customTerminalPath');
+            showToast('Custom terminal path is no longer valid. Switched to default terminal.', TOAST_DURATION_LONG, 'info');
+        }
+    } else {
+        terminalSelect.value = savedPreference;
+        customTerminalPath.value = savedCustomPath;
+    }
 
     // Show/hide custom terminal path input
     updateTerminalVisibility();

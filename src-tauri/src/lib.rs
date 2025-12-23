@@ -219,6 +219,124 @@ fn validate_key_path(path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
+fn validate_terminal_path(path: &str) -> Result<PathBuf, String> {
+    if path.is_empty() {
+        return Err("Terminal path cannot be empty".to_string());
+    }
+
+    let expanded = shellexpand::tilde(path);
+    let path_buf = PathBuf::from(expanded.as_ref());
+
+    // Check if file exists
+    if !path_buf.exists() {
+        return Err(format!("Terminal application not found: {}", path));
+    }
+
+    // Get canonical path to resolve symlinks, .. components, and relative paths
+    let canonical = std::fs::canonicalize(&path_buf)
+        .map_err(|e| format!("Invalid terminal path: {}", e))?;
+
+    // Platform-specific validation
+    #[cfg(target_os = "macos")]
+    {
+        // Ensure it's an .app bundle
+        let path_str = canonical.to_string_lossy();
+        if !path_str.ends_with(".app") {
+            return Err("macOS terminal must be an .app bundle".to_string());
+        }
+
+        // Whitelist: Must be in standard macOS application directories
+        let allowed_dirs = vec![
+            PathBuf::from("/Applications"),
+            PathBuf::from("/System/Applications"),
+            PathBuf::from("/System/Library/CoreServices/Applications"),
+            PathBuf::from("/usr/local"),
+            PathBuf::from("/opt/homebrew"),
+            PathBuf::from("/opt/local"), // MacPorts
+        ];
+
+        let mut is_allowed = false;
+        for allowed_dir in allowed_dirs {
+            if canonical.starts_with(&allowed_dir) {
+                is_allowed = true;
+                break;
+            }
+        }
+
+        // Also allow user's Applications folder
+        if !is_allowed {
+            if let Some(home) = dirs::home_dir() {
+                let user_apps = home.join("Applications");
+                if canonical.starts_with(&user_apps) {
+                    is_allowed = true;
+                }
+            }
+        }
+
+        if !is_allowed {
+            return Err("Terminal must be located in /Applications, /System/Applications, or ~/Applications".to_string());
+        }
+
+        // Check if the app bundle is executable (check the Contents/MacOS directory exists)
+        let macos_dir = canonical.join("Contents").join("MacOS");
+        if !macos_dir.exists() || !macos_dir.is_dir() {
+            return Err("Invalid .app bundle structure".to_string());
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Ensure it's an .exe file
+        let path_str = canonical.to_string_lossy();
+        if !path_str.ends_with(".exe") {
+            return Err("Windows terminal must be an .exe file".to_string());
+        }
+
+        // Whitelist: Must be in Program Files, Windows directory, or user's AppData
+        let mut is_allowed = false;
+
+        // Check Program Files
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            if canonical.starts_with(&program_files) {
+                is_allowed = true;
+            }
+        }
+
+        // Check Program Files (x86)
+        if !is_allowed {
+            if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
+                if canonical.starts_with(&program_files_x86) {
+                    is_allowed = true;
+                }
+            }
+        }
+
+        // Check Windows directory
+        if !is_allowed {
+            if let Ok(windir) = std::env::var("SystemRoot") {
+                if canonical.starts_with(&windir) {
+                    is_allowed = true;
+                }
+            }
+        }
+
+        // Check user's Local AppData
+        if !is_allowed {
+            if let Some(local_appdata) = dirs::data_local_dir() {
+                if canonical.starts_with(&local_appdata) {
+                    is_allowed = true;
+                }
+            }
+        }
+
+        if !is_allowed {
+            return Err("Terminal must be located in Program Files, Windows directory, or AppData".to_string());
+        }
+    }
+
+    Ok(canonical)
+}
+
 // Database wrapper
 pub struct Database {
     conn: Mutex<Connection>,
@@ -1028,6 +1146,15 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
 }
 
 #[tauri::command]
+fn validate_custom_terminal(path: String) -> Result<bool, String> {
+    // Simply validate the path without opening file picker
+    match validate_terminal_path(&path) {
+        Ok(_) => Ok(true),
+        Err(e) => Err(e),
+    }
+}
+
+#[tauri::command]
 fn connect_ssh(
     db: State<Database>,
     profile_id: String,
@@ -1108,34 +1235,25 @@ fn connect_ssh(
             "custom" => {
                 // Use custom terminal app
                 if let Some(custom_path) = custom_terminal_path {
-                    // Validate the custom terminal path
-                    let path_buf = std::path::PathBuf::from(&custom_path);
-
-                    // Check if file exists
-                    if !path_buf.exists() {
-                        return Err(format!("Terminal application not found: {}", custom_path));
-                    }
-
-                    // Ensure it's an .app bundle
-                    if !custom_path.ends_with(".app") {
-                        return Err("macOS terminal must be an .app bundle".to_string());
-                    }
+                    // SECURITY: Re-validate path immediately before use to prevent TOCTOU attacks
+                    // An attacker could swap the validated file between load-time validation and connection-time use
+                    let validated_path = validate_terminal_path(&custom_path)?;
 
                     // Escape the SSH command for AppleScript
                     let applescript_escaped = applescript_escape(&ssh_cmd_str);
 
-                    // Get app name from path and escape it for AppleScript
-                    let app_name = path_buf
+                    // Get app name from validated path and escape it for AppleScript
+                    let app_name = validated_path
                         .file_stem()
                         .and_then(|s| s.to_str())
                         .ok_or_else(|| "Invalid terminal application path".to_string())?;
 
                     let app_name_escaped = applescript_escape(app_name);
 
-                    // First open the app
+                    // First open the app using validated canonical path
                     Command::new("open")
                         .arg("-a")
-                        .arg(&custom_path)
+                        .arg(&validated_path)
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
@@ -1241,26 +1359,17 @@ fn connect_ssh(
             "custom" => {
                 // Use custom terminal
                 if let Some(custom_path) = custom_terminal_path {
-                    // Validate the custom terminal path
-                    let path_buf = std::path::PathBuf::from(&custom_path);
+                    // SECURITY: Re-validate path immediately before use to prevent TOCTOU attacks
+                    // An attacker could swap the validated file between load-time validation and connection-time use
+                    let validated_path = validate_terminal_path(&custom_path)?;
 
-                    // Check if file exists
-                    if !path_buf.exists() {
-                        return Err(format!("Terminal application not found: {}", custom_path));
-                    }
-
-                    // Ensure it's an .exe file
-                    if !custom_path.ends_with(".exe") {
-                        return Err("Windows terminal must be an .exe file".to_string());
-                    }
-
-                    // Launch custom terminal with SSH command
+                    // Launch custom terminal with SSH command using validated canonical path
                     // Note: Custom terminals may have different argument formats
                     // This attempts to use cmd.exe-style arguments, but may not work for all terminals
                     Command::new("cmd")
                         .arg("/c")
                         .arg("start")
-                        .arg(&custom_path)
+                        .arg(&validated_path)
                         .arg("/k")
                         .arg("ssh")
                         .args(&ssh_args)
@@ -1303,47 +1412,6 @@ fn connect_ssh(
         }
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        // For Linux, we can safely use shell_escape similar to macOS
-        fn shell_escape(s: &str) -> String {
-            format!("'{}'", s.replace('\'', "'\\''"))
-        }
-
-        let escaped_args: Vec<String> = ssh_args.iter()
-            .map(|arg| shell_escape(arg))
-            .collect();
-        let ssh_cmd = format!("ssh {}", escaped_args.join(" "));
-
-        // Try common terminal emulators
-        let terminals = vec!["gnome-terminal", "konsole", "xterm"];
-        let mut tried_terminals = Vec::new();
-
-        for terminal in terminals {
-            match Command::new(terminal)
-                .arg("-e")
-                .arg(&ssh_cmd)
-                .spawn()
-            {
-                Ok(_) => {
-                    // Minimize the app window after launching terminal
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.minimize();
-                    }
-                    return Ok(());
-                }
-                Err(e) => {
-                    tried_terminals.push(format!("{} ({})", terminal, e));
-                }
-            }
-        }
-
-        return Err(format!(
-            "No terminal emulator found. Tried: {}",
-            tried_terminals.join(", ")
-        ));
-    }
-
     Ok(())
 }
 
@@ -1383,6 +1451,7 @@ pub fn run() {
             save_profiles_to_file,
             browse_ssh_key,
             browse_terminal_app,
+            validate_custom_terminal,
             check_for_updates,
             connect_ssh,
             export_settings,

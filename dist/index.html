@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -14,7 +15,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.4.2</span>
+                    <span class="version">v0.4.3</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -30,11 +31,11 @@
                 <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
                 <button id="filter-btn" class="btn btn-secondary">
                     Filter Groups
-                    <span id="filter-badge" class="filter-badge hidden">0</span>
+                    <span id="filter-badge" class="badge filter-badge hidden">0</span>
                 </button>
                 <div class="profile-counter-display">
                     Total Profiles
-                    <span id="profile-count-badge" class="profile-count-badge">0</span>
+                    <span id="profile-count-badge" class="badge profile-count-badge">0</span>
                 </div>
             </div>
 
@@ -273,7 +274,7 @@
                             <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All Profiles</button>
                             <input type="file" id="import-file-input" accept=".json" style="display: none;">
                         </div>
-                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.</p>
+                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently. <strong>Security Warning:</strong> Exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
                     </div>
 
                     <!-- Settings Management -->
@@ -291,7 +292,7 @@
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" style="display: none;">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup. <strong>Security Warning:</strong> Backups with profiles contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
                     </div>
 
                     <!-- Updates Section -->
@@ -319,7 +320,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.4.2" target="_blank" class="about-value version-link">0.4.2</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.4.3" target="_blank" class="about-value version-link">0.4.3</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
