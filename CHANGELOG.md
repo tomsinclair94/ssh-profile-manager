@@ -5,6 +5,47 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2024-12-23
+
+### Changed
+- **New Application Logo**: Replaced Tauri logo with custom SSH-themed logo
+  - Blue padlock with terminal prompt design
+  - Generated in all required formats (.png, .icns, .ico)
+  - Consistent branding across all platforms
+- **GitHub Actions Workflow**: Switched to official `tauri-apps/tauri-action` for more reliable builds
+  - Added Rust caching for faster build times
+  - Pinned action version to v0.5 for stability
+  - Simplified workflow configuration
+- **README Documentation**: Converted all text to British English
+  - "Organise" instead of "Organize"
+  - "Colour-coded" instead of "Color-coded"
+  - "Minimises" instead of "Minimizes"
+- **Version Update Process**: Added README.md locations to version update checklist
+  - README.md line 14: Version badge
+  - README.md line 16: Download link text
+
+### Fixed
+- **Modal Dismiss Behaviour**: Removed ability to close modals by clicking outside
+  - Profile creation/edit modals now require explicit close/cancel button click
+  - Settings modal now requires explicit close button click
+  - Prevents accidental loss of unsaved form data
+  - Improves UX consistency across the application
+- **Windows Build**: Re-enabled Windows MSI builds in GitHub Actions
+  - Official tauri-action handles Windows-specific requirements automatically
+  - MSI packages now generated successfully alongside macOS DMG
+
+### Security
+- **CRITICAL**: Fixed command injection vulnerabilities in Windows SSH terminal handling
+  - **CMD Terminal**: Replaced unsafe `raw_arg()` with separate arguments (src-tauri/src/lib.rs:1192)
+  - **Custom Terminal**: Replaced unsafe `raw_arg()` with separate arguments (src-tauri/src/lib.rs:1262)
+  - **Default Terminal**: Fixed undefined variable that caused compilation error (src-tauri/src/lib.rs:1287)
+  - All Windows terminals now use safe argument passing instead of shell string concatenation
+  - Prevents arbitrary command execution via malicious profile data
+- **HIGH**: Enhanced AppleScript escaping for macOS custom terminals
+  - Added escaping for single quotes, dollar signs, and backticks
+  - Prevents command injection through terminal application names and SSH commands
+  - Comprehensive escaping now covers all shell metacharacters
+
 ## [0.4.0] - 2024-12-22
 
 ### Added

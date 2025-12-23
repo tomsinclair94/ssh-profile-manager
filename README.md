@@ -11,9 +11,9 @@
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
-### [📥 Download Latest Release (v0.3.0)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
+### [📥 Download Latest Release (v0.4.1)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
 <sub>**macOS 14.0+ | Windows 10+ | ~3-5 MB | Native Performance**</sub>
 
@@ -33,7 +33,7 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 
 **Profile Management**
 - ✅ Create, edit, delete, and duplicate profiles with validation
-- 📁 Organize into collapsible groups with search & filtering
+- 📁 Organise into collapsible groups with search & filtering
 - 🔑 Three auth methods: SSH Key, Password (keychain), Keyboard-Interactive
 - 📤 Export/Import profiles as JSON for team sharing
 
@@ -43,7 +43,7 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 
 **Modern UI**
 - 🌓 Dark/Light themes with system preference detection
-- 🎨 Color-coded buttons • Toast notifications • Smooth animations
+- 🎨 Colour-coded buttons • Toast notifications • Smooth animations
 - 📱 Responsive layout (NEW in v0.4.0)
 
 **SSH Connection**
@@ -88,9 +88,9 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 
 **Create a Profile:** Click "New Profile" → Fill in Name, Host, Username → Choose auth method → Save
 
-**Connect:** Click the green "Connect" button → Terminal opens automatically → App minimizes
+**Connect:** Click the green "Connect" button → Terminal opens automatically → App minimises
 
-**Organize:** Group profiles → Collapse/expand groups → Use search & filters
+**Organise:** Group profiles → Collapse/expand groups → Use search & filters
 
 **Backup:** Settings → Backup Settings → Toggle "Include Profiles" for full backup → Export → Restore anytime
 

@@ -1093,6 +1093,9 @@ fn connect_ssh(
              .replace('"', "\\\"")
              .replace('\n', "\\n")
              .replace('\r', "\\r")
+             .replace('\'', "\\'")
+             .replace('$', "\\$")
+             .replace('`', "\\`")
         }
 
         // Build the escaped SSH command
@@ -1181,15 +1184,13 @@ fn connect_ssh(
         match terminal_pref.as_str() {
             "cmd" => {
                 // Use Command Prompt - pass args directly to avoid shell escaping issues
-                let mut cmd_args = vec!["ssh".to_string()];
-                cmd_args.extend(ssh_args);
-
                 Command::new("cmd")
                     .arg("/c")
                     .arg("start")
                     .arg("cmd")
                     .arg("/k")
-                    .raw_arg(cmd_args.join(" "))
+                    .arg("ssh")
+                    .args(&ssh_args)
                     .spawn()
                     .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
             },
@@ -1253,13 +1254,16 @@ fn connect_ssh(
                         return Err("Windows terminal must be an .exe file".to_string());
                     }
 
-                    // Build SSH command string for custom terminal
-                    let mut cmd_args = vec!["ssh".to_string()];
-                    cmd_args.extend(ssh_args);
-
-                    Command::new(&custom_path)
+                    // Launch custom terminal with SSH command
+                    // Note: Custom terminals may have different argument formats
+                    // This attempts to use cmd.exe-style arguments, but may not work for all terminals
+                    Command::new("cmd")
+                        .arg("/c")
+                        .arg("start")
+                        .arg(&custom_path)
                         .arg("/k")
-                        .raw_arg(cmd_args.join(" "))
+                        .arg("ssh")
+                        .args(&ssh_args)
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
                 } else {
@@ -1284,7 +1288,8 @@ fn connect_ssh(
                             .arg("start")
                             .arg("cmd")
                             .arg("/k")
-                            .arg(&ssh_cmd)
+                            .arg("ssh")
+                            .args(&ssh_args)
                             .spawn()
                             .map_err(|e| format!("Failed to launch terminal: {}", e))?;
                     }

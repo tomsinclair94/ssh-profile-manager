@@ -687,11 +687,12 @@ function setupEventListeners() {
         }
     });
 
-    profileModal.addEventListener('click', (e) => {
-        if (e.target === profileModal) {
-            closeModal();
-        }
-    });
+    // Removed: backdrop click to close (users should use close/cancel buttons)
+    // profileModal.addEventListener('click', (e) => {
+    //     if (e.target === profileModal) {
+    //         closeModal();
+    //     }
+    // });
 
     profileForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -788,11 +789,12 @@ function setupEventListeners() {
         closeSettings();
     });
 
-    settingsModal.addEventListener('click', (e) => {
-        if (e.target === settingsModal) {
-            closeSettings();
-        }
-    });
+    // Removed: backdrop click to close (users should use close button)
+    // settingsModal.addEventListener('click', (e) => {
+    //     if (e.target === settingsModal) {
+    //         closeSettings();
+    //     }
+    // });
 
     // Theme toggle
     themeSelect.addEventListener('change', () => {

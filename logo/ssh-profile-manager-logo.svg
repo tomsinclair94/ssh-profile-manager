@@ -1,0 +1,41 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#1a5490" opacity="0.95"/>
+
+  <!-- Terminal window -->
+  <rect x="48" y="68" width="160" height="120" rx="8" fill="#2c3e50"/>
+
+  <!-- Terminal header bar -->
+  <rect x="48" y="68" width="160" height="24" rx="8" fill="#34495e"/>
+  <rect x="48" y="80" width="160" height="12" fill="#34495e"/>
+
+  <!-- Terminal buttons -->
+  <circle cx="64" cy="80" r="4" fill="#e74c3c"/>
+  <circle cx="78" cy="80" r="4" fill="#f39c12"/>
+  <circle cx="92" cy="80" r="4" fill="#2ecc71"/>
+
+  <!-- Terminal content - command prompt symbol -->
+  <text x="64" y="125" font-family="monospace" font-size="32" font-weight="bold" fill="#2ecc71">&gt;</text>
+  <rect x="90" y="110" width="40" height="4" fill="#2ecc71" opacity="0.6"/>
+
+  <!-- SSH Key symbol -->
+  <g transform="translate(70, 140)">
+    <!-- Key shaft -->
+    <rect x="0" y="18" width="50" height="8" rx="4" fill="#3498db"/>
+    <!-- Key head (circle) -->
+    <circle cx="5" cy="22" r="12" fill="#3498db" stroke="#2c3e50" stroke-width="2"/>
+    <circle cx="5" cy="22" r="5" fill="#2c3e50"/>
+    <!-- Key teeth -->
+    <rect x="45" y="14" width="4" height="8" fill="#3498db"/>
+    <rect x="40" y="14" width="4" height="12" fill="#3498db"/>
+  </g>
+
+  <!-- Connection dots -->
+  <circle cx="140" cy="150" r="5" fill="#3498db"/>
+  <circle cx="160" cy="155" r="4" fill="#3498db" opacity="0.7"/>
+  <circle cx="175" cy="145" r="4" fill="#3498db" opacity="0.5"/>
+
+  <!-- Connection lines -->
+  <line x1="140" y1="150" x2="160" y2="155" stroke="#3498db" stroke-width="2" opacity="0.6"/>
+  <line x1="160" y1="155" x2="175" y2="145" stroke="#3498db" stroke-width="2" opacity="0.4"/>
+</svg>
