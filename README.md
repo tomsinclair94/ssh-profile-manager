@@ -17,7 +17,7 @@
 
 <sub>**macOS 14.0+ | Windows 10+ | ~3-5 MB | Native Performance**</sub>
 
-<sub>⚠️ **macOS Note:** Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app)</sub>
+<sub>⚠️ **macOS Note:** Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app), or run: `xattr -cr "/Applications/SSH Profile Manager.app"`</sub>
 
 </div>
 
@@ -77,7 +77,7 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 **macOS**
 1. Download the latest `.dmg` from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 2. Drag "SSH Profile Manager" to Applications
-3. **First launch:** Right-click → "Open" to bypass Gatekeeper (unsigned app)
+3. **First launch:** Right-click → "Open" to bypass Gatekeeper (unsigned app), or run `xattr -cr "/Applications/SSH Profile Manager.app"` from Terminal
 
 **Windows**
 1. Download the latest `.msi` from [Releases](https://github.com/tomsinclair94/ssh-profile-manager/releases)
