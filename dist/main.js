@@ -68,7 +68,8 @@ let profiles = [];
 let editingProfileId = null;
 let isSubmitting = false;
 let collapsedGroups = new Set();
-let originalFormValues = {};
+let originalFormValues = {}; // Track original profile form values for change detection
+let originalSettingsValues = {}; // Track original settings values for change detection
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
 
 // Utility: Debounce function to prevent rapid successive calls
@@ -313,8 +314,8 @@ let searchInput;
 let newProfileBtn;
 let profileModal;
 let profileForm;
-let closeModalBtn;
-let cancelBtn;
+let cancelBtn; // Profile close button in header
+let profileSaveBtn; // Profile save button in header
 let deleteProfileBtn;
 let modalTitle;
 let authMethodSelect;
@@ -326,7 +327,8 @@ let confirmOkBtn;
 let confirmCancelBtn;
 let settingsBtn;
 let settingsModal;
-let closeSettingsBtn;
+let settingsCloseBtn; // Settings close button in header
+let settingsSaveBtn; // Settings save button in header
 let themeSelect;
 let exportProfilesBtn;
 let importProfilesBtn;
@@ -369,8 +371,8 @@ async function init() {
     newProfileBtn = document.getElementById('new-profile-btn');
     profileModal = document.getElementById('profile-modal');
     profileForm = document.getElementById('profile-form');
-    closeModalBtn = document.getElementById('close-modal');
-    cancelBtn = document.getElementById('cancel-btn');
+    cancelBtn = document.getElementById('profile-close-btn'); // Profile close button in header
+    profileSaveBtn = document.getElementById('profile-save-btn'); // Profile save button in header
     deleteProfileBtn = document.getElementById('delete-profile-btn');
     modalTitle = document.getElementById('modal-title');
     authMethodSelect = document.getElementById('profile-auth-method');
@@ -382,7 +384,8 @@ async function init() {
     confirmCancelBtn = document.getElementById('confirm-cancel');
     settingsBtn = document.getElementById('settings-btn');
     settingsModal = document.getElementById('settings-modal');
-    closeSettingsBtn = document.getElementById('close-settings');
+    settingsCloseBtn = document.getElementById('settings-close-btn'); // Settings close button in header
+    settingsSaveBtn = document.getElementById('settings-save-btn'); // Settings save button in header
     themeSelect = document.getElementById('theme-select');
     exportProfilesBtn = document.getElementById('export-profiles-btn');
     importProfilesBtn = document.getElementById('import-profiles-btn');
@@ -537,13 +540,39 @@ function renderProfiles(filter = '') {
     });
 
     if (filteredProfiles.length === 0) {
+        // Determine if there are truly no profiles or just no results from filtering/search
+        const hasProfiles = profiles.length > 0;
+        const hasActiveFilters = filteredGroups.size > 0;
+
+        let icon, title, text;
+
+        if (!hasProfiles) {
+            // Truly no profiles exist
+            icon = '💻';
+            title = 'No SSH Profiles Yet';
+            text = 'Create your first SSH profile to get started.';
+        } else if (filter && hasActiveFilters) {
+            // Both search and filters active
+            icon = '🔍';
+            title = 'No Profiles Found';
+            text = 'No profiles match your search and active group filters.';
+        } else if (filter) {
+            // Search active, no filters
+            icon = '🔍';
+            title = 'No Profiles Found';
+            text = 'No profiles match your search.';
+        } else if (hasActiveFilters) {
+            // Only filters active
+            icon = '🔍';
+            title = 'No Profiles Found';
+            text = 'No profiles match the active group filters.';
+        }
+
         profilesList.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">🔌</div>
-                <div class="empty-state-title">No SSH Profiles Yet</div>
-                <div class="empty-state-text">
-                    ${filter ? 'No profiles match your search.' : 'Create your first SSH profile to get started.'}
-                </div>
+                <div class="empty-state-icon">${icon}</div>
+                <div class="empty-state-title">${title}</div>
+                <div class="empty-state-text">${text}</div>
             </div>
         `;
         return;
@@ -714,12 +743,8 @@ function setupEventListeners() {
         openModal();
     });
 
-    closeModalBtn.addEventListener('click', () => {
-        closeModal();
-    });
-
-    cancelBtn.addEventListener('click', () => {
-        closeModal();
+    cancelBtn.addEventListener('click', async () => {
+        await closeModal();
     });
 
     deleteProfileBtn.addEventListener('click', async () => {
@@ -728,7 +753,7 @@ function setupEventListeners() {
             const deleted = await deleteProfile(editingProfileId);
             // Only close modal if deletion was successful
             if (deleted) {
-                closeModal();
+                forceCloseModal(); // Force close without confirmation after deletion
             }
         }
     });
@@ -831,8 +856,12 @@ function setupEventListeners() {
         openSettings();
     });
 
-    closeSettingsBtn.addEventListener('click', () => {
-        closeSettings();
+    settingsCloseBtn.addEventListener('click', async () => {
+        await closeSettings();
+    });
+
+    settingsSaveBtn.addEventListener('click', () => {
+        saveSettings();
     });
 
     // Removed: backdrop click to close (users should use close button)
@@ -842,9 +871,13 @@ function setupEventListeners() {
     //     }
     // });
 
-    // Theme toggle
+    // Theme toggle - don't apply immediately, just track changes
     themeSelect.addEventListener('change', () => {
-        applyTheme(themeSelect.value);
+        checkSettingsChanged();
+    });
+
+    autoUpdateCheck.addEventListener('change', () => {
+        checkSettingsChanged();
     });
 
     // Export/Import
@@ -877,12 +910,8 @@ function setupEventListeners() {
         await checkForUpdates(false); // not silent, show notification
     });
 
-    autoUpdateCheck.addEventListener('change', () => {
-        saveAutoUpdatePreference();
-    });
-
     includeProfilesCheck.addEventListener('change', () => {
-        saveIncludeProfilesPreference();
+        checkSettingsChanged();
     });
 
     // Expand/collapse all groups button
@@ -923,7 +952,11 @@ function setupEventListeners() {
     // Terminal preference
     terminalSelect.addEventListener('change', () => {
         updateTerminalVisibility();
-        saveTerminalPreference();
+        checkSettingsChanged();
+    });
+
+    customTerminalPath.addEventListener('input', () => {
+        checkSettingsChanged();
     });
 
     browseTerminalBtn.addEventListener('click', async () => {
@@ -1002,6 +1035,35 @@ function updateAuthMethodVisibility() {
 }
 
 // Settings modal functions
+// Get current settings values from localStorage and DOM
+function getCurrentSettingsValues() {
+    return {
+        theme: themeSelect.value,
+        autoUpdateCheck: autoUpdateCheck.checked,
+        terminalPreference: terminalSelect.value,
+        customTerminalPath: customTerminalPath.value,
+        includeProfiles: includeProfilesCheck.checked
+    };
+}
+
+// Capture current settings values for change detection
+function captureSettingsValues() {
+    originalSettingsValues = getCurrentSettingsValues();
+}
+
+// Check if settings have changed
+function hasUnsavedSettingsChanges() {
+    const currentValues = getCurrentSettingsValues();
+    return Object.keys(originalSettingsValues).some(key =>
+        currentValues[key] !== originalSettingsValues[key]
+    );
+}
+
+// Check settings changes and update Save button state
+function checkSettingsChanged() {
+    settingsSaveBtn.disabled = !hasUnsavedSettingsChanges();
+}
+
 function openSettings() {
     settingsModal.classList.remove('hidden');
 
@@ -1010,10 +1072,95 @@ function openSettings() {
     if (modalContent) {
         modalContent.scrollTop = 0;
     }
+
+    // Capture original settings values and disable Save button initially
+    captureSettingsValues();
+    settingsSaveBtn.disabled = true;
 }
 
-function closeSettings() {
+// Force close settings without confirmation
+function forceCloseSettings() {
     settingsModal.classList.add('hidden');
+    originalSettingsValues = {};
+}
+
+// Close settings with unsaved changes check
+async function closeSettings() {
+    // Check if there are unsaved changes
+    if (hasUnsavedSettingsChanges()) {
+        const confirmed = await customConfirm(
+            'You have unsaved changes. Are you sure you want to close without saving?',
+            {
+                title: 'Unsaved Changes',
+                okText: 'Close Without Saving',
+                cancelText: 'Cancel',
+                okClass: 'btn-danger'
+            }
+        );
+
+        if (!confirmed) {
+            return; // User cancelled, keep modal open
+        }
+
+        // User confirmed - revert any changes made in the UI
+        revertSettingsUI();
+    }
+
+    // No unsaved changes or user confirmed - close the modal
+    forceCloseSettings();
+}
+
+// Revert settings UI to original values (without saving)
+// SECURITY: Validate all values before applying to prevent corrupted localStorage from breaking UI
+function revertSettingsUI() {
+    // Validate theme with safe default
+    const validThemes = ['system', 'light', 'dark'];
+    themeSelect.value = validThemes.includes(originalSettingsValues.theme)
+        ? originalSettingsValues.theme
+        : 'system';
+
+    // Validate boolean values with safe defaults
+    autoUpdateCheck.checked = typeof originalSettingsValues.autoUpdateCheck === 'boolean'
+        ? originalSettingsValues.autoUpdateCheck
+        : true;
+
+    // Validate terminal preference - must exist in dropdown options
+    const validTerminalOptions = Array.from(terminalSelect.options).map(opt => opt.value);
+    terminalSelect.value = validTerminalOptions.includes(originalSettingsValues.terminalPreference)
+        ? originalSettingsValues.terminalPreference
+        : 'default';
+
+    // Validate custom terminal path - must be string, can be empty
+    customTerminalPath.value = typeof originalSettingsValues.customTerminalPath === 'string'
+        ? originalSettingsValues.customTerminalPath
+        : '';
+
+    // Validate boolean value with safe default
+    includeProfilesCheck.checked = typeof originalSettingsValues.includeProfiles === 'boolean'
+        ? originalSettingsValues.includeProfiles
+        : false;
+
+    updateTerminalVisibility();
+}
+
+// Save all settings changes
+function saveSettings() {
+    // Apply theme
+    applyTheme(themeSelect.value);
+
+    // Save auto-update preference
+    saveAutoUpdatePreference();
+
+    // Save terminal preference
+    saveTerminalPreference();
+
+    // Save include profiles preference
+    saveIncludeProfilesPreference();
+
+    // Close modal after saving
+    forceCloseSettings();
+
+    showToast('Settings saved successfully!');
 }
 
 // Update checker functions
@@ -1948,9 +2095,9 @@ function openModal(profile = null) {
     // For new profiles, enable Save button immediately
     // For editing, disable until changes are made
     if (profile) {
-        saveProfileBtn.disabled = true;
+        profileSaveBtn.disabled = true;
     } else {
-        saveProfileBtn.disabled = false;
+        profileSaveBtn.disabled = false;
     }
 }
 
@@ -1978,7 +2125,7 @@ function captureFormValues() {
 function checkFormChanged() {
     // If creating a new profile, always keep Save button enabled
     if (!editingProfileId) {
-        saveProfileBtn.disabled = false;
+        profileSaveBtn.disabled = false;
         return;
     }
 
@@ -1990,15 +2137,53 @@ function checkFormChanged() {
         currentValues[key] !== originalFormValues[key]
     );
 
-    saveProfileBtn.disabled = !hasChanged;
+    profileSaveBtn.disabled = !hasChanged;
 }
 
-// Close modal
-function closeModal() {
+// Check if there are unsaved profile changes
+function hasUnsavedProfileChanges() {
+    // If creating a new profile, check if any fields have content
+    if (!editingProfileId) {
+        const currentValues = getCurrentFormValues();
+        return currentValues.name || currentValues.host || currentValues.username;
+    }
+
+    // For editing, compare current values with original values
+    const currentValues = getCurrentFormValues();
+    return Object.keys(originalFormValues).some(key =>
+        currentValues[key] !== originalFormValues[key]
+    );
+}
+
+// Close modal (force close without confirmation)
+function forceCloseModal() {
     profileModal.classList.add('hidden');
     editingProfileId = null;
     profileForm.reset();
     originalFormValues = {};
+}
+
+// Close modal with unsaved changes check
+async function closeModal() {
+    // Check if there are unsaved changes
+    if (hasUnsavedProfileChanges()) {
+        const confirmed = await customConfirm(
+            'You have unsaved changes. Are you sure you want to close without saving?',
+            {
+                title: 'Unsaved Changes',
+                okText: 'Close Without Saving',
+                cancelText: 'Cancel',
+                okClass: 'btn-danger'
+            }
+        );
+
+        if (!confirmed) {
+            return; // User cancelled, keep modal open
+        }
+    }
+
+    // No unsaved changes or user confirmed - close the modal
+    forceCloseModal();
 }
 
 // Save profile (create or update)
@@ -2049,7 +2234,7 @@ async function saveProfile() {
         }
 
         await loadProfiles();
-        closeModal();
+        forceCloseModal(); // Force close without confirmation after successful save
         showToast(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
     } catch (error) {
         console.error('Failed to save profile:', error);

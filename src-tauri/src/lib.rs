@@ -1239,35 +1239,70 @@ fn connect_ssh(
                     // An attacker could swap the validated file between load-time validation and connection-time use
                     let validated_path = validate_terminal_path(&custom_path)?;
 
-                    // Escape the SSH command for AppleScript
-                    let applescript_escaped = applescript_escape(&ssh_cmd_str);
+                    // For custom terminals, we use a temporary shell script approach
+                    // This works with any terminal that can execute a shell script
+                    // and is more reliable than trying to pass commands via AppleScript
 
-                    // Get app name from validated path and escape it for AppleScript
-                    let app_name = validated_path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .ok_or_else(|| "Invalid terminal application path".to_string())?;
+                    // Helper function to escape strings for bash double-quote context
+                    fn escape_bash_double_quote(s: &str) -> String {
+                        s.replace('\\', "\\\\")
+                         .replace('"', "\\\"")
+                         .replace('$', "\\$")
+                         .replace('`', "\\`")
+                    }
 
-                    let app_name_escaped = applescript_escape(app_name);
+                    // Create a temporary directory for our script
+                    let temp_dir = std::env::temp_dir();
+                    let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
 
-                    // First open the app using validated canonical path
+                    // Build the shell script content
+                    // The script will execute SSH and then keep the shell open
+                    let script_content = format!(
+                        "#!/bin/bash\n\
+                         echo \"Connecting to {}...\"\n\
+                         ssh {}\n\
+                         echo \"\"\n\
+                         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+                         exec bash\n",
+                        escape_bash_double_quote(&profile.name),
+                        ssh_args.iter()
+                            .map(|arg| shell_escape(arg))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+
+                    // Write the script file
+                    fs::write(&script_path, script_content)
+                        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
+
+                    // Make the script executable
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let mut perms = fs::metadata(&script_path)
+                            .map_err(|e| format!("Failed to get script permissions: {}", e))?
+                            .permissions();
+                        perms.set_mode(0o700); // rwx------
+                        fs::set_permissions(&script_path, perms)
+                            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+                    }
+
+                    // Launch the terminal with the script
                     Command::new("open")
+                        .arg("-n")  // Open new instance
                         .arg("-a")
                         .arg(&validated_path)
+                        .arg(&script_path)
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-                    // Small delay to let the app open
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-
-                    // Send the SSH command with properly escaped app name
-                    Command::new("osascript")
-                        .arg("-e")
-                        .arg(format!("tell application \"{}\" to do script \"{}\"", app_name_escaped, applescript_escaped))
-                        .arg("-e")
-                        .arg(format!("tell application \"{}\" to activate", app_name_escaped))
-                        .spawn()
-                        .map_err(|e| format!("Failed to execute SSH command in custom terminal: {}", e))?;
+                    // Schedule script cleanup after 30 seconds
+                    // This gives the terminal time to read and execute the script
+                    let script_path_cleanup = script_path.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_secs(30));
+                        let _ = fs::remove_file(&script_path_cleanup); // Best effort cleanup
+                    });
                 } else {
                     return Err("Custom terminal selected but no path provided".to_string());
                 }
@@ -1363,18 +1398,69 @@ fn connect_ssh(
                     // An attacker could swap the validated file between load-time validation and connection-time use
                     let validated_path = validate_terminal_path(&custom_path)?;
 
-                    // Launch custom terminal with SSH command using validated canonical path
-                    // Note: Custom terminals may have different argument formats
-                    // This attempts to use cmd.exe-style arguments, but may not work for all terminals
+                    // For custom terminals, we use a temporary batch script approach
+                    // This works with any terminal that can execute batch scripts
+                    // and is more reliable than assuming cmd.exe-style argument support
+
+                    // Helper function to escape strings for Windows batch echo context
+                    // SECURITY: Prevents command injection in batch file echo statements
+                    fn escape_batch_echo(s: &str) -> String {
+                        s.replace('^', "^^")  // Escape the escape character first
+                         .replace('&', "^&")
+                         .replace('|', "^|")
+                         .replace('<', "^<")
+                         .replace('>', "^>")
+                         .replace('%', "%%")
+                         .replace('!', "^!")
+                    }
+
+                    // Helper function to escape arguments for batch script execution
+                    // SECURITY: Wraps arguments in quotes and escapes internal quotes
+                    fn escape_batch_arg(s: &str) -> String {
+                        format!("\"{}\"", s.replace('"', "\"\""))
+                    }
+
+                    // Create a temporary directory for our script
+                    let temp_dir = std::env::temp_dir();
+                    let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+
+                    // Build the batch script content
+                    // The script will execute SSH and then pause to keep the window open
+                    let script_content = format!(
+                        "@echo off\r\n\
+                         echo Connecting to {}...\r\n\
+                         ssh {}\r\n\
+                         echo.\r\n\
+                         echo Connection closed.\r\n\
+                         pause\r\n",
+                        escape_batch_echo(&profile.name),
+                        ssh_args.iter()
+                            .map(|arg| escape_batch_arg(arg))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+
+                    // Write the script file
+                    fs::write(&script_path, script_content)
+                        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
+
+                    // Launch the terminal with the script
                     Command::new("cmd")
                         .arg("/c")
                         .arg("start")
+                        .arg("")  // Empty title
                         .arg(&validated_path)
-                        .arg("/k")
-                        .arg("ssh")
-                        .args(&ssh_args)
+                        .arg(&script_path)
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+
+                    // SECURITY: Schedule script cleanup after 30 seconds
+                    // This prevents accumulation of temporary scripts while giving the terminal time to read it
+                    let script_path_cleanup = script_path.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_secs(30));
+                        let _ = fs::remove_file(&script_path_cleanup);
+                    });
                 } else {
                     return Err("Custom terminal selected but no path provided".to_string());
                 }

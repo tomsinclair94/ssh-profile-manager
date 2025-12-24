@@ -202,20 +202,31 @@ body {
     flex-wrap: wrap;
 }
 
-.search-bar input[type="text"] {
+.search-input-wrapper {
     flex: 1;
+    position: relative;
+    min-width: 200px;
+}
+
+.search-bar input[type="text"] {
+    width: 100%;
     padding: 10px 16px;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     color: var(--text-color);
     font-size: 14px;
-    min-width: 200px;
+}
+
+/* Show tooltip on search input focus */
+.search-bar input[type="text"]:focus + .input-tooltip {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Narrow screens: search input on separate row, buttons grow dynamically */
 @media (max-width: 799px) {
-    .search-bar input[type="text"] {
+    .search-input-wrapper {
         flex-basis: 100%;
         order: 2;
     }
@@ -716,6 +727,22 @@ body {
     font-weight: 600;
 }
 
+.modal-header-left {
+    flex: 0 0 auto;
+}
+
+.modal-header-right {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Buttons in modal header should have consistent sizing */
+.modal-header-right .btn {
+    min-width: 80px;
+}
+
 .close-btn {
     background: none;
     border: none;
@@ -745,6 +772,11 @@ form {
     position: relative;
 }
 
+/* Remove bottom margin from last form group to eliminate wasted space */
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
 .form-group label {
     display: block;
     margin-bottom: 8px;
@@ -768,6 +800,8 @@ form {
     border-radius: var(--radius);
     color: var(--text-color);
     font-size: 14px;
+    height: 42px; /* Ensure consistent height for inputs and selects */
+    box-sizing: border-box;
 }
 
 .form-group input:focus,
@@ -1038,6 +1072,14 @@ form {
         opacity 0.2s ease,
         visibility 0.2s ease;
     pointer-events: none;
+}
+
+/* For the last form group, show tooltip above instead of below */
+.form-group:last-child .input-tooltip {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
 }
 
 /* Show on focus */

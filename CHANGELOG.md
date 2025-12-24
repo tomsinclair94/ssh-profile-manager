@@ -5,6 +5,84 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2024-12-24
+
+### Added
+- **Close/Save Pattern**: Profile Editor and Settings modals now have Close/Save buttons
+  - Save button enabled/disabled based on changes detection
+  - Confirmation dialog when closing with unsaved changes
+  - "Close Without Saving" option with warning
+  - Improved UX prevents accidental data loss
+- **Settings Revert Validation**: Settings restore now validates all values with safe defaults
+  - Validates theme against allowed values (system/light/dark)
+  - Validates terminal preferences against available options
+  - Validates boolean values with type checking
+  - Prevents corrupted localStorage from breaking UI
+- **Search Tooltip**: Added informative tooltip to search bar
+  - Explains search scope (names, hosts, usernames)
+  - Notes that results are filtered by active group filters
+  - Helpful tip to clear group filters for searching all profiles
+- **Context-Aware Empty States**: Improved empty state messages with appropriate icons
+  - "No SSH Profiles Yet" when no profiles exist (💻 icon)
+  - "No Profiles Found" with context-specific explanations (🔍 icon)
+  - Different messages for search-only vs search+filter combinations
+  - Better user guidance for different scenarios
+
+### Changed
+- **Modal Button Layout**: Replaced X buttons with Close buttons in modals
+  - Profile Editor: Delete | Save | Close (left to right)
+  - Settings Modal: Save | Close (left to right)
+  - Close button positioned as rightmost element
+  - Cleaner, less cluttered appearance
+- **Dropdown Heights**: All select dropdowns now match text input height (42px)
+  - Consistent visual alignment across forms
+  - Applied to Profile Editor and Settings modals
+  - Better visual harmony
+
+### Fixed
+- **Custom Terminal Support (macOS)**: Custom terminals now execute SSH commands correctly
+  - Switched from AppleScript `do script` to temporary shell script approach
+  - Works with any terminal app (Ghostty, iTerm2, Wezterm, etc.)
+  - Shell scripts placed in temp directory with UUID naming
+  - Scripts made executable with 0o700 permissions
+  - 30-second delayed cleanup prevents accumulation
+- **Custom Terminal Support (Windows)**: Custom terminals now work correctly
+  - Temporary batch script approach for compatibility
+  - Works with any terminal that can execute .bat files
+  - 30-second delayed cleanup mechanism
+- **Form Spacing**: Removed wasted space at bottom of Profile Editor form
+  - Tooltips for last form group now appear above input
+  - Cleaner, more compact layout
+- **Unsaved Changes Detection**: Confirmation dialogs now work correctly
+  - Fixed confirmation dialog function call (customConfirm instead of confirm)
+  - Proper Promise handling for async confirmations
+  - Consistent behaviour across Profile Editor and Settings modals
+
+### Security
+- **CRITICAL**: Fixed command injection in macOS temporary scripts
+  - Profile names now properly escaped in shell scripts using `escape_bash_double_quote()`
+  - Escapes: backslash, double quote, dollar sign, backtick
+  - Prevents command injection via malicious profile names
+  - CVSS Score: 9.8
+- **CRITICAL**: Fixed command injection in Windows batch scripts
+  - Profile names escaped for batch echo context using `escape_batch_echo()`
+  - SSH arguments escaped using `escape_batch_arg()`
+  - Escapes: ^, &, |, <, >, %, !, double quotes
+  - Prevents command execution via batch special characters
+  - CVSS Score: 9.8
+- **CRITICAL**: Implemented temporary script cleanup mechanism
+  - Background thread deletes scripts after 30-second timeout
+  - Prevents accumulation of sensitive data in temp directories
+  - Applied to both macOS (.sh) and Windows (.bat) scripts
+  - Reduces disk space usage and privacy risks
+  - CVSS Score: 7.5
+- **HIGH**: Added comprehensive validation to settings revert
+  - All settings values validated before applying to UI
+  - Safe defaults used for invalid/missing values
+  - Prevents corrupted localStorage from breaking application
+  - Type checking for boolean, string, and enum values
+  - CVSS Score: 6.5
+
 ## [0.4.3] - 2024-12-23
 
 ### Added

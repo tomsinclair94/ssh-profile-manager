@@ -15,7 +15,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.4.3</span>
+                    <span class="version">v0.5.0</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -27,7 +27,19 @@
         <!-- Search and Filter -->
         <div class="search-bar">
             <div class="search-controls">
-                <input type="text" id="search-input" placeholder="Search profiles..." />
+                <div class="search-input-wrapper">
+                    <input type="text" id="search-input" placeholder="Search profiles..." />
+                    <div class="input-tooltip search-tooltip">
+                        <div class="tooltip-content">
+                            <div class="tooltip-title">Search Scope</div>
+                            <ul class="tooltip-rules">
+                                <li>Searches profile names, hosts, and usernames</li>
+                                <li>Results are filtered by active group filters</li>
+                                <li>Clear group filters to search all profiles</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
                 <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
                 <button id="filter-btn" class="btn btn-secondary">
                     Filter Groups
@@ -60,8 +72,14 @@
         <div id="profile-modal" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 id="modal-title">New Profile</h2>
-                    <button class="close-btn" id="close-modal">&times;</button>
+                    <div class="modal-header-left">
+                        <h2 id="modal-title">New Profile</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-danger hidden" id="delete-profile-btn">Delete</button>
+                        <button type="submit" form="profile-form" class="btn btn-primary" id="profile-save-btn">Save</button>
+                        <button type="button" class="btn btn-secondary" id="profile-close-btn">Close</button>
+                    </div>
                 </div>
                 <form id="profile-form">
                     <div class="form-group">
@@ -187,16 +205,6 @@
                         </div>
                         <span class="char-counter" id="profile-group-counter">0 / 32</span>
                     </div>
-
-                    <div class="form-actions">
-                        <div class="form-actions-left">
-                            <button type="button" class="btn btn-danger hidden" id="delete-profile-btn">Delete Profile</button>
-                        </div>
-                        <div class="form-actions-right">
-                            <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
-                            <button type="submit" class="btn btn-primary" id="save-profile-btn">Save Profile</button>
-                        </div>
-                    </div>
                 </form>
             </div>
         </div>
@@ -229,8 +237,13 @@
         <div id="settings-modal" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Settings</h2>
-                    <button class="close-btn" id="close-settings">&times;</button>
+                    <div class="modal-header-left">
+                        <h2>Settings</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-primary" id="settings-save-btn">Save</button>
+                        <button type="button" class="btn btn-secondary" id="settings-close-btn">Close</button>
+                    </div>
                 </div>
                 <div class="settings-content">
                     <!-- Theme Settings -->
@@ -320,7 +333,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.4.3" target="_blank" class="about-value version-link">0.4.3</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.5.0" target="_blank" class="about-value version-link">0.5.0</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
