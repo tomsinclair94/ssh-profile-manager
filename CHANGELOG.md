@@ -5,6 +5,41 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2024-12-29
+
+### Fixed
+- **macOS Default Terminal Launch**: Fixed critical bug preventing Default Terminal option from working
+  - Removed incorrect single-quote escaping in AppleScript double-quoted strings
+  - Terminal.app now launches correctly with "Default" preference selected
+  - Custom terminals continue to work via temporary script approach
+- **Filter Dropdown Alignment**: Filter popup now aligns correctly with button in all layouts
+  - Dynamic JavaScript positioning replaces fixed CSS positioning
+  - Works correctly in both normal view and compact view (<800px width)
+  - Popup appears below button even when buttons wrap to second row
+- **Import Validation**: Added comprehensive JSON validation for profile and settings imports
+  - Profile imports now reject settings backup files with helpful error message
+  - Settings restores now reject profile-only files with helpful error message
+  - Validates required fields and array structures
+  - Multi-line error messages display correctly in toast notifications
+- **Multi-line Toast Messages**: Toast notifications now properly display multi-line error messages
+  - Safe DOM manipulation using split() and createTextNode()
+  - Preserves line breaks for better readability
+  - No excessive spacing around short messages
+- **Confirmation Dialog Validation**: Added null reference protection to buildConfirmMessage()
+  - Function now validates config parameter before use
+  - Returns empty fragment if invalid config provided
+  - Prevents runtime errors from malformed dialog configurations
+
+### Security
+- **MEDIUM**: Fixed XSS risk in confirmation dialog construction (CVSS 5.4)
+  - Added input validation to buildConfirmMessage() function
+  - Validates config structure before processing
+  - Defense-in-depth protection against future misuse
+- **MEDIUM**: Fixed HTML injection risk in toast messages (CVSS 4.5)
+  - Replaced innerHTML with safe DOM manipulation
+  - Uses document.createTextNode() and createElement('br')
+  - Prevents potential XSS if user input ever reaches toast function
+
 ## [0.5.0] - 2024-12-24
 
 ### Added

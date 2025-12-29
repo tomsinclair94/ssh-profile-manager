@@ -750,6 +750,24 @@ function setupEventListeners() {
     deleteProfileBtn.addEventListener('click', async () => {
         console.log('Delete button clicked in modal');
         if (editingProfileId) {
+            // Check for unsaved changes before proceeding with deletion
+            if (hasUnsavedProfileChanges()) {
+                const confirmed = await customConfirm(
+                    'You have unsaved changes. Do you want to proceed with deletion?',
+                    {
+                        title: 'Unsaved Changes',
+                        okText: 'Proceed with Delete',
+                        cancelText: 'Cancel',
+                        okClass: 'btn-danger'
+                    }
+                );
+
+                if (!confirmed) {
+                    return; // User cancelled, keep modal open with unsaved changes
+                }
+            }
+
+            // Proceed with deletion
             const deleted = await deleteProfile(editingProfileId);
             // Only close modal if deletion was successful
             if (deleted) {
@@ -873,11 +891,11 @@ function setupEventListeners() {
 
     // Theme toggle - don't apply immediately, just track changes
     themeSelect.addEventListener('change', () => {
-        checkSettingsChanged();
+        debouncedCheckSettingsChanged();
     });
 
     autoUpdateCheck.addEventListener('change', () => {
-        checkSettingsChanged();
+        debouncedCheckSettingsChanged();
     });
 
     // Export/Import
@@ -911,7 +929,7 @@ function setupEventListeners() {
     });
 
     includeProfilesCheck.addEventListener('change', () => {
-        checkSettingsChanged();
+        debouncedCheckSettingsChanged();
     });
 
     // Expand/collapse all groups button
@@ -952,11 +970,11 @@ function setupEventListeners() {
     // Terminal preference
     terminalSelect.addEventListener('change', () => {
         updateTerminalVisibility();
-        checkSettingsChanged();
+        debouncedCheckSettingsChanged();
     });
 
     customTerminalPath.addEventListener('input', () => {
-        checkSettingsChanged();
+        debouncedCheckSettingsChanged();
     });
 
     browseTerminalBtn.addEventListener('click', async () => {
@@ -996,7 +1014,21 @@ function customConfirm(message, options = {}) {
         const okClass = options.okClass || 'btn-danger';
 
         confirmTitle.textContent = title;
-        confirmMessage.innerHTML = message;
+
+        // Clear previous content
+        confirmMessage.innerHTML = '';
+
+        // Support both DOM elements and strings (for backward compatibility)
+        // Prefer passing DOM elements for security
+        if (message instanceof Node) {
+            confirmMessage.appendChild(message);
+        } else if (typeof message === 'string') {
+            // For string messages, use textContent for safety (no HTML)
+            // If HTML formatting is needed, caller should create DOM elements
+            const textNode = document.createTextNode(message);
+            confirmMessage.appendChild(textNode);
+        }
+
         confirmOkBtn.textContent = okText;
         confirmCancelBtn.textContent = cancelText;
         confirmOkBtn.className = `btn ${okClass}`;
@@ -1011,7 +1043,19 @@ function customConfirm(message, options = {}) {
 
 // Toast notification
 function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
-    toastMessage.textContent = message;
+    // Clear previous content
+    toastMessage.textContent = '';
+
+    // Safely handle multi-line messages using DOM manipulation
+    if (message.includes('\n')) {
+        message.split('\n').forEach((line, index) => {
+            if (index > 0) toastMessage.appendChild(document.createElement('br'));
+            toastMessage.appendChild(document.createTextNode(line));
+        });
+    } else {
+        toastMessage.textContent = message;
+    }
+
     toastElement.classList.remove('hidden', 'toast-error', 'toast-success');
 
     // Add appropriate class based on type
@@ -1063,6 +1107,9 @@ function hasUnsavedSettingsChanges() {
 function checkSettingsChanged() {
     settingsSaveBtn.disabled = !hasUnsavedSettingsChanges();
 }
+
+// Debounced version to prevent race conditions with rapid changes (50ms delay)
+const debouncedCheckSettingsChanged = debounce(checkSettingsChanged, 50);
 
 function openSettings() {
     settingsModal.classList.remove('hidden');
@@ -1235,8 +1282,21 @@ function loadFilterState() {
                 throw new Error('Invalid filter data structure');
             }
 
-            // Validate each item is a string
-            if (!filtersArray.every(item => typeof item === 'string')) {
+            // Validate array length (max 1000 to prevent DoS)
+            if (filtersArray.length > 1000) {
+                throw new Error('Too many filtered groups');
+            }
+
+            // Validate each item is a string with proper format
+            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ]
+            // Max length: 32 characters
+            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]]+$/;
+            if (!filtersArray.every(item =>
+                typeof item === 'string' &&
+                item.length > 0 &&
+                item.length <= 32 &&
+                groupNameRegex.test(item)
+            )) {
                 throw new Error('Invalid filter group names');
             }
 
@@ -1272,8 +1332,21 @@ function loadCollapsedState() {
                 throw new Error('Invalid collapsed groups data structure');
             }
 
-            // Validate each item is a string
-            if (!collapsedArray.every(item => typeof item === 'string')) {
+            // Validate array length (max 1000 to prevent DoS)
+            if (collapsedArray.length > 1000) {
+                throw new Error('Too many collapsed groups');
+            }
+
+            // Validate each item is a string with proper format
+            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ]
+            // Max length: 32 characters
+            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]]+$/;
+            if (!collapsedArray.every(item =>
+                typeof item === 'string' &&
+                item.length > 0 &&
+                item.length <= 32 &&
+                groupNameRegex.test(item)
+            )) {
                 throw new Error('Invalid collapsed group names');
             }
 
@@ -1376,6 +1449,19 @@ function toggleFilterPopup() {
     if (isHidden) {
         // Build the list before showing
         buildFilterGroupsList();
+
+        // Position popup to align with filter button (works in both normal and compact views)
+        const filterBtnRect = filterBtn.getBoundingClientRect();
+        const searchBarRect = filterPopup.parentElement.getBoundingClientRect();
+
+        // Calculate horizontal position (left edge of button)
+        const leftOffset = filterBtnRect.left - searchBarRect.left;
+        filterPopup.style.left = `${leftOffset}px`;
+
+        // Calculate vertical position (directly below button)
+        const topOffset = filterBtnRect.bottom - searchBarRect.top + 8; // 8px margin
+        filterPopup.style.top = `${topOffset}px`;
+
         filterPopup.classList.remove('hidden');
     } else {
         filterPopup.classList.add('hidden');
@@ -1626,6 +1712,57 @@ async function exportProfiles() {
     }
 }
 
+// Validate profile import JSON structure
+function validateProfileImportData(data) {
+    // Must have a profiles array
+    if (!data || typeof data !== 'object') {
+        return { valid: false, error: 'Invalid JSON structure' };
+    }
+
+    // Check if this is a settings file (has settings object)
+    // Settings files should use "Restore Settings", not "Import Profiles"
+    if (data.settings && typeof data.settings === 'object') {
+        return {
+            valid: false,
+            error: 'This appears to be a settings backup file.\nPlease use "Restore Settings" instead of "Import Profiles"'
+        };
+    }
+
+    if (!data.profiles || !Array.isArray(data.profiles)) {
+        return { valid: false, error: 'Missing or invalid "profiles" array' };
+    }
+
+    if (data.profiles.length === 0) {
+        return { valid: false, error: 'No profiles found in file' };
+    }
+
+    // Validate each profile has required fields
+    const requiredFields = ['name', 'host', 'username', 'auth_method'];
+    for (let i = 0; i < data.profiles.length; i++) {
+        const profile = data.profiles[i];
+
+        for (const field of requiredFields) {
+            if (!profile.hasOwnProperty(field) || profile[field] === null) {
+                return {
+                    valid: false,
+                    error: `Profile ${i + 1} is missing required field: "${field}"`
+                };
+            }
+        }
+
+        // Validate auth_method is one of the allowed values
+        const validAuthMethods = ['none', 'key', 'password'];
+        if (!validAuthMethods.includes(profile.auth_method)) {
+            return {
+                valid: false,
+                error: `Profile ${i + 1} has invalid auth_method: "${profile.auth_method}"`
+            };
+        }
+    }
+
+    return { valid: true };
+}
+
 // Import profiles from JSON
 async function importProfiles(file) {
     try {
@@ -1635,7 +1772,21 @@ async function importProfiles(file) {
         // Note: file.text() is a modern File API method (not supported in older browsers)
         // This is fine for Tauri apps as they use a modern WebView (WKWebView on macOS, WebView2 on Windows)
         const text = await file.text();
-        const data = JSON.parse(text);
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            showToast('Invalid JSON file: File is not valid JSON format', TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Validate the JSON structure
+        const validation = validateProfileImportData(data);
+        if (!validation.valid) {
+            showToast(`Invalid profile file: ${validation.error}`, TOAST_DURATION_LONG, 'error');
+            return;
+        }
 
         // Close settings modal first to avoid visibility issues
         closeSettings();
@@ -1650,11 +1801,15 @@ async function importProfiles(file) {
             const existingText = existingCount === 1 ? 'existing profile' : 'existing profiles';
             const importText = importCount === 1 ? 'new profile' : 'new profiles';
 
-            const confirmMessage = `
-                <div>You have <span class="profile-name">${existingCount} ${existingText}</span>.</div>
-                <div class="host-info">Importing will add ${importCount} ${importText} and override all existing profiles.</div>
-                <div style="margin-top: 12px;">Are you sure you want to import these profiles?</div>
-            `;
+            const confirmMessage = buildConfirmMessage({
+                lines: [
+                    { prefix: 'You have ', highlight: `${existingCount} ${existingText}`, suffix: '.' }
+                ],
+                warnings: [
+                    `Importing will add ${importCount} ${importText} and override all existing profiles.`
+                ],
+                question: 'Are you sure you want to import these profiles?'
+            });
 
             const confirmImport = await customConfirm(confirmMessage, {
                 title: 'Confirm Import',
@@ -1700,12 +1855,16 @@ async function deleteAllProfiles() {
     const count = profiles.length;
     const profileText = count === 1 ? 'profile' : 'profiles';
 
-    const confirmMessage = `
-        <div>You currently have <span class="profile-name">${count} ${profileText}</span>.</div>
-        <div class="warning">This will permanently delete all profiles and their stored passwords.</div>
-        <div class="warning">This action cannot be undone.</div>
-        <div style="margin-top: 12px;">Are you sure you want to delete all profiles?</div>
-    `;
+    const confirmMessage = buildConfirmMessage({
+        lines: [
+            { prefix: 'You currently have ', highlight: `${count} ${profileText}`, suffix: '.' }
+        ],
+        warnings: [
+            'This will permanently delete all profiles and their stored passwords.',
+            'This action cannot be undone.'
+        ],
+        question: 'Are you sure you want to delete all profiles?'
+    });
 
     const confirmed = await customConfirm(confirmMessage, {
         title: 'Delete All Profiles',
@@ -1793,13 +1952,89 @@ async function backupSettings() {
     }
 }
 
+// Validate settings restore JSON structure
+function validateSettingsRestoreData(data) {
+    // Must have basic structure
+    if (!data || typeof data !== 'object') {
+        return { valid: false, error: 'Invalid JSON structure' };
+    }
+
+    // Check if this is a profile-only export file (has profiles but no settings)
+    // Profile files should use "Import Profiles", not "Restore Settings"
+    if (data.profiles && !data.settings) {
+        return {
+            valid: false,
+            error: 'This appears to be a profile export file.\nPlease use "Import Profiles" instead of "Restore Settings"'
+        };
+    }
+
+    // Must have version field
+    if (!data.version || typeof data.version !== 'string') {
+        return { valid: false, error: 'Missing or invalid "version" field' };
+    }
+
+    // Must have settings object
+    if (!data.settings || typeof data.settings !== 'object') {
+        return { valid: false, error: 'Missing or invalid "settings" object' };
+    }
+
+    // Validate required settings fields
+    const requiredSettings = ['theme', 'auto_update_check', 'window_width', 'window_height'];
+    for (const field of requiredSettings) {
+        if (!data.settings.hasOwnProperty(field)) {
+            return {
+                valid: false,
+                error: `Settings missing required field: "${field}"`
+            };
+        }
+    }
+
+    // Validate theme value
+    const validThemes = ['system', 'dark', 'light'];
+    if (!validThemes.includes(data.settings.theme)) {
+        return {
+            valid: false,
+            error: `Invalid theme value: "${data.settings.theme}"`
+        };
+    }
+
+    // If profiles are included, validate them
+    if (data.profiles) {
+        if (!Array.isArray(data.profiles)) {
+            return { valid: false, error: 'Invalid "profiles" field (must be an array)' };
+        }
+
+        // Use the same validation as profile imports
+        const profileValidation = validateProfileImportData({ profiles: data.profiles });
+        if (!profileValidation.valid) {
+            return profileValidation;
+        }
+    }
+
+    return { valid: true };
+}
+
 // Restore settings from JSON file
 async function restoreSettings(file) {
     try {
         showToast('Reading settings file...', TOAST_DURATION_LOADING);
 
         const text = await file.text();
-        const data = JSON.parse(text);
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            showToast('Invalid JSON file: File is not valid JSON format', TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Validate the JSON structure
+        const validation = validateSettingsRestoreData(data);
+        if (!validation.valid) {
+            showToast(`Invalid settings file: ${validation.error}`, TOAST_DURATION_LONG, 'error');
+            return;
+        }
 
         closeSettings();
 
@@ -1821,40 +2056,31 @@ async function restoreSettings(file) {
         if (hasSettings || (includesProfiles && hasProfiles) || !osMatches) {
             toastElement.classList.add('hidden');
 
-            let confirmMessage;
+            // Build confirmation message based on what's included
+            const lines = [];
+            const warnings = [];
+
             if (includesProfiles) {
                 const importCount = result.profiles.length;
                 const profileText = importCount === 1 ? 'profile' : 'profiles';
-                confirmMessage = `
-                    <div>This backup contains <span class="profile-name">${importCount} ${profileText}</span>.</div>
-                    <div class="warning">Restoring will replace all your current settings${hasProfiles ? ' and profiles' : ''}.</div>
-                `;
-
-                // Add OS mismatch warning
-                if (!osMatches) {
-                    const osNames = { 'macos': 'macOS', 'windows': 'Windows', 'unknown': 'Unknown OS' };
-                    confirmMessage += `
-                        <div class="warning" style="margin-top: 8px;">This backup is from ${osNames[backupOS] || backupOS}. OS-specific settings will use ${osNames[currentOS] || currentOS} defaults.</div>
-                    `;
-                }
-
-                confirmMessage += `<div style="margin-top: 12px;">Are you sure you want to restore this backup?</div>`;
+                lines.push({ prefix: 'This backup contains ', highlight: `${importCount} ${profileText}`, suffix: '.' });
+                warnings.push(`Restoring will replace all your current settings${hasProfiles ? ' and profiles' : ''}.`);
             } else {
-                confirmMessage = `
-                    <div>You have existing settings configured.</div>
-                    <div class="warning">Restoring will replace all your current settings.</div>
-                `;
-
-                // Add OS mismatch warning
-                if (!osMatches) {
-                    const osNames = { 'macos': 'macOS', 'windows': 'Windows', 'unknown': 'Unknown OS' };
-                    confirmMessage += `
-                        <div class="warning" style="margin-top: 8px;">This backup is from ${osNames[backupOS] || backupOS}. OS-specific settings will use ${osNames[currentOS] || currentOS} defaults.</div>
-                    `;
-                }
-
-                confirmMessage += `<div style="margin-top: 12px;">Are you sure you want to restore this backup?</div>`;
+                lines.push('You have existing settings configured.');
+                warnings.push('Restoring will replace all your current settings.');
             }
+
+            // Add OS mismatch warning
+            if (!osMatches) {
+                const osNames = { 'macos': 'macOS', 'windows': 'Windows', 'unknown': 'Unknown OS' };
+                warnings.push(`This backup is from ${osNames[backupOS] || backupOS}. OS-specific settings will use ${osNames[currentOS] || currentOS} defaults.`);
+            }
+
+            const confirmMessage = buildConfirmMessage({
+                lines,
+                warnings,
+                question: 'Are you sure you want to restore this backup?'
+            });
 
             const confirmRestore = await customConfirm(confirmMessage, {
                 title: 'Confirm Restore',
@@ -1871,44 +2097,88 @@ async function restoreSettings(file) {
 
         showToast('Restoring settings...', TOAST_DURATION_LOADING);
 
-        // Restore settings
-        localStorage.setItem('theme', result.settings.theme);
-        localStorage.setItem('autoUpdateCheck', result.settings.auto_update_check.toString());
+        // Validate and restore settings with safe defaults
+        // Defense in depth: frontend validation in addition to backend validation
+
+        // Validate theme (must be one of the allowed values)
+        const validThemes = ['system', 'dark', 'light'];
+        const theme = validThemes.includes(result.settings.theme) ? result.settings.theme : 'system';
+        localStorage.setItem('theme', theme);
+
+        // Validate auto update check (must be boolean)
+        const autoUpdate = typeof result.settings.auto_update_check === 'boolean'
+            ? result.settings.auto_update_check
+            : true;
+        localStorage.setItem('autoUpdateCheck', autoUpdate.toString());
 
         // Restore OS-specific settings if present (backend filters cross-platform backups)
         if (result.settings_os_specific && result.settings_os_specific.terminal_preference) {
-            localStorage.setItem('terminalPreference', result.settings_os_specific.terminal_preference);
+            // Validate terminal preference based on OS
+            const validTerminalPrefs = getOS() === 'macos'
+                ? ['default', 'custom', 'embedded']
+                : ['default', 'cmd', 'powershell', 'windows_terminal', 'custom', 'embedded'];
+
+            const termPref = validTerminalPrefs.includes(result.settings_os_specific.terminal_preference)
+                ? result.settings_os_specific.terminal_preference
+                : 'default';
+            localStorage.setItem('terminalPreference', termPref);
         } else {
             // No OS-specific settings in backup (different OS or old format) - use default
             localStorage.setItem('terminalPreference', 'default');
         }
 
-        // Restore window state if available
+        // Restore window state if available with validation
         if (result.settings.window_width && result.settings.window_height) {
-            localStorage.setItem('windowWidth', result.settings.window_width.toString());
-            localStorage.setItem('windowHeight', result.settings.window_height.toString());
+            // Validate window dimensions (reasonable bounds: 560-5000 width, 420-3000 height)
+            const width = typeof result.settings.window_width === 'number'
+                && result.settings.window_width >= 560
+                && result.settings.window_width <= 5000
+                ? result.settings.window_width
+                : 800;
+
+            const height = typeof result.settings.window_height === 'number'
+                && result.settings.window_height >= 420
+                && result.settings.window_height <= 3000
+                ? result.settings.window_height
+                : 600;
+
+            localStorage.setItem('windowWidth', width.toString());
+            localStorage.setItem('windowHeight', height.toString());
 
             try {
                 const window = getCurrentWindow();
-                const size = new LogicalSize(result.settings.window_width, result.settings.window_height);
+                const size = new LogicalSize(width, height);
                 await window.setSize(size);
             } catch (error) {
                 console.error('Error restoring window size:', error);
             }
         }
 
-        // Only restore filtered/collapsed groups if they exist
+        // Validate and restore filtered/collapsed groups
+        // Must be arrays, with reasonable length limits (max 1000 items to prevent DoS)
         if (result.settings.filtered_groups) {
-            localStorage.setItem('filteredGroups', JSON.stringify(result.settings.filtered_groups));
+            if (Array.isArray(result.settings.filtered_groups)
+                && result.settings.filtered_groups.length <= 1000
+                && result.settings.filtered_groups.every(g => typeof g === 'string' && g.length <= 32)) {
+                localStorage.setItem('filteredGroups', JSON.stringify(result.settings.filtered_groups));
+            } else {
+                console.warn('Invalid filtered_groups in backup, skipping');
+            }
         }
         if (result.settings.collapsed_groups) {
-            localStorage.setItem('collapsedGroups', JSON.stringify(result.settings.collapsed_groups));
+            if (Array.isArray(result.settings.collapsed_groups)
+                && result.settings.collapsed_groups.length <= 1000
+                && result.settings.collapsed_groups.every(g => typeof g === 'string' && g.length <= 32)) {
+                localStorage.setItem('collapsedGroups', JSON.stringify(result.settings.collapsed_groups));
+            } else {
+                console.warn('Invalid collapsed_groups in backup, skipping');
+            }
         }
 
-        themeSelect.value = result.settings.theme;
-        applyTheme(result.settings.theme);
+        themeSelect.value = theme;
+        applyTheme(theme);
 
-        autoUpdateCheck.checked = result.settings.auto_update_check;
+        autoUpdateCheck.checked = autoUpdate;
 
         // Reload terminal preference UI
         loadTerminalPreference();
@@ -1973,19 +2243,19 @@ async function restoreSettings(file) {
 // Reset all settings to defaults
 async function resetSettings() {
     try {
-        const confirmMessage = `
-            <div class="warning">This will reset all settings to their default values:</div>
-            <ul style="text-align: left; margin: 12px 0; padding-left: 24px;">
-                <li>Theme: System</li>
-                <li>Terminal: Default</li>
-                <li>Auto-update check: Enabled</li>
-                <li>Window size: 800 × 600</li>
-                <li>Filtered groups: Cleared</li>
-                <li>Collapsed groups: Cleared</li>
-            </ul>
-            <div style="margin-top: 12px;">Profiles will not be affected.</div>
-            <div style="margin-top: 12px;">Are you sure you want to reset all settings?</div>
-        `;
+        const confirmMessage = buildConfirmMessage({
+            warnings: ['This will reset all settings to their default values:'],
+            list: [
+                'Theme: System',
+                'Terminal: Default',
+                'Auto-update check: Enabled',
+                'Window size: 800 × 600',
+                'Filtered groups: Cleared',
+                'Collapsed groups: Cleared'
+            ],
+            lines: ['Profiles will not be affected.'],
+            question: 'Are you sure you want to reset all settings?'
+        });
 
         const confirmReset = await customConfirm(confirmMessage, {
             title: 'Reset Settings',
@@ -2197,6 +2467,12 @@ async function saveProfile() {
 
     const profileName = document.getElementById('profile-name').value.trim();
 
+    // Explicit empty string validation (defense in depth, even though validateAllFields should catch this)
+    if (profileName.length === 0) {
+        showToast('Profile name cannot be empty', TOAST_DURATION_LONG, 'error');
+        return;
+    }
+
     // Check for duplicate names (case-insensitive)
     const duplicateProfile = profiles.find(p =>
         p.name.toLowerCase() === profileName.toLowerCase() &&
@@ -2302,12 +2578,14 @@ async function deleteProfile(id) {
 
     console.log('Found profile to delete:', profile);
 
-    const confirmMessage = `
-        <div>Profile: <span class="profile-name">"${escapeHtml(profile.name)}"</span></div>
-        <div class="host-info">Host: ${escapeHtml(profile.username)}@${escapeHtml(profile.host)}</div>
-        <div class="warning">This action cannot be undone.</div>
-        <div style="margin-top: 12px;">Are you sure you want to delete this profile?</div>
-    `;
+    const confirmMessage = buildConfirmMessage({
+        lines: [
+            { prefix: 'Profile: ', highlight: `"${profile.name}"`, highlightClass: 'profile-name' },
+            `Host: ${profile.username}@${profile.host}`
+        ],
+        warnings: ['This action cannot be undone.'],
+        question: 'Are you sure you want to delete this profile?'
+    });
 
     const confirmDelete = await customConfirm(confirmMessage, {
         title: 'Confirm Delete',
@@ -2362,4 +2640,84 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Utility: Build confirmation message using safe DOM manipulation
+// Returns a DocumentFragment with safely constructed message elements
+function buildConfirmMessage(config) {
+    // Validate config parameter
+    if (!config || typeof config !== 'object') {
+        console.error('Invalid config passed to buildConfirmMessage:', config);
+        return document.createDocumentFragment();
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    // Helper to create a div with optional class and text
+    const createDiv = (text, className = null, isTextContent = true) => {
+        const div = document.createElement('div');
+        if (className) div.className = className;
+        if (isTextContent) {
+            div.textContent = text;
+        }
+        return div;
+    };
+
+    // Helper to create a span with text
+    const createSpan = (text, className = null) => {
+        const span = document.createElement('span');
+        if (className) span.className = className;
+        span.textContent = text;
+        return span;
+    };
+
+    // Add main message lines
+    if (config.lines) {
+        config.lines.forEach(line => {
+            const div = createDiv('');
+            if (typeof line === 'string') {
+                div.textContent = line;
+            } else if (line.text) {
+                // Line can have parts with different styling
+                if (line.prefix) div.appendChild(document.createTextNode(line.prefix));
+                if (line.highlight) {
+                    const span = createSpan(line.highlight, line.highlightClass || 'profile-name');
+                    div.appendChild(span);
+                }
+                if (line.suffix) div.appendChild(document.createTextNode(line.suffix));
+                if (!line.prefix && !line.highlight && !line.suffix) {
+                    div.textContent = line.text;
+                }
+            }
+            fragment.appendChild(div);
+        });
+    }
+
+    // Add warning messages
+    if (config.warnings) {
+        config.warnings.forEach(warning => {
+            fragment.appendChild(createDiv(warning, 'warning'));
+        });
+    }
+
+    // Add list if provided
+    if (config.list) {
+        const ul = document.createElement('ul');
+        ul.className = 'confirmation-list';
+        config.list.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            ul.appendChild(li);
+        });
+        fragment.appendChild(ul);
+    }
+
+    // Add final question
+    if (config.question) {
+        const questionDiv = createDiv(config.question);
+        questionDiv.style.marginTop = '12px';
+        fragment.appendChild(questionDiv);
+    }
+
+    return fragment;
 }

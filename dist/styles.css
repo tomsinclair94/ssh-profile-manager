@@ -269,9 +269,8 @@ body {
 /* Filter Popup */
 .filter-popup {
     position: absolute;
-    top: 100%;
-    right: 24px;
-    margin-top: 8px;
+    /* Top and left positions set dynamically via JavaScript to align with filter button */
+    /* This ensures correct positioning in both normal and compact views */
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
@@ -690,6 +689,12 @@ body {
     margin-top: 12px;
 }
 
+.confirm-body .confirmation-list {
+    text-align: left;
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
 .confirm-modal-content .form-actions {
     padding-top: 16px;
     padding-bottom: 20px;
@@ -1074,8 +1079,22 @@ form {
     pointer-events: none;
 }
 
+/* Tooltip content max height to prevent off-screen overflow */
+.tooltip-content {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 /* For the last form group, show tooltip above instead of below */
 .form-group:last-child .input-tooltip {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
+}
+
+/* For form groups near the bottom of scrollable containers, show tooltip above */
+.modal-content .form-group:nth-last-child(-n+2) .input-tooltip {
     top: auto;
     bottom: 100%;
     margin-top: 0;

@@ -1220,7 +1220,7 @@ fn connect_ssh(
              .replace('"', "\\\"")
              .replace('\n', "\\n")
              .replace('\r', "\\r")
-             .replace('\'', "\\'")
+             // Note: Single quotes don't need escaping inside AppleScript double-quoted strings
              .replace('$', "\\$")
              .replace('`', "\\`")
         }
@@ -1441,6 +1441,11 @@ fn connect_ssh(
                     );
 
                     // Write the script file
+                    // SECURITY NOTE: On Windows, this creates the file with default permissions.
+                    // For better security, should use Windows ACLs to restrict to current user only.
+                    // This is mitigated by: (1) 30-second cleanup, (2) no passwords in script,
+                    // (3) temp directory is typically user-specific.
+                    // TODO: Add Windows ACL restrictions using windows-acl crate
                     fs::write(&script_path, script_content)
                         .map_err(|e| format!("Failed to create temporary script: {}", e))?;
 

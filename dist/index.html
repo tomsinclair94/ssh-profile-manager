@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,7 +15,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.5.0</span>
+                    <span class="version">v0.5.1</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -285,7 +285,7 @@
                             <button id="export-profiles-btn" class="btn btn-secondary">Export Profiles</button>
                             <button id="import-profiles-btn" class="btn btn-secondary">Import Profiles</button>
                             <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All Profiles</button>
-                            <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                            <input type="file" id="import-file-input" accept=".json" class="hidden">
                         </div>
                         <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently. <strong>Security Warning:</strong> Exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
                     </div>
@@ -303,7 +303,7 @@
                             <button id="backup-settings-btn" class="btn btn-secondary">Backup Settings</button>
                             <button id="restore-settings-btn" class="btn btn-secondary">Restore Settings</button>
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
-                            <input type="file" id="restore-settings-input" accept=".json" style="display: none;">
+                            <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
                         <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup. <strong>Security Warning:</strong> Backups with profiles contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
                     </div>
@@ -333,7 +333,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.5.0" target="_blank" class="about-value version-link">0.5.0</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.5.1" target="_blank" class="about-value version-link">0.5.1</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
