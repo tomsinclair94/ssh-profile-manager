@@ -1,6 +1,6 @@
 [package]
 name = "ssh-profile-manager"
-version = "0.5.1"
+version = "0.5.2"
 description = "SSH Profile Manager - A lightweight SSH client"
 authors = ["you"]
 license = ""
@@ -25,7 +25,7 @@ tauri = { version = "2.9.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
-uuid = { version = "1.11", features = ["v4", "serde"] }
+uuid = { version = "1.11", features = ["v4", "serde", "fast-rng"] }
 keyring = "3.6"
 dirs = "5.0"
 shellexpand = "3.1"
@@ -34,3 +34,6 @@ rfd = "0.15"
 reqwest = { version = "0.11", features = ["json"] }
 semver = "1.0"
 tokio = { version = "1", features = ["time"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-acl = "0.3"

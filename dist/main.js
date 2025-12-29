@@ -71,6 +71,7 @@ let collapsedGroups = new Set();
 let originalFormValues = {}; // Track original profile form values for change detection
 let originalSettingsValues = {}; // Track original settings values for change detection
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
+let lastImportTime = 0; // Track last settings import time for rate limiting
 
 // Utility: Debounce function to prevent rapid successive calls
 function debounce(func, wait) {
@@ -999,9 +1000,43 @@ function setupEventListeners() {
                 await shell.open(target.href);
             } catch (error) {
                 console.error('Failed to open link:', error);
-                showToast('Failed to open link', 'error');
+                showToast('Failed to open link: ' + error, TOAST_DURATION_LONG, 'error');
             }
         }
+    });
+
+    // Setup dynamic tooltip positioning
+    setupTooltipPositioning();
+}
+
+// Setup dynamic tooltip positioning based on available viewport space
+function setupTooltipPositioning() {
+    // Find all inputs and selects that have tooltips
+    const inputsWithTooltips = document.querySelectorAll('.form-group input, .form-group select');
+
+    inputsWithTooltips.forEach(input => {
+        const tooltip = input.nextElementSibling;
+        if (!tooltip || !tooltip.classList.contains('input-tooltip')) return;
+
+        // On focus, check if there's enough space below to show tooltip
+        input.addEventListener('focus', () => {
+            // Get input position relative to viewport
+            const inputRect = input.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+
+            // Tooltip typically needs about 150px height (can vary based on content)
+            // Check if there's enough space below the input
+            const spaceBelow = viewportHeight - inputRect.bottom;
+            const tooltipHeight = 150; // Approximate tooltip height
+
+            if (spaceBelow < tooltipHeight) {
+                // Not enough space below, show tooltip above
+                tooltip.classList.add('tooltip-above');
+            } else {
+                // Enough space below, show tooltip normally
+                tooltip.classList.remove('tooltip-above');
+            }
+        });
     });
 }
 
@@ -1396,7 +1431,7 @@ function buildFilterGroupsList() {
     const allGroups = getAllGroups();
 
     if (allGroups.length === 0) {
-        filterGroupsList.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted);">No groups available</div>';
+        filterGroupsList.innerHTML = '<div class="filter-empty-state">No groups available</div>';
         return;
     }
 
@@ -2017,6 +2052,19 @@ function validateSettingsRestoreData(data) {
 // Restore settings from JSON file
 async function restoreSettings(file) {
     try {
+        // Rate limiting: prevent rapid successive imports (5-second cooldown)
+        const now = Date.now();
+        const timeSinceLastImport = now - lastImportTime;
+        const IMPORT_COOLDOWN_MS = 5000; // 5 seconds
+
+        if (timeSinceLastImport < IMPORT_COOLDOWN_MS) {
+            const remainingSeconds = Math.ceil((IMPORT_COOLDOWN_MS - timeSinceLastImport) / 1000);
+            showToast(`Please wait ${remainingSeconds} second${remainingSeconds > 1 ? 's' : ''} before importing again`, TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        lastImportTime = now;
+
         showToast('Reading settings file...', TOAST_DURATION_LOADING);
 
         const text = await file.text();
@@ -2099,10 +2147,14 @@ async function restoreSettings(file) {
 
         // Validate and restore settings with safe defaults
         // Defense in depth: frontend validation in addition to backend validation
+        // SECURITY: Whitelist approach - only explicitly validated fields are written to localStorage
+        // This prevents arbitrary localStorage injection even if backend validation is bypassed
 
-        // Validate theme (must be one of the allowed values)
+        // Validate theme (must be string and one of the allowed values)
         const validThemes = ['system', 'dark', 'light'];
-        const theme = validThemes.includes(result.settings.theme) ? result.settings.theme : 'system';
+        const theme = (typeof result.settings.theme === 'string' && validThemes.includes(result.settings.theme))
+            ? result.settings.theme
+            : 'system';
         localStorage.setItem('theme', theme);
 
         // Validate auto update check (must be boolean)
@@ -2113,12 +2165,13 @@ async function restoreSettings(file) {
 
         // Restore OS-specific settings if present (backend filters cross-platform backups)
         if (result.settings_os_specific && result.settings_os_specific.terminal_preference) {
-            // Validate terminal preference based on OS
+            // Validate terminal preference based on OS (must be string and in whitelist)
             const validTerminalPrefs = getOS() === 'macos'
                 ? ['default', 'custom', 'embedded']
                 : ['default', 'cmd', 'powershell', 'windows_terminal', 'custom', 'embedded'];
 
-            const termPref = validTerminalPrefs.includes(result.settings_os_specific.terminal_preference)
+            const termPref = (typeof result.settings_os_specific.terminal_preference === 'string'
+                && validTerminalPrefs.includes(result.settings_os_specific.terminal_preference))
                 ? result.settings_os_specific.terminal_preference
                 : 'default';
             localStorage.setItem('terminalPreference', termPref);

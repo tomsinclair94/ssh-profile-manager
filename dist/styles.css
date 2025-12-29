@@ -338,6 +338,12 @@ body {
     border-radius: 10px;
 }
 
+.filter-empty-state {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
 /* Profiles Container */
 .profiles-container {
     flex: 1;
@@ -1099,6 +1105,14 @@ form {
     bottom: 100%;
     margin-top: 0;
     margin-bottom: 4px;
+}
+
+/* Dynamic tooltip positioning - added by JavaScript when viewport space is limited */
+.input-tooltip.tooltip-above {
+    top: auto !important;
+    bottom: 100% !important;
+    margin-top: 0 !important;
+    margin-bottom: 4px !important;
 }
 
 /* Show on focus */

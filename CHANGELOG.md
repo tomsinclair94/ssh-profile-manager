@@ -5,6 +5,58 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2024-12-29
+
+### Fixed
+- **Windows ACL Implementation**: Enhanced Windows temporary script security
+  - Added explicit deny rules for Everyone and Users groups
+  - Improved error handling with detailed logging
+  - Each ACL operation now validated separately for robustness
+  - Ensures temporary scripts are truly restricted to current user only
+- **localStorage Injection Prevention**: Strengthened settings restore validation
+  - Added strict string type checking before whitelist validation
+  - Theme validation now checks type AND whitelist membership
+  - Terminal preference validation enhanced with type safety
+  - Documented whitelist approach in code comments for maintainability
+- **Tooltip Positioning**: Implemented dynamic viewport-aware positioning
+  - Tooltips now detect available space below input field
+  - Automatically show above input when viewport space is limited
+  - JavaScript-based positioning replaces static CSS rules
+  - Prevents tooltips from appearing off-screen in scrolled modals
+- **CSP Compliance**: Removed inline styles from JavaScript
+  - Replaced inline style in filter popup with CSS class
+  - Added .filter-empty-state class to stylesheet
+  - Maintains strict Content Security Policy without unsafe-inline
+
+### Added
+- **Rate Limiting**: Added 5-second cooldown on settings import
+  - Prevents accidental rapid successive imports
+  - User-friendly countdown message shows remaining wait time
+  - Tracked via lastImportTime timestamp
+  - Mitigates potential DoS via localStorage writes
+
+### Changed
+- **Error Message Consistency**: Standardized error messages across the application
+  - All system failures now include error details in user-facing toast messages
+  - Consistent pattern: console.error() for debugging + showToast() with details for users
+  - Improves troubleshooting and user support experience
+
+### Security
+- **MEDIUM**: Enhanced Windows temp script ACL with explicit deny rules (CVSS 5.5)
+  - Windows temporary scripts now have comprehensive ACL protection
+  - Denies read access to Everyone and Users groups before granting to current user
+  - Prevents other local users from reading SSH connection details
+  - Detailed error logging for troubleshooting without exposing info to user
+- **MEDIUM**: Strengthened localStorage validation against injection (CVSS 5.0)
+  - Added type checking to all settings fields before localStorage writes
+  - Whitelist approach documented and enforced consistently
+  - Defense-in-depth: frontend validation complements backend validation
+  - Prevents arbitrary localStorage injection even if backend bypassed
+- **LOW**: Improved UUID entropy for temporary script names (CVSS 3.5)
+  - Added fast-rng feature to uuid crate ensuring CSPRNG usage
+  - Reduces predictability of temporary script filenames
+  - Additional defense against race condition attacks
+
 ## [0.5.1] - 2024-12-29
 
 ### Fixed

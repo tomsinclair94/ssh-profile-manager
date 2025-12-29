@@ -7,8 +7,58 @@ use std::sync::Mutex;
 use tauri::{Manager, State};
 use uuid::Uuid;
 
+#[cfg(target_os = "windows")]
+use windows_acl::acl::ACL;
+
 // Constants
 const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
+
+// Windows-specific file security function
+#[cfg(target_os = "windows")]
+fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
+    use std::env;
+
+    // Restrict file access to current user only using Windows ACL
+    // This prevents other users on the system from reading the temporary script
+    let username = env::var("USERNAME")
+        .map_err(|_| "Failed to get current username".to_string())?;
+
+    // Load the file's ACL (windows-acl automatically applies changes to filesystem)
+    let mut acl = ACL::from_file_path(path, false)
+        .map_err(|e| {
+            eprintln!("Windows ACL read error details: {}", e);
+            "Failed to read file ACL".to_string()
+        })?;
+
+    // Deny access to Everyone group to override any inherited permissions
+    acl.deny("Everyone", false, "READ")
+        .map_err(|e| {
+            eprintln!("Windows ACL deny Everyone error details: {}", e);
+            "Failed to deny Everyone group access".to_string()
+        })?;
+
+    // Deny access to Users group
+    acl.deny("Users", false, "READ")
+        .map_err(|e| {
+            eprintln!("Windows ACL deny Users error details: {}", e);
+            "Failed to deny Users group access".to_string()
+        })?;
+
+    // Grant full control to current user only
+    acl.allow(
+        username.as_str(),
+        false,  // is_directory = false (this is a file, not directory)
+        "FULL",  // Full control for current user
+    )
+    .map_err(|e| {
+        eprintln!("Windows ACL allow user error details: {}", e);
+        format!("Failed to grant access to user: {}", username)
+    })?;
+
+    // windows-acl automatically persists changes to the file system
+    // No explicit write/apply method needed
+    Ok(())
+}
 
 // Profile structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1441,13 +1491,12 @@ fn connect_ssh(
                     );
 
                     // Write the script file
-                    // SECURITY NOTE: On Windows, this creates the file with default permissions.
-                    // For better security, should use Windows ACLs to restrict to current user only.
-                    // This is mitigated by: (1) 30-second cleanup, (2) no passwords in script,
-                    // (3) temp directory is typically user-specific.
-                    // TODO: Add Windows ACL restrictions using windows-acl crate
                     fs::write(&script_path, script_content)
                         .map_err(|e| format!("Failed to create temporary script: {}", e))?;
+
+                    // SECURITY: Set Windows ACL to restrict file access to current user only
+                    // This prevents other users on the system from reading the temporary script
+                    set_file_permissions_windows(&script_path)?;
 
                     // Launch the terminal with the script
                     Command::new("cmd")
