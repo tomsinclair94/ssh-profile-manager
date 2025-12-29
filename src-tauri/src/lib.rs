@@ -17,7 +17,7 @@ const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
 #[cfg(target_os = "windows")]
 fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
     use windows_acl::helper;
-    use winapi::um::winnt::{PSID, FILE_GENERIC_READ, FILE_ALL_ACCESS};
+    use winapi::um::winnt::{PSID, FILE_GENERIC_READ};
 
     // Convert path to string
     let path_str = path.to_str()
