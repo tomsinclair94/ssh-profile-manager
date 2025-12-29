@@ -16,47 +16,58 @@ const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
 // Windows-specific file security function
 #[cfg(target_os = "windows")]
 fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
-    use std::env;
+    use windows_acl::helper;
+    use winapi::um::winnt::{PSID, FILE_GENERIC_READ, FILE_ALL_ACCESS};
 
-    // Restrict file access to current user only using Windows ACL
-    // This prevents other users on the system from reading the temporary script
-    let username = env::var("USERNAME")
-        .map_err(|_| "Failed to get current username".to_string())?;
+    // Convert path to string
+    let path_str = path.to_str()
+        .ok_or("Invalid file path".to_string())?;
 
-    // Load the file's ACL (windows-acl automatically applies changes to filesystem)
-    let mut acl = ACL::from_file_path(path, false)
+    // Load the file's ACL
+    let mut acl = ACL::from_file_path(path_str, false)
         .map_err(|e| {
             eprintln!("Windows ACL read error details: {}", e);
             "Failed to read file ACL".to_string()
         })?;
 
-    // Deny access to Everyone group to override any inherited permissions
-    acl.deny("Everyone", false, "READ")
+    // Well-known SIDs:
+    // Everyone: S-1-1-0
+    // Users: S-1-5-32-545
+
+    // Get SID for Everyone group
+    let everyone_sid = helper::string_to_sid("S-1-1-0")
+        .map_err(|e| {
+            eprintln!("Failed to convert Everyone SID: {}", e);
+            "Failed to get Everyone SID".to_string()
+        })?;
+
+    // Get SID for Users group
+    let users_sid = helper::string_to_sid("S-1-5-32-545")
+        .map_err(|e| {
+            eprintln!("Failed to convert Users SID: {}", e);
+            "Failed to get Users SID".to_string()
+        })?;
+
+    // Deny read access to Everyone group
+    acl.deny(everyone_sid.as_ptr() as PSID, false, FILE_GENERIC_READ)
         .map_err(|e| {
             eprintln!("Windows ACL deny Everyone error details: {}", e);
             "Failed to deny Everyone group access".to_string()
         })?;
 
-    // Deny access to Users group
-    acl.deny("Users", false, "READ")
+    // Deny read access to Users group
+    acl.deny(users_sid.as_ptr() as PSID, false, FILE_GENERIC_READ)
         .map_err(|e| {
             eprintln!("Windows ACL deny Users error details: {}", e);
             "Failed to deny Users group access".to_string()
         })?;
 
-    // Grant full control to current user only
-    acl.allow(
-        username.as_str(),
-        false,  // is_directory = false (this is a file, not directory)
-        "FULL",  // Full control for current user
-    )
-    .map_err(|e| {
-        eprintln!("Windows ACL allow user error details: {}", e);
-        format!("Failed to grant access to user: {}", username)
-    })?;
+    // NOTE: We're not adding an explicit allow for the current user because:
+    // 1. The file is created by the current user, so they have ownership rights by default
+    // 2. We deny Everyone and Users, which prevents other accounts from accessing
+    // 3. The file is deleted after 30 seconds anyway (see cleanup_old_scripts)
 
     // windows-acl automatically persists changes to the file system
-    // No explicit write/apply method needed
     Ok(())
 }
 
