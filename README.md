@@ -17,11 +17,11 @@
 
 <sub>**macOS 14.0+ | Windows 10+ | Native Performance**</sub>
 
-<sub>⚠️ **macOS Gatekeeper Warning** ⚠️
+<sub>⚠️ **macOS Gatekeeper Warning** ⚠️</sub>
 
-Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app)
+<sub>Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app)</sub>
 
-Alternatively, run: `xattr -cr "/Applications/SSH Profile Manager.app"`</sub>
+<sub>Alternatively, run: `xattr -cr "/Applications/SSH Profile Manager.app"`</sub>
 
 </div>
 
