@@ -15,9 +15,11 @@
 
 ### [📥 Download Latest Release (v0.5.1)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
-<sub>**macOS 14.0+ | Windows 10+ | ~3-5 MB | Native Performance**</sub>
+<sub>**macOS 14.0+ | Windows 10+ | Native Performance**</sub>
 
-<sub>⚠️ **macOS Note:** Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app), or run: `xattr -cr "/Applications/SSH Profile Manager.app"`</sub>
+<sub>⚠️ **macOS Gatekeeper Warning** ⚠️
+Right-click and select "Open" on first launch to bypass Gatekeeper (unsigned app)
+Alternatively, run: `xattr -cr "/Applications/SSH Profile Manager.app"`</sub>
 
 </div>
 
@@ -25,9 +27,9 @@
 
 ## Why SSH Profile Manager?
 
-Manage SSH connection profiles with a clean GUI and launch them in your native terminal. No more memorizing commands or bloated Electron apps.
+Manage SSH connection profiles with a clean GUI and launch them in your native terminal. No more memorising commands, endpoints or credentials!
 
-✨ **~3-5 MB** (vs 100MB+ Electron) • 🚀 **Native Performance** (Tauri + Rust) • 🔒 **Secure** (system keychain) • 🎯 **Simple** (clean, focused UI)
+🚀 **Native Performance** (Tauri + Rust) • 🔒 **Secure** (system keychain / local SSH Keys) • 🎯 **Simple** (clean, focused UI)
 
 ## Features
 
@@ -35,18 +37,18 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 - ✅ Create, edit, delete, and duplicate profiles with validation
 - 📁 Organise into collapsible groups with search & filtering
 - 🔑 Three auth methods: SSH Key, Password (keychain), Keyboard-Interactive
-- 📤 Export/Import profiles as JSON for team sharing
+- 📤 Export/Import profiles for team sharing
 
 **Settings & Backup**
-- 💾 Backup & restore settings/profiles in cross-platform JSON format
+- 💾 Backup & restore settings and profiles in cross-platform JSON format
 - 🔄 Reset to defaults • Auto-update checker
 
 **Modern UI**
 - 🌓 Dark/Light themes with system preference detection
 - 🎨 Colour-coded buttons • Toast notifications • Smooth animations
-- 📱 Responsive layout (NEW in v0.4.0)
+- 📱 Responsive layout
 
-**SSH Connection**
+**SSH Connections**
 - ⚡ One-click connect launches SSH in your native terminal
 - 🖥️ Works with Terminal.app (macOS) and Windows Terminal/cmd
 - 🪟 App auto-minimizes when connecting
@@ -58,22 +60,22 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 ### Main Interface
 <img src="screenshots/main-page.png" alt="Main Interface" width="800">
 
-*Profile list with groups, search, and filtering*
+*Profile list with collapsible groups, search, and filtering*
 
 ### Main Interface (Compact View)
 <img src="screenshots/main-page-compact.png" alt="Main Interface - Compact" width="600">
 
-*Responsive layout when window is narrower - search moves to separate row*
+*Responsive layout when window is narrower - search moves to separate row for a more compact look*
 
 ### Settings Modal
 <img src="screenshots/settings-modal.png" alt="Settings Modal" width="800">
 
-*Dark/Light theme, backup/restore, and preferences*
+*Dark/Light theme, backup/restore and more*
 
 ### Profile Editor
 <img src="screenshots/profile-editor.png" alt="Profile Editor" width="800">
 
-*Create/edit profiles with validation and tooltips*
+*Create and modify profiles with validation and tooltips*
 
 </div>
 
@@ -142,8 +144,8 @@ npm run build
 
 ```
 ssh-profile-manager/
-├── dist/               # Frontend files (HTML, CSS, JS)
-├── src-tauri/          # Rust backend
+├── dist/              # Frontend files (HTML, CSS, JS)
+├── src-tauri/         # Rust backend
 │   ├── src/           # Rust source code
 │   ├── icons/         # App icons
 │   └── Cargo.toml     # Rust dependencies
