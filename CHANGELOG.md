@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Windows ACL Implementation**: Enhanced Windows temporary script security
+  - Fixed compilation error using correct windows-acl API with helper::string_to_sid()
+  - Convert Path to &str for ACL::from_file_path compatibility
+  - Use well-known SIDs for Everyone (S-1-1-0) and Users (S-1-5-32-545) groups
+  - Use winapi constants (FILE_GENERIC_READ) for permission masks
   - Added explicit deny rules for Everyone and Users groups
   - Improved error handling with detailed logging
   - Each ACL operation now validated separately for robustness
