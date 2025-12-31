@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- xterm.js for embedded terminal -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -60,6 +64,20 @@
                 <div id="filter-groups-list" class="filter-groups-list">
                     <!-- Group checkboxes will be dynamically added here -->
                 </div>
+            </div>
+        </div>
+
+        <!-- Recent Connections -->
+        <div class="recent-connections-section" id="recent-connections-section">
+            <div class="recent-connections-header">
+                <h3>Recent Connections</h3>
+                <div class="recent-connections-buttons">
+                    <button id="toggle-recent-btn" class="btn btn-secondary btn-small" title="Collapse/Expand Recent Connections">▼</button>
+                    <button id="clear-recent-btn" class="btn btn-secondary btn-small">Clear</button>
+                </div>
+            </div>
+            <div id="recent-connections-list" class="recent-connections-list">
+                <!-- Recent connections will be dynamically loaded here -->
             </div>
         </div>
 
@@ -249,7 +267,7 @@
                     <!-- Theme Settings -->
                     <div class="settings-section">
                         <h3>Appearance</h3>
-                        <div class="form-group">
+                        <div class="form-group settings-gap">
                             <label for="theme-select">Theme</label>
                             <select id="theme-select">
                                 <option value="system">Follow System</option>
@@ -257,18 +275,42 @@
                                 <option value="light">Light Mode</option>
                             </select>
                         </div>
+                        <p class="settings-help">Choose your preferred color theme. System mode automatically matches your operating system's theme.</p>
+                    </div>
+
+                    <!-- Keyboard Shortcuts -->
+                    <div class="settings-section">
+                        <h3>Keyboard Shortcuts</h3>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="keyboard-shortcuts-check" checked>
+                                <span>Enable keyboard shortcuts</span>
+                            </label>
+                        </div>
+                        <button type="button" id="shortcuts-help-btn" class="btn btn-secondary settings-gap">View All Shortcuts</button>
+                        <p class="settings-help">Use keyboard shortcuts for quick navigation and actions. Press ? to see all available shortcuts.</p>
+                    </div>
+
+                    <!-- Recent Connections -->
+                    <div class="settings-section">
+                        <h3>Recent Connections</h3>
+                        <div class="form-group settings-gap">
+                            <label for="recent-connections-limit">Number of recent connections to show (0 to disable)</label>
+                            <input type="number" id="recent-connections-limit" min="0" max="20" value="5">
+                        </div>
+                        <p class="settings-help">Display your most recent connections for quick reconnect. Set to 0 to hide the recent connections bar.</p>
                     </div>
 
                     <!-- Terminal Settings -->
                     <div class="settings-section">
                         <h3>Terminal</h3>
-                        <div class="form-group">
+                        <div class="form-group settings-gap">
                             <label for="terminal-select">Terminal Application</label>
                             <select id="terminal-select">
                                 <!-- Options will be populated by JavaScript based on OS -->
                             </select>
                         </div>
-                        <div class="form-group hidden" id="custom-terminal-group">
+                        <div class="form-group hidden settings-gap" id="custom-terminal-group">
                             <label for="custom-terminal-path">Custom Terminal Path</label>
                             <div class="input-group">
                                 <input type="text" id="custom-terminal-path" placeholder="Select terminal application..." readonly spellcheck="false" autocorrect="off" autocapitalize="off">
@@ -287,13 +329,13 @@
                             <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All Profiles</button>
                             <input type="file" id="import-file-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently. <strong>Security Warning:</strong> Exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.<br><strong>Security Warning:</strong> Exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
                     </div>
 
                     <!-- Settings Management -->
                     <div class="settings-section">
                         <h3>Settings Management</h3>
-                        <div class="form-group">
+                        <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="include-profiles-check" checked>
                                 <span>Include Profiles</span>
@@ -305,13 +347,13 @@
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup. <strong>Security Warning:</strong> Backups with profiles contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Warning:</strong> Backups with profiles contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
                     </div>
 
                     <!-- Updates Section -->
                     <div class="settings-section">
                         <h3>Updates</h3>
-                        <div class="form-group">
+                        <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="auto-update-check" checked>
                                 <span>Check for updates on launch</span>
@@ -358,6 +400,25 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Modal -->
+        <div id="terminal-modal" class="modal hidden">
+            <div class="modal-content terminal-modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2 id="terminal-title">Terminal</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <span id="terminal-status" class="terminal-status">Connecting...</span>
+                        <button type="button" class="btn btn-secondary" id="terminal-clear-btn">Clear</button>
+                        <button type="button" class="btn btn-secondary" id="terminal-close-btn">Close</button>
+                    </div>
+                </div>
+                <div class="terminal-container" id="terminal-container">
+                    <!-- xterm.js terminal will be mounted here -->
                 </div>
             </div>
         </div>

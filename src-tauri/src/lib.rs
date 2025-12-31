@@ -1,11 +1,15 @@
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
-use tauri::{Manager, State};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 #[cfg(target_os = "windows")]
 use windows_acl::acl::ACL;
@@ -83,6 +87,50 @@ pub struct Profile {
     pub auth_method: String, // "key", "password", or "none"
     pub key_path: Option<String>,
     pub group: Option<String>,
+}
+
+// Recent connection structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentConnection {
+    pub id: i32,
+    pub profile_id: String,
+    pub name: String,
+    pub username: String,
+    pub host: String,
+    pub port: i32,
+    pub connected_at: String,
+}
+
+// User setting structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSetting {
+    pub key: String,
+    pub value: String,
+    pub updated_at: String,
+}
+
+// Terminal session structure
+pub struct TerminalSession {
+    pub session_id: String,
+    pub profile_id: String,
+    pub reader_handle: Option<thread::JoinHandle<()>>,
+}
+
+// Session registry for managing active terminal sessions
+pub struct SessionRegistry {
+    sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
+    pty_writers: Arc<Mutex<HashMap<String, Box<dyn Write + Send>>>>,
+    pty_pairs: Arc<Mutex<HashMap<String, Box<dyn portable_pty::MasterPty + Send>>>>,
+}
+
+impl SessionRegistry {
+    pub fn new() -> Self {
+        SessionRegistry {
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            pty_writers: Arc::new(Mutex::new(HashMap::new())),
+            pty_pairs: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
 }
 
 // Input validation functions
@@ -213,6 +261,11 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
     }
     if settings.window_height < 450 || settings.window_height > 3000 {
         return Err(format!("Invalid window height: {} (must be between 450-3000)", settings.window_height));
+    }
+
+    // Validate recent_connections_limit
+    if settings.recent_connections_limit < 0 || settings.recent_connections_limit > 20 {
+        return Err(format!("Invalid recent_connections_limit: {} (must be between 0-20)", settings.recent_connections_limit));
     }
 
     // Validate filtered_groups if present
@@ -407,7 +460,19 @@ impl Database {
     fn new(path: PathBuf) -> SqlResult<Self> {
         let conn = Connection::open(path)?;
 
-        // Create profiles table
+        // Enable foreign keys
+        conn.execute("PRAGMA foreign_keys = ON", [])?;
+
+        // Create schema_version table if it doesn't exist
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        // Create profiles table (migration 0 - baseline)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS profiles (
                 id TEXT PRIMARY KEY,
@@ -423,9 +488,99 @@ impl Database {
             [],
         )?;
 
+        // Apply migrations
+        Self::apply_migrations(&conn)?;
+
         Ok(Database {
             conn: Mutex::new(conn),
         })
+    }
+
+    fn get_schema_version(conn: &Connection) -> SqlResult<i32> {
+        // Get the highest version number from schema_version table
+        let version: Result<i32, _> = conn.query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+            [],
+            |row| row.get(0)
+        );
+        Ok(version.unwrap_or(0))
+    }
+
+    fn apply_migrations(conn: &Connection) -> SqlResult<()> {
+        let current_version = Self::get_schema_version(conn)?;
+
+        // Migration 1: Create recent_connections table
+        if current_version < 1 {
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS recent_connections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_id TEXT NOT NULL,
+                    connected_at TEXT NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+
+            // Create indexes for better query performance
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recent_connections_profile_id
+                 ON recent_connections(profile_id)",
+                [],
+            )?;
+
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recent_connections_connected_at
+                 ON recent_connections(connected_at DESC)",
+                [],
+            )?;
+
+            // Record migration
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+                (1, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
+        // Migration 2: Create active_sessions table
+        if current_version < 2 {
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS active_sessions (
+                    id TEXT PRIMARY KEY,
+                    profile_id TEXT NOT NULL,
+                    tab_id TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    last_activity_at TEXT NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+
+            // Record migration
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+                (2, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
+        // Migration 3: Create user_settings table
+        if current_version < 3 {
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS user_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+
+            // Record migration
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+                (3, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
+        Ok(())
     }
 
     fn get_all_profiles(&self) -> SqlResult<Vec<Profile>> {
@@ -529,6 +684,103 @@ impl Database {
             Ok(None)
         }
     }
+
+    // Recent connections methods
+    fn get_recent_connections(&self, limit: Option<usize>) -> SqlResult<Vec<RecentConnection>> {
+        let conn = self.conn.lock().unwrap();
+        let limit_val = limit.unwrap_or(5).min(20); // Max 20, default 5
+
+        let mut stmt = conn.prepare(
+            "SELECT rc.id, rc.profile_id, p.name, p.username, p.host, p.port, rc.connected_at
+             FROM recent_connections rc
+             JOIN profiles p ON rc.profile_id = p.id
+             ORDER BY rc.connected_at DESC
+             LIMIT ?1"
+        )?;
+
+        let connections = stmt
+            .query_map([limit_val], |row| {
+                Ok(RecentConnection {
+                    id: row.get(0)?,
+                    profile_id: row.get(1)?,
+                    name: row.get(2)?,
+                    username: row.get(3)?,
+                    host: row.get(4)?,
+                    port: row.get(5)?,
+                    connected_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(connections)
+    }
+
+    fn record_connection(&self, profile_id: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Check if this profile already exists in recent_connections
+        let exists: bool = conn.query_row(
+            "SELECT COUNT(*) > 0 FROM recent_connections WHERE profile_id = ?1",
+            [profile_id],
+            |row| row.get(0)
+        )?;
+
+        if exists {
+            // Update the timestamp (moves to top of recent list)
+            conn.execute(
+                "UPDATE recent_connections SET connected_at = ?1 WHERE profile_id = ?2",
+                (chrono::Utc::now().to_rfc3339(), profile_id),
+            )?;
+        } else {
+            // Insert new record
+            conn.execute(
+                "INSERT INTO recent_connections (profile_id, connected_at) VALUES (?1, ?2)",
+                (profile_id, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn clear_recent_connections(&self) -> SqlResult<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM recent_connections", [])?;
+        Ok(())
+    }
+
+    // User settings methods
+    fn get_setting(&self, key: &str) -> SqlResult<Option<UserSetting>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT key, value, updated_at FROM user_settings WHERE key = ?1"
+        )?;
+
+        let mut settings = stmt.query_map([key], |row| {
+            Ok(UserSetting {
+                key: row.get(0)?,
+                value: row.get(1)?,
+                updated_at: row.get(2)?,
+            })
+        })?;
+
+        if let Some(setting) = settings.next() {
+            Ok(Some(setting?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn save_setting(&self, key: &str, value: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Use INSERT OR REPLACE for upsert behavior
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
+            (key, value, chrono::Utc::now().to_rfc3339()),
+        )?;
+
+        Ok(())
+    }
 }
 
 // Password storage using system keychain
@@ -585,6 +837,7 @@ struct SettingsData {
     auto_update_check: bool,
     window_width: i32,
     window_height: i32,
+    recent_connections_limit: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     filtered_groups: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -899,6 +1152,7 @@ fn export_settings(
     auto_update_check: bool,
     window_width: i32,
     window_height: i32,
+    recent_connections_limit: i32,
     filtered_groups: Option<Vec<String>>,
     collapsed_groups: Option<Vec<String>>,
     terminal_preference: String,
@@ -920,6 +1174,7 @@ fn export_settings(
         auto_update_check,
         window_width,
         window_height,
+        recent_connections_limit,
         filtered_groups,
         collapsed_groups,
     };
@@ -1216,6 +1471,279 @@ fn validate_custom_terminal(path: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+fn get_recent_connections(db: State<Database>, limit: Option<usize>) -> Result<Vec<RecentConnection>, String> {
+    db.get_recent_connections(limit)
+        .map_err(|e| format!("Failed to get recent connections: {}", e))
+}
+
+#[tauri::command]
+fn record_connection(db: State<Database>, profile_id: String) -> Result<(), String> {
+    db.record_connection(&profile_id)
+        .map_err(|e| format!("Failed to record connection: {}", e))
+}
+
+#[tauri::command]
+fn clear_recent_connections(db: State<Database>) -> Result<(), String> {
+    db.clear_recent_connections()
+        .map_err(|e| format!("Failed to clear recent connections: {}", e))
+}
+
+#[tauri::command]
+fn get_setting(db: State<Database>, key: String) -> Result<Option<UserSetting>, String> {
+    db.get_setting(&key)
+        .map_err(|e| format!("Failed to get setting: {}", e))
+}
+
+#[tauri::command]
+fn save_setting(db: State<Database>, key: String, value: String) -> Result<(), String> {
+    db.save_setting(&key, &value)
+        .map_err(|e| format!("Failed to save setting: {}", e))
+}
+
+#[tauri::command]
+async fn create_terminal_session(
+    db: State<'_, Database>,
+    registry: State<'_, SessionRegistry>,
+    app_handle: tauri::AppHandle,
+    profile_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<String, String> {
+    // Get profile from database
+    let profile = db
+        .get_profile_by_id(&profile_id)
+        .map_err(|e| format!("Failed to get profile: {}", e))?
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    // Validate inputs
+    validate_hostname(&profile.host)?;
+    validate_username(&profile.username)?;
+    validate_port(profile.port)?;
+
+    // Validate dimensions
+    if cols < 10 || cols > 500 {
+        return Err("Terminal columns must be between 10 and 500".to_string());
+    }
+    if rows < 10 || rows > 200 {
+        return Err("Terminal rows must be between 10 and 200".to_string());
+    }
+
+    // Create PTY
+    let pty_system = native_pty_system();
+    let pty_pair = pty_system
+        .openpty(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("Failed to create PTY: {}", e))?;
+
+    // Build SSH command arguments (reuse logic from connect_ssh)
+    let mut ssh_args: Vec<String> = vec!["ssh".to_string()];
+
+    // Add port if not default
+    if profile.port != 22 {
+        ssh_args.push("-p".to_string());
+        ssh_args.push(profile.port.to_string());
+    }
+
+    // Add key path if specified and validated
+    if profile.auth_method == "key" {
+        if let Some(key_path) = &profile.key_path {
+            if !key_path.is_empty() {
+                let validated_path = validate_key_path(key_path)?;
+                ssh_args.push("-i".to_string());
+                ssh_args.push(validated_path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // Build connection string
+    let connection = format!("{}@{}", profile.username, profile.host);
+    ssh_args.push(connection);
+
+    // Create command builder for PTY
+    let mut cmd = CommandBuilder::new(&ssh_args[0]);
+    cmd.args(&ssh_args[1..]);
+
+    // Spawn SSH process in PTY
+    let _child = pty_pair
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| format!("Failed to spawn SSH process: {}", e))?;
+
+    // Generate session ID
+    let session_id = Uuid::new_v4().to_string();
+
+    // Get reader and writer from PTY
+    let mut reader = pty_pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| format!("Failed to clone PTY reader: {}", e))?;
+
+    let writer = pty_pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("Failed to take PTY writer: {}", e))?;
+
+    // Spawn reader thread to emit terminal output events
+    let session_id_clone = session_id.clone();
+    let app_handle_clone = app_handle.clone();
+    let reader_handle = thread::spawn(move || {
+        let mut buffer = [0u8; 8192];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break, // EOF - SSH process ended
+                Ok(n) => {
+                    // Emit data to frontend
+                    let data = &buffer[..n];
+                    let _ = app_handle_clone.emit(&format!("terminal-output-{}", session_id_clone), data.to_vec());
+                }
+                Err(_) => break, // Error reading
+            }
+        }
+    });
+
+    // Create terminal session
+    let terminal_session = TerminalSession {
+        session_id: session_id.clone(),
+        profile_id: profile_id.clone(),
+        reader_handle: Some(reader_handle),
+    };
+
+    // Store in registry
+    {
+        let mut sessions = registry.sessions.lock().unwrap();
+        sessions.insert(session_id.clone(), terminal_session);
+    }
+    {
+        let mut writers = registry.pty_writers.lock().unwrap();
+        writers.insert(session_id.clone(), writer);
+    }
+    {
+        let mut pairs = registry.pty_pairs.lock().unwrap();
+        pairs.insert(session_id.clone(), pty_pair.master);
+    }
+
+    // Record in active_sessions table
+    let conn = db.conn.lock().unwrap();
+    conn.execute(
+        "INSERT INTO active_sessions (id, profile_id, tab_id, started_at, last_activity_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        (
+            &session_id,
+            &profile_id,
+            &session_id, // Use session_id as tab_id for now
+            chrono::Utc::now().to_rfc3339(),
+            chrono::Utc::now().to_rfc3339(),
+        ),
+    )
+    .map_err(|e| format!("Failed to record session in database: {}", e))?;
+    drop(conn); // Release lock before calling record_connection
+
+    // Record connection in recent_connections table
+    db.record_connection(&profile_id)
+        .map_err(|e| format!("Failed to record recent connection: {}", e))?;
+
+    Ok(session_id)
+}
+
+#[tauri::command]
+fn write_to_terminal(
+    registry: State<SessionRegistry>,
+    session_id: String,
+    data: String,
+) -> Result<(), String> {
+    let mut writers = registry.pty_writers.lock().unwrap();
+
+    let writer = writers
+        .get_mut(&session_id)
+        .ok_or_else(|| "Invalid session ID".to_string())?;
+
+    writer
+        .write_all(data.as_bytes())
+        .map_err(|e| format!("Failed to write to terminal: {}", e))?;
+
+    writer
+        .flush()
+        .map_err(|e| format!("Failed to flush terminal: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn resize_terminal(
+    registry: State<SessionRegistry>,
+    session_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    // Validate dimensions
+    if cols < 10 || cols > 500 {
+        return Err("Terminal columns must be between 10 and 500".to_string());
+    }
+    if rows < 10 || rows > 200 {
+        return Err("Terminal rows must be between 10 and 200".to_string());
+    }
+
+    let pairs = registry.pty_pairs.lock().unwrap();
+
+    let pty = pairs
+        .get(&session_id)
+        .ok_or_else(|| "Invalid session ID".to_string())?;
+
+    pty.resize(PtySize {
+        rows,
+        cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    })
+    .map_err(|e| format!("Failed to resize terminal: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn close_terminal_session(
+    db: State<Database>,
+    registry: State<SessionRegistry>,
+    session_id: String,
+) -> Result<(), String> {
+    // Remove from session registry
+    let session = {
+        let mut sessions = registry.sessions.lock().unwrap();
+        sessions.remove(&session_id)
+    };
+
+    // Remove writer
+    {
+        let mut writers = registry.pty_writers.lock().unwrap();
+        writers.remove(&session_id);
+    }
+
+    // Remove PTY pair (this will drop it and send SIGHUP to the SSH process)
+    {
+        let mut pairs = registry.pty_pairs.lock().unwrap();
+        pairs.remove(&session_id);
+    }
+
+    // Wait for reader thread to finish (if it exists)
+    if let Some(session) = session {
+        if let Some(handle) = session.reader_handle {
+            // Give the thread a moment to exit gracefully
+            let _ = handle.join();
+        }
+    }
+
+    // Remove from active_sessions table
+    let conn = db.conn.lock().unwrap();
+    conn.execute("DELETE FROM active_sessions WHERE id = ?1", [&session_id])
+        .map_err(|e| format!("Failed to remove session from database: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 fn connect_ssh(
     db: State<Database>,
     profile_id: String,
@@ -1263,11 +1791,6 @@ fn connect_ssh(
     // Open in system terminal
     #[cfg(target_os = "macos")]
     {
-        // Check for embedded terminal (not yet implemented)
-        if terminal_pref == "embedded" {
-            return Err("Embedded terminal is not yet available. Coming soon!".to_string());
-        }
-
         // Properly escape the SSH command for shell
         // Each argument must be shell-escaped to prevent injection
         fn shell_escape(s: &str) -> String {
@@ -1390,11 +1913,6 @@ fn connect_ssh(
 
     #[cfg(target_os = "windows")]
     {
-        // Check for embedded terminal (not yet implemented)
-        if terminal_pref == "embedded" {
-            return Err("Embedded terminal is not yet available. Coming soon!".to_string());
-        }
-
         match terminal_pref.as_str() {
             "cmd" => {
                 // Use Command Prompt - pass args directly to avoid shell escaping issues
@@ -1563,6 +2081,10 @@ fn connect_ssh(
         }
     }
 
+    // Record connection in recent_connections table (for all external terminals)
+    db.record_connection(&profile_id)
+        .map_err(|e| format!("Failed to record recent connection: {}", e))?;
+
     Ok(())
 }
 
@@ -1579,8 +2101,12 @@ pub fn run() {
     // Initialize database
     let db = Database::new(db_path).expect("Failed to initialize database");
 
+    // Initialize session registry
+    let registry = SessionRegistry::new();
+
     tauri::Builder::default()
         .manage(db)
+        .manage(registry)
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -1606,7 +2132,16 @@ pub fn run() {
             check_for_updates,
             connect_ssh,
             export_settings,
-            import_settings
+            import_settings,
+            get_recent_connections,
+            record_connection,
+            clear_recent_connections,
+            get_setting,
+            save_setting,
+            create_terminal_session,
+            write_to_terminal,
+            resize_terminal,
+            close_terminal_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

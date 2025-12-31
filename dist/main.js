@@ -72,6 +72,13 @@ let originalFormValues = {}; // Track original profile form values for change de
 let originalSettingsValues = {}; // Track original settings values for change detection
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
 let lastImportTime = 0; // Track last settings import time for rate limiting
+let keyboardShortcutsEnabled = true; // Enable/disable keyboard shortcuts
+let selectedProfileId = null; // Currently selected profile for keyboard navigation
+let selectedGroupName = null; // Currently selected group header for keyboard navigation
+let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
+let activeNavigationSection = 'profiles'; // Current navigation section: 'recent', 'profiles'
+let activeTerminalSession = null; // Active embedded terminal session {sessionId, term, fitAddon, unlisten}
+let recentConnections = []; // Recent connections list
 
 // Utility: Debounce function to prevent rapid successive calls
 function debounce(func, wait) {
@@ -362,6 +369,810 @@ let browseTerminalBtn;
 // Confirmation promise resolver
 let confirmResolver = null;
 
+// Keyboard Shortcuts
+function loadKeyboardShortcuts() {
+    const stored = localStorage.getItem('keyboardShortcutsEnabled');
+    keyboardShortcutsEnabled = stored === null ? true : stored === 'true';
+}
+
+function setupKeyboardShortcutListeners() {
+    document.addEventListener('keydown', (e) => {
+        if (!keyboardShortcutsEnabled) return;
+
+        // Detect if we're in an input field
+        const inInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        const inModal = !profileModal.classList.contains('hidden') ||
+                       !settingsModal.classList.contains('hidden') ||
+                       !confirmModal.classList.contains('hidden');
+
+        // Handle modal shortcuts (always active in modals)
+        if (inModal) {
+            handleModalShortcuts(e);
+            return;
+        }
+
+        // Handle global shortcuts (not in input fields)
+        if (!inInput) {
+            handleGlobalShortcuts(e);
+        }
+
+        // Handle profile navigation (only when profile list is visible)
+        if (!inInput && !inModal) {
+            handleProfileNavigation(e);
+        }
+    });
+}
+
+function handleGlobalShortcuts(e) {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+    // Cmd/Ctrl+N - New Profile
+    if (cmdOrCtrl && e.key === 'n') {
+        e.preventDefault();
+        openModal();
+        return;
+    }
+
+    // Cmd/Ctrl+F or / - Focus Search
+    if ((cmdOrCtrl && e.key === 'f') || e.key === '/') {
+        e.preventDefault();
+        searchInput.focus();
+        return;
+    }
+
+    // Cmd/Ctrl+, - Open Settings
+    if (cmdOrCtrl && e.key === ',') {
+        e.preventDefault();
+        openSettings();
+        return;
+    }
+
+    // ? - Show keyboard shortcuts help (Shift+/)
+    if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        showKeyboardShortcutsHelp();
+        return;
+    }
+}
+
+function handleModalShortcuts(e) {
+    // Tab - Special handling for confirm modal
+    if (e.key === 'Tab' && !confirmModal.classList.contains('hidden')) {
+        e.preventDefault();
+        const focusedElement = document.activeElement;
+
+        // If nothing is focused (mouse mode), focus cancel button as default
+        if (focusedElement !== confirmOkBtn && focusedElement !== confirmCancelBtn) {
+            confirmCancelBtn.focus();
+            return;
+        }
+
+        if (e.shiftKey) {
+            // Shift+Tab - Cycle backwards
+            if (focusedElement === confirmCancelBtn) {
+                confirmOkBtn.focus();
+            } else {
+                confirmCancelBtn.focus();
+            }
+        } else {
+            // Tab - Cycle forwards
+            if (focusedElement === confirmOkBtn) {
+                confirmCancelBtn.focus();
+            } else {
+                confirmOkBtn.focus();
+            }
+        }
+        return;
+    }
+
+    // Escape - Close modal or cancel
+    if (e.key === 'Escape') {
+        e.preventDefault();
+
+        // Close terminal modal first if open
+        const terminalModal = document.getElementById('terminal-modal');
+        if (terminalModal && !terminalModal.classList.contains('hidden')) {
+            closeEmbeddedTerminal();
+            return;
+        }
+
+        // Close confirm modal first if open
+        if (!confirmModal.classList.contains('hidden')) {
+            if (confirmResolver) {
+                confirmResolver(false);
+                confirmResolver = null;
+            }
+            confirmModal.classList.add('hidden');
+            return;
+        }
+
+        // Close settings modal
+        if (!settingsModal.classList.contains('hidden')) {
+            closeSettings();
+            return;
+        }
+
+        // Close profile modal
+        if (!profileModal.classList.contains('hidden')) {
+            cancelProfile();
+            return;
+        }
+    }
+
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+    // Cmd/Ctrl+S - Save (in profile or settings modal)
+    if (cmdOrCtrl && e.key === 's') {
+        e.preventDefault();
+
+        if (!profileModal.classList.contains('hidden')) {
+            saveProfile();
+            return;
+        }
+
+        if (!settingsModal.classList.contains('hidden')) {
+            saveSettings();
+            return;
+        }
+    }
+}
+
+function handleProfileNavigation(e) {
+    const visibleProfiles = getVisibleProfiles();
+    const visibleRecentConnections = getVisibleRecentConnections();
+
+    // Tab - Cycle through sections
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        cycleNavigationSection(visibleRecentConnections, visibleProfiles, e.shiftKey);
+        return;
+    }
+
+    // Section-specific navigation
+    if (activeNavigationSection === 'recent') {
+        handleRecentConnectionsNavigation(e, visibleRecentConnections);
+    } else if (activeNavigationSection === 'profiles') {
+        handleProfilesNavigation(e, visibleProfiles);
+    }
+}
+
+// Get all tabbable items in order
+function getAllTabbableItems() {
+    const items = [];
+
+    // 1. Search bar
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        items.push({ type: 'input', element: searchInput, id: 'search-input' });
+    }
+
+    // 2. Expand/Collapse groups button (comes before filter in DOM)
+    const expandCollapseBtn = document.getElementById('expand-collapse-btn');
+    if (expandCollapseBtn) {
+        items.push({ type: 'button', element: expandCollapseBtn, id: 'expand-collapse-btn' });
+    }
+
+    // 3. Filter button
+    const filterBtn = document.getElementById('filter-btn');
+    if (filterBtn) {
+        items.push({ type: 'button', element: filterBtn, id: 'filter-btn' });
+    }
+
+    // 4. Toggle recent button
+    const toggleBtn = document.getElementById('toggle-recent-btn');
+    if (toggleBtn) {
+        items.push({ type: 'button', element: toggleBtn, id: 'toggle-recent-btn' });
+    }
+
+    // 5. Clear button
+    const clearBtn = document.getElementById('clear-recent-btn');
+    if (clearBtn) {
+        items.push({ type: 'button', element: clearBtn, id: 'clear-recent-btn' });
+    }
+
+    // 6. Recent connections (first one)
+    const recentConnections = getVisibleRecentConnections();
+    if (recentConnections.length > 0) {
+        items.push({
+            type: 'recent',
+            element: recentConnections[0],
+            profileId: recentConnections[0].dataset.profileId
+        });
+    }
+
+    // 7. All group headers
+    const groupHeaders = document.querySelectorAll('.profile-group-header');
+    groupHeaders.forEach(header => {
+        items.push({
+            type: 'group',
+            element: header,
+            name: header.dataset.group
+        });
+    });
+
+    return items;
+}
+
+function cycleNavigationSection(visibleRecentConnections, visibleProfiles, reverse) {
+    const items = getAllTabbableItems();
+    if (items.length === 0) return;
+
+    // Find current item index based on what's selected/focused
+    let currentIndex = -1;
+    const activeElement = document.activeElement;
+
+    // Check if any focusable element is currently focused
+    const searchInput = document.getElementById('search-input');
+    const filterBtn = document.getElementById('filter-btn');
+    const expandCollapseBtn = document.getElementById('expand-collapse-btn');
+    const toggleBtn = document.getElementById('toggle-recent-btn');
+    const clearBtn = document.getElementById('clear-recent-btn');
+
+    if (activeElement === searchInput) {
+        currentIndex = items.findIndex(item => item.id === 'search-input');
+    } else if (activeElement === filterBtn) {
+        currentIndex = items.findIndex(item => item.id === 'filter-btn');
+    } else if (activeElement === expandCollapseBtn) {
+        currentIndex = items.findIndex(item => item.id === 'expand-collapse-btn');
+    } else if (activeElement === toggleBtn) {
+        currentIndex = items.findIndex(item => item.id === 'toggle-recent-btn');
+    } else if (activeElement === clearBtn) {
+        currentIndex = items.findIndex(item => item.id === 'clear-recent-btn');
+    } else if (selectedRecentConnectionId) {
+        currentIndex = items.findIndex(item => item.type === 'recent');
+    } else if (selectedGroupName) {
+        currentIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
+    } else if (selectedProfileId) {
+        // Find the group this profile belongs to
+        const profileCard = document.querySelector(`.profile-card[data-id="${selectedProfileId}"]`);
+        if (profileCard) {
+            const groupHeader = profileCard.closest('.profile-group').querySelector('.profile-group-header');
+            if (groupHeader) {
+                currentIndex = items.findIndex(item => item.type === 'group' && item.name === groupHeader.dataset.group);
+            }
+        }
+    }
+
+    // If we couldn't determine current position, start at beginning (or end for reverse)
+    if (currentIndex === -1) {
+        currentIndex = reverse ? items.length : -1;
+    }
+
+    // Cycle to next/previous item
+    if (reverse) {
+        currentIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+    } else {
+        currentIndex = (currentIndex + 1) % items.length;
+    }
+
+    const nextItem = items[currentIndex];
+
+    // Select/focus the next item
+    if (nextItem.type === 'input') {
+        // Clear all selections
+        clearAllSelections();
+        // Focus the input
+        nextItem.element.focus();
+    } else if (nextItem.type === 'button') {
+        // Clear all selections
+        clearAllSelections();
+        // Focus the button
+        nextItem.element.focus();
+    } else if (nextItem.type === 'recent') {
+        // Blur any focused button or input
+        if (document.activeElement && (document.activeElement.tagName === 'BUTTON' || document.activeElement.tagName === 'INPUT')) {
+            document.activeElement.blur();
+        }
+        activeNavigationSection = 'recent';
+        selectRecentConnection(nextItem.profileId);
+    } else if (nextItem.type === 'group') {
+        // Blur any focused button or input
+        if (document.activeElement && (document.activeElement.tagName === 'BUTTON' || document.activeElement.tagName === 'INPUT')) {
+            document.activeElement.blur();
+        }
+        activeNavigationSection = 'profiles';
+        selectGroup(nextItem.name);
+        nextItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+// Clear all selections (helper function)
+function clearAllSelections() {
+    // Clear profile selection
+    if (selectedProfileId) {
+        const prevProfile = document.querySelector(`.profile-card[data-id="${selectedProfileId}"]`);
+        if (prevProfile) prevProfile.classList.remove('selected');
+        selectedProfileId = null;
+    }
+
+    // Clear group selection
+    if (selectedGroupName) {
+        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        if (prevGroup) prevGroup.classList.remove('selected');
+        selectedGroupName = null;
+    }
+
+    // Clear recent connection selection
+    if (selectedRecentConnectionId) {
+        const prevRecent = document.querySelector(`.recent-connection-item[data-profile-id="${selectedRecentConnectionId}"]`);
+        if (prevRecent) prevRecent.classList.remove('selected');
+        selectedRecentConnectionId = null;
+    }
+}
+
+function handleRecentConnectionsNavigation(e, visibleRecentConnections) {
+    // Arrow Up - Collapse recent connections section
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const list = document.getElementById('recent-connections-list');
+        const toggleBtn = document.getElementById('toggle-recent-btn');
+        if (list && !list.classList.contains('collapsed')) {
+            toggleRecentConnections();
+        }
+        return;
+    }
+
+    // Arrow Down - Expand recent connections section
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const list = document.getElementById('recent-connections-list');
+        const toggleBtn = document.getElementById('toggle-recent-btn');
+        if (list && list.classList.contains('collapsed')) {
+            toggleRecentConnections();
+        }
+        return;
+    }
+
+    // C - Clear recent connections
+    if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        clearRecentConnections();
+        return;
+    }
+
+    // Delete/Backspace - Clear recent connections
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        clearRecentConnections();
+        return;
+    }
+
+    if (visibleRecentConnections.length === 0) return;
+
+    // Arrow Left/Right - Navigate recent connections
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        selectPreviousRecentConnection(visibleRecentConnections);
+        return;
+    }
+
+    if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        selectNextRecentConnection(visibleRecentConnections);
+        return;
+    }
+
+    // Enter - Connect to selected recent connection
+    if (e.key === 'Enter' && selectedRecentConnectionId) {
+        e.preventDefault();
+        connectToProfile(selectedRecentConnectionId);
+        return;
+    }
+}
+
+function handleProfilesNavigation(e, visibleProfiles) {
+    const visibleGroups = getVisibleGroupHeaders();
+    if (visibleProfiles.length === 0 && visibleGroups.length === 0) return;
+
+    // If we're on a group header, handle group-specific keys
+    if (selectedGroupName) {
+        // Enter - Toggle group collapse/expand
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            toggleGroupByName(selectedGroupName);
+            return;
+        }
+
+        // Left Arrow - Collapse group
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            if (!collapsedGroups.has(selectedGroupName)) {
+                toggleGroupByName(selectedGroupName);
+            }
+            return;
+        }
+
+        // Right Arrow - Expand group
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            if (collapsedGroups.has(selectedGroupName)) {
+                toggleGroupByName(selectedGroupName);
+            }
+            return;
+        }
+
+        // Arrow Down - Move to next item (group or profile)
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectNextItem(visibleGroups, visibleProfiles);
+            return;
+        }
+
+        // Arrow Up - Move to previous item (group or profile)
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectPreviousItem(visibleGroups, visibleProfiles);
+            return;
+        }
+    } else {
+        // We're on a profile, handle profile-specific keys
+        // Arrow Down - Select next item
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectNextItem(visibleGroups, visibleProfiles);
+            return;
+        }
+
+        // Arrow Up - Select previous item
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectPreviousItem(visibleGroups, visibleProfiles);
+            return;
+        }
+
+        // Enter - Connect to selected profile
+        if (e.key === 'Enter' && selectedProfileId) {
+            e.preventDefault();
+            connectToProfile(selectedProfileId);
+            return;
+        }
+
+        // E - Edit selected profile
+        if ((e.key === 'e' || e.key === 'E') && selectedProfileId) {
+            e.preventDefault();
+            editProfile(selectedProfileId);
+            return;
+        }
+
+        // D - Duplicate selected profile
+        if ((e.key === 'd' || e.key === 'D') && selectedProfileId) {
+            e.preventDefault();
+            duplicateProfile(selectedProfileId);
+            return;
+        }
+
+        // Delete/Backspace - Delete selected profile
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedProfileId) {
+            e.preventDefault();
+            deleteProfile(selectedProfileId);
+            return;
+        }
+    }
+}
+
+function getVisibleProfiles() {
+    const profileCards = Array.from(document.querySelectorAll('.profile-card'));
+    return profileCards.filter(card => {
+        const groupContent = card.closest('.profile-group-content');
+        return !groupContent || !groupContent.classList.contains('collapsed');
+    });
+}
+
+function getVisibleGroupHeaders() {
+    return Array.from(document.querySelectorAll('.profile-group-header'));
+}
+
+// Build ordered list of all navigable items (groups and their visible profiles)
+function getNavigableItems() {
+    const items = [];
+    const groups = document.querySelectorAll('.profile-group');
+
+    groups.forEach(group => {
+        const header = group.querySelector('.profile-group-header');
+        const groupName = header.dataset.group;
+
+        // Add group header
+        items.push({ type: 'group', name: groupName, element: header });
+
+        // Add profiles if group is expanded
+        const content = group.querySelector('.profile-group-content');
+        if (!content.classList.contains('collapsed')) {
+            const profiles = Array.from(group.querySelectorAll('.profile-card'));
+            profiles.forEach(profile => {
+                items.push({ type: 'profile', id: profile.dataset.id, element: profile });
+            });
+        }
+    });
+
+    return items;
+}
+
+function selectNextItem(visibleGroups, visibleProfiles) {
+    const items = getNavigableItems();
+    if (items.length === 0) return;
+
+    let currentIndex = -1;
+
+    // Find current selection
+    if (selectedGroupName) {
+        currentIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
+    } else if (selectedProfileId) {
+        currentIndex = items.findIndex(item => item.type === 'profile' && item.id === selectedProfileId);
+    }
+
+    // Move to next item
+    const nextIndex = (currentIndex + 1) % items.length;
+    const nextItem = items[nextIndex];
+
+    if (nextItem.type === 'group') {
+        selectGroup(nextItem.name);
+    } else {
+        selectProfile(nextItem.id);
+    }
+
+    nextItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function selectPreviousItem(visibleGroups, visibleProfiles) {
+    const items = getNavigableItems();
+    if (items.length === 0) return;
+
+    let currentIndex = -1;
+
+    // Find current selection
+    if (selectedGroupName) {
+        currentIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
+    } else if (selectedProfileId) {
+        currentIndex = items.findIndex(item => item.type === 'profile' && item.id === selectedProfileId);
+    }
+
+    // Move to previous item
+    const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+    const prevItem = items[prevIndex];
+
+    if (prevItem.type === 'group') {
+        selectGroup(prevItem.name);
+    } else {
+        selectProfile(prevItem.id);
+    }
+
+    prevItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function selectGroup(groupName) {
+    // Clear profile selection
+    if (selectedProfileId) {
+        const prevProfile = document.querySelector(`.profile-card[data-id="${selectedProfileId}"]`);
+        if (prevProfile) {
+            prevProfile.classList.remove('selected');
+        }
+        selectedProfileId = null;
+    }
+
+    // Clear recent connection selection
+    if (selectedRecentConnectionId) {
+        const prevRecent = document.querySelector(`.recent-connection-item[data-profile-id="${selectedRecentConnectionId}"]`);
+        if (prevRecent) {
+            prevRecent.classList.remove('selected');
+        }
+        selectedRecentConnectionId = null;
+    }
+
+    // Clear previous group selection
+    if (selectedGroupName) {
+        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        if (prevGroup) {
+            prevGroup.classList.remove('selected');
+        }
+    }
+
+    // Set new group selection
+    selectedGroupName = groupName;
+    const groupHeader = document.querySelector(`.profile-group-header[data-group="${groupName}"]`);
+    if (groupHeader) {
+        groupHeader.classList.add('selected');
+    }
+}
+
+function toggleGroupByName(groupName) {
+    const groupHeader = document.querySelector(`.profile-group-header[data-group="${groupName}"]`);
+    if (groupHeader) {
+        groupHeader.click(); // Trigger existing click handler
+    }
+}
+
+function selectProfile(profileId) {
+    // Remove previous selection
+    document.querySelectorAll('.profile-card.selected').forEach(card => {
+        card.classList.remove('selected');
+    });
+
+    // Clear recent connection selection
+    selectedRecentConnectionId = null;
+    document.querySelectorAll('.recent-connection-item.selected').forEach(item => {
+        item.classList.remove('selected');
+    });
+
+    // Clear group header selection
+    if (selectedGroupName) {
+        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        if (prevGroup) {
+            prevGroup.classList.remove('selected');
+        }
+        selectedGroupName = null;
+    }
+
+    // Add selection to new profile
+    selectedProfileId = profileId;
+    activeNavigationSection = 'profiles';
+    const profileCard = document.querySelector(`.profile-card[data-id="${profileId}"]`);
+    if (profileCard) {
+        profileCard.classList.add('selected');
+        // Disable hover effect when keyboard navigation is active
+        profilesList.classList.add('keyboard-nav-active');
+    }
+}
+
+function selectRecentConnection(profileId) {
+    // Remove previous selection from profiles
+    selectedProfileId = null;
+    document.querySelectorAll('.profile-card.selected').forEach(card => {
+        card.classList.remove('selected');
+    });
+    profilesList.classList.remove('keyboard-nav-active');
+
+    // Clear group header selection
+    if (selectedGroupName) {
+        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        if (prevGroup) {
+            prevGroup.classList.remove('selected');
+        }
+        selectedGroupName = null;
+    }
+
+    // Remove previous selection from recent connections
+    document.querySelectorAll('.recent-connection-item.selected').forEach(item => {
+        item.classList.remove('selected');
+    });
+
+    // Add selection to new recent connection
+    selectedRecentConnectionId = profileId;
+    activeNavigationSection = 'recent';
+    const recentItem = document.querySelector(`.recent-connection-item[data-profile-id="${profileId}"]`);
+    if (recentItem) {
+        recentItem.classList.add('selected');
+    }
+}
+
+function getVisibleRecentConnections() {
+    return Array.from(document.querySelectorAll('.recent-connection-item'));
+}
+
+function selectNextRecentConnection(visibleRecentConnections) {
+    if (visibleRecentConnections.length === 0) return;
+
+    let currentIndex = -1;
+    if (selectedRecentConnectionId) {
+        currentIndex = visibleRecentConnections.findIndex(item => item.dataset.profileId === selectedRecentConnectionId);
+    }
+
+    const nextIndex = (currentIndex + 1) % visibleRecentConnections.length;
+    const nextItem = visibleRecentConnections[nextIndex];
+
+    selectRecentConnection(nextItem.dataset.profileId);
+    nextItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+}
+
+function selectPreviousRecentConnection(visibleRecentConnections) {
+    if (visibleRecentConnections.length === 0) return;
+
+    let currentIndex = -1;
+    if (selectedRecentConnectionId) {
+        currentIndex = visibleRecentConnections.findIndex(item => item.dataset.profileId === selectedRecentConnectionId);
+    }
+
+    const prevIndex = currentIndex <= 0 ? visibleRecentConnections.length - 1 : currentIndex - 1;
+    const prevItem = visibleRecentConnections[prevIndex];
+
+    selectRecentConnection(prevItem.dataset.profileId);
+    prevItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+}
+
+function showKeyboardShortcutsHelp() {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modKey = isMac ? 'Cmd' : 'Ctrl';
+
+    const shortcuts = [
+        { category: 'Global', items: [
+            { keys: `${modKey}+N`, action: 'New Profile' },
+            { keys: `${modKey}+F or /`, action: 'Focus Search' },
+            { keys: `${modKey}+,`, action: 'Open Settings' },
+            { keys: '?', action: 'Show This Help' },
+        ]},
+        { category: 'Navigation', items: [
+            { keys: 'Tab', action: 'Cycle: Search → Actions → Recent → Groups' },
+            { keys: 'Shift+Tab', action: 'Cycle Backwards' },
+            { keys: 'Enter', action: 'Activate Focused Button/Item' },
+        ]},
+        { category: 'Recent Connections', items: [
+            { keys: '← / →', action: 'Navigate Connections' },
+            { keys: '↑', action: 'Collapse Section' },
+            { keys: '↓', action: 'Expand Section' },
+            { keys: 'Enter', action: 'Connect to Selected' },
+            { keys: 'C', action: 'Clear Recent Connections' },
+            { keys: 'Backspace / Delete', action: 'Clear Recent Connections' },
+        ]},
+        { category: 'Profile List', items: [
+            { keys: '↑ / ↓', action: 'Navigate Groups & Profiles' },
+            { keys: 'Enter', action: 'Connect (Profile) / Toggle (Group)' },
+            { keys: '← / →', action: 'Collapse / Expand Group' },
+            { keys: 'E', action: 'Edit Selected Profile' },
+            { keys: 'D', action: 'Duplicate Selected Profile' },
+            { keys: 'Backspace / Delete', action: 'Delete Selected Profile' },
+        ]},
+        { category: 'Modals', items: [
+            { keys: 'Escape', action: 'Close Modal/Cancel' },
+            { keys: `${modKey}+S`, action: 'Save' },
+        ]},
+    ];
+
+    let html = '<div class="shortcuts-help-modal"><div class="shortcuts-help-content">';
+
+    // Header (non-scrolling)
+    html += '<div class="modal-header">';
+    html += '<div class="modal-header-left">';
+    html += '<h2>Keyboard Shortcuts</h2>';
+    html += '</div>';
+    html += '<div class="modal-header-right">';
+    html += '<button type="button" id="shortcuts-help-close" class="btn btn-secondary">Close</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // Scrollable content
+    html += '<div class="shortcuts-help-body">';
+    html += '<div class="shortcuts-grid">'; // Grid container
+
+    shortcuts.forEach(section => {
+        html += `<div class="shortcuts-section">`;
+        html += `<h3>${section.category}</h3>`;
+        html += '<table class="shortcuts-table">';
+        section.items.forEach(item => {
+            html += `<tr><td class="shortcut-keys">${escapeHtml(item.keys)}</td><td>${escapeHtml(item.action)}</td></tr>`;
+        });
+        html += '</table></div>';
+    });
+
+    html += '</div>'; // Close grid container
+    html += '</div>'; // Close body
+    html += '</div></div>';
+
+    // Remove existing if present
+    const existing = document.querySelector('.shortcuts-help-modal');
+    if (existing) existing.remove();
+
+    // Add to body
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    // Add close handler
+    document.getElementById('shortcuts-help-close').addEventListener('click', () => {
+        document.querySelector('.shortcuts-help-modal').remove();
+    });
+
+    // Close on Escape
+    const closeOnEscape = (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.querySelector('.shortcuts-help-modal');
+            if (modal) {
+                modal.remove();
+                document.removeEventListener('keydown', closeOnEscape);
+            }
+        }
+    };
+    document.addEventListener('keydown', closeOnEscape);
+}
+
 // Initialize app
 async function init() {
     console.log('Initializing app...');
@@ -422,6 +1233,9 @@ async function init() {
     setBrowseHint();
 
     await loadProfiles();
+    await loadRecentConnections(); // Load recent connections after profiles
+    loadRecentConnectionsLimit(); // Load recent connections limit into settings
+    loadRecentConnectionsCollapsedState(); // Load recent connections collapsed state
     loadThemePreference();
     loadAutoUpdatePreference();
     loadIncludeProfilesPreference();
@@ -429,9 +1243,11 @@ async function init() {
     loadTerminalPreference();
     loadFilterState();
     loadCollapsedState();
+    loadKeyboardShortcuts();
     await loadWindowState();
     await setupWindowListeners();
     setupEventListeners();
+    setupKeyboardShortcutListeners();
 
     // Check for updates on launch if enabled
     if (autoUpdateCheck.checked) {
@@ -518,6 +1334,218 @@ async function loadProfiles() {
 // Update profile count badge
 function updateProfileCount() {
     profileCountBadge.textContent = profiles.length;
+}
+
+// Recent Connections Functions
+
+// Get recent connections limit from localStorage (default: 5)
+function getRecentConnectionsLimit() {
+    const saved = localStorage.getItem('recentConnectionsLimit');
+    if (saved === null) return 5; // Default to 5
+    const limit = parseInt(saved, 10);
+    // Validate: must be 0-20
+    if (isNaN(limit) || limit < 0 || limit > 20) return 5;
+    return limit;
+}
+
+// Save recent connections limit to localStorage
+function saveRecentConnectionsLimit() {
+    const input = document.getElementById('recent-connections-limit');
+    if (!input) return;
+
+    const limit = parseInt(input.value, 10);
+    // Validate: must be 0-20
+    if (isNaN(limit) || limit < 0 || limit > 20) {
+        showToast('Recent connections limit must be between 0 and 20', TOAST_DURATION_SHORT, 'error');
+        input.value = getRecentConnectionsLimit(); // Reset to current value
+        return;
+    }
+
+    localStorage.setItem('recentConnectionsLimit', limit.toString());
+}
+
+// Load recent connections limit into settings input
+function loadRecentConnectionsLimit() {
+    const input = document.getElementById('recent-connections-limit');
+    if (!input) return;
+
+    input.value = getRecentConnectionsLimit();
+}
+
+// Load recent connections from backend
+async function loadRecentConnections() {
+    try {
+        const limit = getRecentConnectionsLimit();
+
+        // If limit is 0, hide the section and don't fetch
+        const section = document.getElementById('recent-connections-section');
+        if (limit === 0) {
+            if (section) section.classList.add('hidden');
+            recentConnections = [];
+            return;
+        }
+
+        // Show section and fetch recent connections
+        if (section) section.classList.remove('hidden');
+        recentConnections = await invoke('get_recent_connections', { limit });
+        console.log('Recent connections loaded:', recentConnections);
+        renderRecentConnections();
+    } catch (error) {
+        console.error('Failed to load recent connections:', error);
+        recentConnections = [];
+        renderRecentConnections();
+    }
+}
+
+// Render recent connections in the UI
+function renderRecentConnections() {
+    const list = document.getElementById('recent-connections-list');
+    if (!list) return;
+
+    // Clear existing items
+    list.innerHTML = '';
+
+    // If no recent connections, show empty state
+    if (recentConnections.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'recent-connections-empty';
+        empty.textContent = 'No recent connections yet. Connect to a profile to see it here.';
+        list.appendChild(empty);
+        return;
+    }
+
+    // Create items for each recent connection
+    recentConnections.forEach(recent => {
+        const item = document.createElement('div');
+        item.className = 'recent-connection-item';
+        item.dataset.profileId = recent.profile_id;
+
+        const name = document.createElement('div');
+        name.className = 'recent-connection-name';
+        name.textContent = recent.name;
+
+        const host = document.createElement('div');
+        host.className = 'recent-connection-host';
+        host.textContent = `${recent.username}@${recent.host}:${recent.port}`;
+
+        const time = document.createElement('div');
+        time.className = 'recent-connection-time';
+        time.textContent = formatTimeAgo(recent.connected_at);
+
+        item.appendChild(name);
+        item.appendChild(host);
+        item.appendChild(time);
+
+        // Click to reconnect
+        item.addEventListener('click', () => {
+            connectToProfile(recent.profile_id);
+        });
+
+        list.appendChild(item);
+    });
+}
+
+// Format timestamp as "time ago" (e.g., "2 minutes ago")
+function formatTimeAgo(timestamp) {
+    try {
+        const now = new Date();
+        const then = new Date(timestamp);
+        const seconds = Math.floor((now - then) / 1000);
+
+        if (seconds < 60) {
+            return seconds === 1 ? '1 second ago' : `${seconds} seconds ago`;
+        }
+
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) {
+            return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
+        }
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) {
+            return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+        }
+
+        const days = Math.floor(hours / 24);
+        if (days < 30) {
+            return days === 1 ? '1 day ago' : `${days} days ago`;
+        }
+
+        const months = Math.floor(days / 30);
+        if (months < 12) {
+            return months === 1 ? '1 month ago' : `${months} months ago`;
+        }
+
+        const years = Math.floor(months / 12);
+        return years === 1 ? '1 year ago' : `${years} years ago`;
+    } catch (error) {
+        console.error('Error formatting time ago:', error);
+        return 'recently';
+    }
+}
+
+// Clear all recent connections
+async function clearRecentConnections() {
+    const confirmed = await customConfirm(
+        'Are you sure you want to clear all recent connections?',
+        {
+            title: 'Clear Recent Connections',
+            okText: 'Clear',
+            cancelText: 'Cancel',
+            okClass: 'btn-danger'
+        }
+    );
+
+    if (!confirmed) return;
+
+    try {
+        await invoke('clear_recent_connections');
+        recentConnections = [];
+        renderRecentConnections();
+        showToast('Recent connections cleared', TOAST_DURATION_SHORT);
+    } catch (error) {
+        console.error('Failed to clear recent connections:', error);
+        showToast('Failed to clear recent connections: ' + error, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Toggle recent connections collapsed state
+function toggleRecentConnections() {
+    const list = document.getElementById('recent-connections-list');
+    const toggleBtn = document.getElementById('toggle-recent-btn');
+    if (!list || !toggleBtn) return;
+
+    const isCollapsed = list.classList.contains('collapsed');
+
+    if (isCollapsed) {
+        list.classList.remove('collapsed');
+        toggleBtn.textContent = '▼';
+        localStorage.setItem('recentConnectionsCollapsed', 'false');
+    } else {
+        list.classList.add('collapsed');
+        toggleBtn.textContent = '▶';
+        localStorage.setItem('recentConnectionsCollapsed', 'true');
+    }
+
+    // Focus the toggle button after action (for keyboard navigation)
+    setTimeout(() => toggleBtn.focus(), 50);
+}
+
+// Load recent connections collapsed state from localStorage
+function loadRecentConnectionsCollapsedState() {
+    const list = document.getElementById('recent-connections-list');
+    const toggleBtn = document.getElementById('toggle-recent-btn');
+    if (!list || !toggleBtn) return;
+
+    const isCollapsed = localStorage.getItem('recentConnectionsCollapsed') === 'true';
+
+    if (isCollapsed) {
+        list.classList.add('collapsed');
+        toggleBtn.textContent = '▶';
+    } else {
+        list.classList.remove('collapsed');
+        toggleBtn.textContent = '▼';
+    }
 }
 
 // Render profiles in the UI with collapsible groups
@@ -648,6 +1676,33 @@ function renderProfiles(filter = '') {
             const groupName = header.dataset.group;
             toggleGroup(groupName);
         });
+
+        // Clear keyboard selection when hovering with mouse
+        header.addEventListener('mouseenter', (e) => {
+            if (selectedGroupName) {
+                const previouslySelected = document.querySelector('.profile-group-header.selected');
+                if (previouslySelected) {
+                    previouslySelected.classList.remove('selected');
+                }
+                selectedGroupName = null;
+            }
+        });
+    });
+
+    // Attach event listeners to profile cards to clear keyboard selection on hover
+    document.querySelectorAll('.profile-card').forEach(card => {
+        card.addEventListener('mouseenter', (e) => {
+            // Clear keyboard selection when hovering with mouse
+            if (selectedProfileId) {
+                const previouslySelected = document.querySelector('.profile-card.selected');
+                if (previouslySelected) {
+                    previouslySelected.classList.remove('selected');
+                }
+                selectedProfileId = null;
+            }
+            // Re-enable hover effects when mouse is used
+            profilesList.classList.remove('keyboard-nav-active');
+        });
     });
 
     // Update expand/collapse button text
@@ -667,7 +1722,19 @@ function toggleGroup(groupName) {
         collapsedGroups.add(groupName);
     }
     saveCollapsedState();
+
+    // Save current selection to restore after render
+    const wasGroupSelected = selectedGroupName === groupName;
+
     renderProfiles(searchInput.value);
+
+    // Restore group selection if it was selected before toggle
+    if (wasGroupSelected) {
+        const groupHeader = document.querySelector(`.profile-group-header[data-group="${groupName}"]`);
+        if (groupHeader) {
+            groupHeader.classList.add('selected');
+        }
+    }
 }
 
 // Update expand/collapse button text
@@ -850,6 +1917,8 @@ function setupEventListeners() {
             confirmResolver = null;
         }
         confirmModal.classList.add('hidden');
+        // Clear keyboard selections to prevent accidental actions after modal closes
+        clearAllSelections();
     });
 
     confirmCancelBtn.addEventListener('click', () => {
@@ -858,6 +1927,21 @@ function setupEventListeners() {
             confirmResolver = null;
         }
         confirmModal.classList.add('hidden');
+        // Clear keyboard selections to prevent accidental actions after modal closes
+        clearAllSelections();
+    });
+
+    // Clear focus when mouse hovers over buttons (switch to mouse mode)
+    confirmOkBtn.addEventListener('mouseenter', () => {
+        if (document.activeElement === confirmOkBtn || document.activeElement === confirmCancelBtn) {
+            document.activeElement.blur();
+        }
+    });
+
+    confirmCancelBtn.addEventListener('mouseenter', () => {
+        if (document.activeElement === confirmOkBtn || document.activeElement === confirmCancelBtn) {
+            document.activeElement.blur();
+        }
     });
 
     confirmModal.addEventListener('click', (e) => {
@@ -867,6 +1951,30 @@ function setupEventListeners() {
                 confirmResolver = null;
             }
             confirmModal.classList.add('hidden');
+            // Clear keyboard selections to prevent accidental actions after modal closes
+            clearAllSelections();
+        }
+    });
+
+    // Keyboard navigation for confirm modal
+    confirmModal.addEventListener('keydown', (e) => {
+        if (confirmModal.classList.contains('hidden')) return;
+
+        // Escape - Cancel (trigger cancel button)
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            confirmCancelBtn.click();
+            return;
+        }
+
+        // Enter - Activate focused button
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const focusedElement = document.activeElement;
+
+            if (focusedElement === confirmOkBtn || focusedElement === confirmCancelBtn) {
+                focusedElement.click();
+            }
         }
     });
 
@@ -898,6 +2006,23 @@ function setupEventListeners() {
     autoUpdateCheck.addEventListener('change', () => {
         debouncedCheckSettingsChanged();
     });
+
+    // Keyboard shortcuts
+    const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    if (keyboardShortcutsCheck) {
+        keyboardShortcutsCheck.addEventListener('change', () => {
+            keyboardShortcutsEnabled = keyboardShortcutsCheck.checked;
+            localStorage.setItem('keyboardShortcutsEnabled', keyboardShortcutsEnabled);
+            debouncedCheckSettingsChanged();
+        });
+    }
+
+    const shortcutsHelpBtn = document.getElementById('shortcuts-help-btn');
+    if (shortcutsHelpBtn) {
+        shortcutsHelpBtn.addEventListener('click', () => {
+            showKeyboardShortcutsHelp();
+        });
+    }
 
     // Export/Import
     exportProfilesBtn.addEventListener('click', async () => {
@@ -938,10 +2063,36 @@ function setupEventListeners() {
         toggleExpandCollapseAll();
     });
 
+    // Add keyboard support for expand/collapse button
+    expandCollapseBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            expandCollapseBtn.click();
+        }
+    });
+
     // Filter button and popup
     filterBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleFilterPopup();
+    });
+
+    // Add keyboard support for filter button
+    filterBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            filterBtn.click();
+        }
+    });
+
+    // Close filter popup when focus leaves the button (e.g., tabbing away)
+    filterBtn.addEventListener('blur', () => {
+        // Small delay to allow click events to process first
+        setTimeout(() => {
+            if (!filterPopup.classList.contains('hidden')) {
+                filterPopup.classList.add('hidden');
+            }
+        }, 100);
     });
 
     clearFiltersBtn.addEventListener('click', () => {
@@ -1004,6 +2155,45 @@ function setupEventListeners() {
             }
         }
     });
+
+    // Recent connections
+    const clearRecentBtn = document.getElementById('clear-recent-btn');
+    const toggleRecentBtn = document.getElementById('toggle-recent-btn');
+    const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
+
+    if (clearRecentBtn) {
+        clearRecentBtn.addEventListener('click', async () => {
+            await clearRecentConnections();
+        });
+    }
+
+    if (toggleRecentBtn) {
+        toggleRecentBtn.addEventListener('click', () => {
+            toggleRecentConnections();
+        });
+    }
+
+    if (recentConnectionsLimitInput) {
+        recentConnectionsLimitInput.addEventListener('input', () => {
+            debouncedCheckSettingsChanged();
+        });
+    }
+
+    // Terminal modal buttons
+    const terminalCloseBtn = document.getElementById('terminal-close-btn');
+    const terminalClearBtn = document.getElementById('terminal-clear-btn');
+
+    if (terminalCloseBtn) {
+        terminalCloseBtn.addEventListener('click', () => {
+            closeEmbeddedTerminal();
+        });
+    }
+
+    if (terminalClearBtn) {
+        terminalClearBtn.addEventListener('click', () => {
+            clearTerminal();
+        });
+    }
 
     // Setup dynamic tooltip positioning
     setupTooltipPositioning();
@@ -1116,12 +2306,14 @@ function updateAuthMethodVisibility() {
 // Settings modal functions
 // Get current settings values from localStorage and DOM
 function getCurrentSettingsValues() {
+    const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     return {
         theme: themeSelect.value,
         autoUpdateCheck: autoUpdateCheck.checked,
         terminalPreference: terminalSelect.value,
         customTerminalPath: customTerminalPath.value,
-        includeProfiles: includeProfilesCheck.checked
+        includeProfiles: includeProfilesCheck.checked,
+        recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5'
     };
 }
 
@@ -1154,6 +2346,9 @@ function openSettings() {
     if (modalContent) {
         modalContent.scrollTop = 0;
     }
+
+    // Load current recent connections limit into input
+    loadRecentConnectionsLimit();
 
     // Capture original settings values and disable Save button initially
     captureSettingsValues();
@@ -1222,6 +2417,15 @@ function revertSettingsUI() {
         ? originalSettingsValues.includeProfiles
         : false;
 
+    // Validate recent connections limit - must be string representation of number 0-20
+    const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
+    if (recentConnectionsLimitInput) {
+        const limit = parseInt(originalSettingsValues.recentConnectionsLimit, 10);
+        recentConnectionsLimitInput.value = (!isNaN(limit) && limit >= 0 && limit <= 20)
+            ? limit
+            : 5;
+    }
+
     updateTerminalVisibility();
 }
 
@@ -1238,6 +2442,12 @@ function saveSettings() {
 
     // Save include profiles preference
     saveIncludeProfilesPreference();
+
+    // Save recent connections limit
+    saveRecentConnectionsLimit();
+
+    // Reload recent connections with new limit
+    loadRecentConnections();
 
     // Close modal after saving
     forceCloseSettings();
@@ -1644,7 +2854,7 @@ function populateTerminalOptions() {
         terminalSelect.innerHTML = `
             <option value="default">Default (Terminal.app)</option>
             <option value="custom">Custom Terminal</option>
-            <option value="embedded" disabled>Embedded Terminal (Coming Soon)</option>
+            <option value="embedded">Embedded Terminal</option>
         `;
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
@@ -1653,7 +2863,7 @@ function populateTerminalOptions() {
             <option value="powershell">PowerShell</option>
             <option value="windows_terminal">Windows Terminal</option>
             <option value="custom">Custom Terminal</option>
-            <option value="embedded" disabled>Embedded Terminal (Coming Soon)</option>
+            <option value="embedded">Embedded Terminal</option>
         `;
     } else {
         // Unknown OS - show minimal options
@@ -1941,6 +3151,7 @@ async function backupSettings() {
         const includeProfiles = includeProfilesCheck.checked;
         const windowWidth = parseInt(localStorage.getItem('windowWidth') || '800');
         const windowHeight = parseInt(localStorage.getItem('windowHeight') || '600');
+        const recentConnectionsLimit = getRecentConnectionsLimit();
 
         // Always include terminal preference (OS-specific setting, will be tagged with OS)
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
@@ -1959,6 +3170,7 @@ async function backupSettings() {
         const data = await invoke('export_settings', {
             theme,
             autoUpdateCheck,
+            recentConnectionsLimit,
             filteredGroups,
             collapsedGroups,
             terminalPreference: terminalPreference,
@@ -2207,6 +3419,17 @@ async function restoreSettings(file) {
             }
         }
 
+        // Validate and restore recent connections limit
+        if (result.settings.recent_connections_limit !== undefined) {
+            // Validate limit (must be number between 0-20)
+            const limit = typeof result.settings.recent_connections_limit === 'number'
+                && result.settings.recent_connections_limit >= 0
+                && result.settings.recent_connections_limit <= 20
+                ? result.settings.recent_connections_limit
+                : 5;
+            localStorage.setItem('recentConnectionsLimit', limit.toString());
+        }
+
         // Validate and restore filtered/collapsed groups
         // Must be arrays, with reasonable length limits (max 1000 items to prevent DoS)
         if (result.settings.filtered_groups) {
@@ -2279,8 +3502,10 @@ async function restoreSettings(file) {
 
         loadFilterState();
         loadCollapsedState();
+        loadRecentConnectionsLimit(); // Reload recent connections limit into settings input
 
         await loadProfiles();
+        await loadRecentConnections(); // Reload recent connections with new limit
 
         const successMessage = includesProfiles
             ? `Settings and ${result.profiles.length} ${result.profiles.length === 1 ? 'profile' : 'profiles'} restored successfully!`
@@ -2303,6 +3528,7 @@ async function resetSettings() {
                 'Terminal: Default',
                 'Auto-update check: Enabled',
                 'Window size: 800 × 600',
+                'Recent connections limit: 5',
                 'Filtered groups: Cleared',
                 'Collapsed groups: Cleared'
             ],
@@ -2334,6 +3560,7 @@ async function resetSettings() {
         localStorage.setItem('collapsedGroups', '[]');
         localStorage.setItem('terminalPreference', 'default');
         localStorage.setItem('customTerminalPath', '');
+        localStorage.setItem('recentConnectionsLimit', '5');
 
         // Reset window to default size
         await resetWindowState();
@@ -2349,8 +3576,10 @@ async function resetSettings() {
         // Reload states
         loadFilterState();
         loadCollapsedState();
+        loadRecentConnectionsLimit(); // Reload recent connections limit into settings input
 
         await loadProfiles();
+        await loadRecentConnections(); // Reload recent connections with new limit
 
         showToast('Settings reset to defaults!');
         console.log('Settings reset successfully');
@@ -2677,11 +3906,19 @@ async function connectToProfile(id) {
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
         const customTerminalPath = localStorage.getItem('customTerminalPath') || null;
 
-        await invoke('connect_ssh', {
-            profileId: id,
-            terminalPreference: terminalPreference,
-            customTerminalPath: customTerminalPath
-        });
+        // Route to embedded terminal or external terminal
+        if (terminalPreference === 'embedded') {
+            await openEmbeddedTerminal(id);
+        } else {
+            await invoke('connect_ssh', {
+                profileId: id,
+                terminalPreference: terminalPreference,
+                customTerminalPath: customTerminalPath
+            });
+        }
+
+        // Reload recent connections after successful connection
+        await loadRecentConnections();
     } catch (error) {
         console.error('Failed to connect:', error);
         showToast('Failed to connect: ' + error, TOAST_DURATION_LONG, 'error');
@@ -2773,4 +4010,236 @@ function buildConfirmMessage(config) {
     }
 
     return fragment;
+}
+
+// ===========================
+// Embedded Terminal Functions
+// ===========================
+
+async function openEmbeddedTerminal(profileId) {
+    try {
+        // Get profile to set title
+        const profile = profiles.find(p => p.id === profileId);
+        if (!profile) {
+            showToast('Profile not found', 'error');
+            return;
+        }
+
+        // Show terminal modal
+        const terminalModal = document.getElementById('terminal-modal');
+        const terminalContainer = document.getElementById('terminal-container');
+        const terminalTitle = document.getElementById('terminal-title');
+        const terminalStatus = document.getElementById('terminal-status');
+
+        terminalTitle.textContent = `Terminal - ${profile.name}`;
+        terminalStatus.textContent = 'Connecting...';
+        terminalStatus.className = 'terminal-status connecting';
+
+        terminalModal.classList.remove('hidden');
+
+        // Initialize xterm.js
+        const term = new Terminal({
+            cursorBlink: true,
+            fontSize: 14,
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff',
+                cursor: '#ffffff',
+                selection: '#555555'
+            },
+            scrollback: 10000,
+            allowTransparency: false
+        });
+
+        // Load FitAddon
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+
+        // Open terminal in container
+        term.open(terminalContainer);
+
+        // Small delay to let DOM settle, then fit terminal
+        await new Promise(resolve => setTimeout(resolve, 50));
+        fitAddon.fit();
+
+        // Get terminal dimensions (reduce rows by 3 to prevent bottom cutoff)
+        const cols = term.cols;
+        const rows = Math.max(term.rows - 3, 10); // Subtract 3 rows for safety, minimum 10
+
+        // Create backend terminal session
+        const sessionId = await invoke('create_terminal_session', {
+            profileId: profileId,
+            cols: cols,
+            rows: rows
+        });
+
+        // Update status to connected
+        terminalStatus.textContent = 'Connected';
+        terminalStatus.className = 'terminal-status connected';
+
+        // Listen for terminal output events
+        const unlisten = await window.__TAURI__.event.listen(
+            `terminal-output-${sessionId}`,
+            (event) => {
+                // Convert Vec<u8> to Uint8Array and write to terminal
+                const data = new Uint8Array(event.payload);
+                term.write(data);
+            }
+        );
+
+        // Send user input to backend
+        term.onData((data) => {
+            invoke('write_to_terminal', {
+                sessionId: sessionId,
+                data: data
+            }).catch(err => {
+                console.error('Failed to write to terminal:', err);
+            });
+        });
+
+        // Handle terminal resize
+        let resizeTimeout;
+        term.onResize(({ cols, rows }) => {
+            // Debounce resize events
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                invoke('resize_terminal', {
+                    sessionId: sessionId,
+                    cols: cols,
+                    rows: Math.max(rows - 3, 10) // Subtract 3 rows for safety
+                }).catch(err => {
+                    console.error('Failed to resize terminal:', err);
+                });
+            }, 100);
+        });
+
+        // Handle window resize with debounce
+        let windowResizeTimeout;
+        const handleWindowResize = () => {
+            clearTimeout(windowResizeTimeout);
+            windowResizeTimeout = setTimeout(() => {
+                try {
+                    // Fit terminal to new size
+                    fitAddon.fit();
+
+                    // Double-fit after a small delay to ensure proper sizing
+                    // (helps when resizing from small to large)
+                    setTimeout(() => {
+                        try {
+                            fitAddon.fit();
+                            // Scroll to bottom after resize
+                            term.scrollToBottom();
+                        } catch (err) {
+                            console.error('Failed to refit terminal:', err);
+                        }
+                    }, 50);
+                } catch (err) {
+                    console.error('Failed to fit terminal:', err);
+                }
+            }, 100);
+        };
+        window.addEventListener('resize', handleWindowResize);
+
+        // Intercept Escape key to close terminal (before xterm processes it)
+        term.attachCustomKeyEventHandler((e) => {
+            if (e.type === 'keydown' && e.key === 'Escape') {
+                closeEmbeddedTerminal();
+                return false; // Prevent xterm from processing
+            }
+            return true; // Let xterm process other keys
+        });
+
+        // Store session info
+        activeTerminalSession = {
+            sessionId,
+            term,
+            fitAddon,
+            unlisten,
+            handleWindowResize,
+            windowResizeTimeout
+        };
+
+        // Focus terminal
+        term.focus();
+
+    } catch (error) {
+        console.error('Failed to open terminal:', error);
+        showToast('Failed to open terminal: ' + error, 'error');
+        closeEmbeddedTerminal();
+    }
+}
+
+async function closeEmbeddedTerminal() {
+    if (!activeTerminalSession) {
+        // Just hide modal if no active session
+        const terminalModal = document.getElementById('terminal-modal');
+        terminalModal.classList.add('hidden');
+        return;
+    }
+
+    // Show confirmation dialog
+    const confirmed = await customConfirm(
+        'Are you sure you want to close this terminal session?',
+        {
+            title: 'Close Terminal',
+            okText: 'Close',
+            cancelText: 'Cancel',
+            okClass: 'btn-danger'
+        }
+    );
+
+    if (!confirmed) {
+        return; // User cancelled
+    }
+
+    const { sessionId, term, unlisten, handleWindowResize, windowResizeTimeout } = activeTerminalSession;
+
+    try {
+        // Update status
+        const terminalStatus = document.getElementById('terminal-status');
+        terminalStatus.textContent = 'Disconnecting...';
+        terminalStatus.className = 'terminal-status disconnected';
+
+        // Clear any pending resize timeout
+        if (windowResizeTimeout) {
+            clearTimeout(windowResizeTimeout);
+        }
+
+        // Remove event listeners
+        if (unlisten) {
+            unlisten();
+        }
+        if (handleWindowResize) {
+            window.removeEventListener('resize', handleWindowResize);
+        }
+
+        // Dispose terminal
+        if (term) {
+            term.dispose();
+        }
+
+        // Close backend session
+        if (sessionId) {
+            await invoke('close_terminal_session', {
+                sessionId: sessionId
+            });
+        }
+
+    } catch (error) {
+        console.error('Error closing terminal:', error);
+    } finally {
+        // Clear session and hide modal
+        activeTerminalSession = null;
+        const terminalModal = document.getElementById('terminal-modal');
+        const terminalContainer = document.getElementById('terminal-container');
+        terminalModal.classList.add('hidden');
+        terminalContainer.innerHTML = '<!-- xterm.js terminal will be mounted here -->';
+    }
+}
+
+function clearTerminal() {
+    if (activeTerminalSession && activeTerminalSession.term) {
+        activeTerminalSession.term.clear();
+    }
 }
