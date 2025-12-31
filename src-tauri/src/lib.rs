@@ -748,6 +748,12 @@ impl Database {
         Ok(())
     }
 
+    fn remove_recent_connection(&self, profile_id: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM recent_connections WHERE profile_id = ?1", [profile_id])?;
+        Ok(())
+    }
+
     // User settings methods
     fn get_setting(&self, key: &str) -> SqlResult<Option<UserSetting>> {
         let conn = self.conn.lock().unwrap();
@@ -1489,6 +1495,12 @@ fn clear_recent_connections(db: State<Database>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn remove_recent_connection(db: State<Database>, profile_id: String) -> Result<(), String> {
+    db.remove_recent_connection(&profile_id)
+        .map_err(|e| format!("Failed to remove recent connection: {}", e))
+}
+
+#[tauri::command]
 fn get_setting(db: State<Database>, key: String) -> Result<Option<UserSetting>, String> {
     db.get_setting(&key)
         .map_err(|e| format!("Failed to get setting: {}", e))
@@ -2136,6 +2148,7 @@ pub fn run() {
             get_recent_connections,
             record_connection,
             clear_recent_connections,
+            remove_recent_connection,
             get_setting,
             save_setting,
             create_terminal_session,

@@ -78,6 +78,8 @@ let selectedGroupName = null; // Currently selected group header for keyboard na
 let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
 let activeNavigationSection = 'profiles'; // Current navigation section: 'recent', 'profiles'
 let activeTerminalSession = null; // Active embedded terminal session {sessionId, term, fitAddon, unlisten}
+let mouseHasMoved = false; // Track if mouse has actually moved (vs elements scrolling under stationary cursor)
+let lastHoveredProfileId = null; // Track last hovered profile to resume keyboard nav from that position
 let recentConnections = []; // Recent connections list
 
 // Utility: Debounce function to prevent rapid successive calls
@@ -379,6 +381,14 @@ function setupKeyboardShortcutListeners() {
     document.addEventListener('keydown', (e) => {
         if (!keyboardShortcutsEnabled) return;
 
+        // Check if filter popup is open
+        const filterPopupOpen = !filterPopup.classList.contains('hidden');
+        if (filterPopupOpen) {
+            // Handle filter popup keyboard navigation
+            const handled = handleFilterPopupKeyboard(e);
+            if (handled) return;
+        }
+
         // Detect if we're in an input field
         const inInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
         const inModal = !profileModal.classList.contains('hidden') ||
@@ -436,34 +446,208 @@ function handleGlobalShortcuts(e) {
     }
 }
 
-function handleModalShortcuts(e) {
-    // Tab - Special handling for confirm modal
-    if (e.key === 'Tab' && !confirmModal.classList.contains('hidden')) {
-        e.preventDefault();
-        const focusedElement = document.activeElement;
+// Get all tabbable items in Profile modal
+function getProfileModalTabbableItems() {
+    const items = [];
 
-        // If nothing is focused (mouse mode), focus cancel button as default
-        if (focusedElement !== confirmOkBtn && focusedElement !== confirmCancelBtn) {
-            confirmCancelBtn.focus();
+    // Form fields (in order)
+    const profileName = document.getElementById('profile-name');
+    if (profileName) items.push(profileName);
+
+    const profileDescription = document.getElementById('profile-description');
+    if (profileDescription) items.push(profileDescription);
+
+    const profileHost = document.getElementById('profile-host');
+    if (profileHost) items.push(profileHost);
+
+    const profilePort = document.getElementById('profile-port');
+    if (profilePort) items.push(profilePort);
+
+    const profileUsername = document.getElementById('profile-username');
+    if (profileUsername) items.push(profileUsername);
+
+    const profileAuthMethod = document.getElementById('profile-auth-method');
+    if (profileAuthMethod) items.push(profileAuthMethod);
+
+    // Conditionally visible fields
+    const keyPathGroup = document.getElementById('key-path-group');
+    if (keyPathGroup && !keyPathGroup.classList.contains('hidden')) {
+        const profileKeyPath = document.getElementById('profile-key-path');
+        if (profileKeyPath) items.push(profileKeyPath);
+
+        const browseKeyBtn = document.getElementById('browse-key-btn');
+        if (browseKeyBtn) items.push(browseKeyBtn);
+    }
+
+    const passwordGroup = document.getElementById('password-group');
+    if (passwordGroup && !passwordGroup.classList.contains('hidden')) {
+        const profilePassword = document.getElementById('profile-password');
+        if (profilePassword) items.push(profilePassword);
+    }
+
+    const profileGroup = document.getElementById('profile-group');
+    if (profileGroup) items.push(profileGroup);
+
+    // Header buttons (Save/Close/Delete at the end)
+    const deleteBtn = document.getElementById('delete-profile-btn');
+    if (deleteBtn && !deleteBtn.classList.contains('hidden') && !deleteBtn.disabled) {
+        items.push(deleteBtn);
+    }
+
+    const saveBtn = document.getElementById('profile-save-btn');
+    if (saveBtn && !saveBtn.disabled) items.push(saveBtn);
+
+    const closeBtn = document.getElementById('profile-close-btn');
+    if (closeBtn && !closeBtn.disabled) items.push(closeBtn);
+
+    return items;
+}
+
+// Get all tabbable items in Settings modal
+function getSettingsModalTabbableItems() {
+    const items = [];
+
+    // Theme settings
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) items.push(themeSelect);
+
+    // Keyboard shortcuts
+    const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    if (keyboardShortcutsCheck) items.push(keyboardShortcutsCheck);
+
+    const shortcutsHelpBtn = document.getElementById('shortcuts-help-btn');
+    if (shortcutsHelpBtn) items.push(shortcutsHelpBtn);
+
+    // Recent connections
+    const recentConnectionsLimit = document.getElementById('recent-connections-limit');
+    if (recentConnectionsLimit) items.push(recentConnectionsLimit);
+
+    // Terminal settings
+    const terminalSelect = document.getElementById('terminal-select');
+    if (terminalSelect) items.push(terminalSelect);
+
+    const customTerminalGroup = document.getElementById('custom-terminal-group');
+    if (customTerminalGroup && !customTerminalGroup.classList.contains('hidden')) {
+        const customTerminalPath = document.getElementById('custom-terminal-path');
+        if (customTerminalPath) items.push(customTerminalPath);
+
+        const browseTerminalBtn = document.getElementById('browse-terminal-btn');
+        if (browseTerminalBtn) items.push(browseTerminalBtn);
+    }
+
+    // Profile management buttons
+    const exportProfilesBtn = document.getElementById('export-profiles-btn');
+    if (exportProfilesBtn) items.push(exportProfilesBtn);
+
+    const importProfilesBtn = document.getElementById('import-profiles-btn');
+    if (importProfilesBtn) items.push(importProfilesBtn);
+
+    const deleteAllProfilesBtn = document.getElementById('delete-all-profiles-btn');
+    if (deleteAllProfilesBtn) items.push(deleteAllProfilesBtn);
+
+    // Settings management
+    const includeProfilesCheck = document.getElementById('include-profiles-check');
+    if (includeProfilesCheck) items.push(includeProfilesCheck);
+
+    const backupSettingsBtn = document.getElementById('backup-settings-btn');
+    if (backupSettingsBtn) items.push(backupSettingsBtn);
+
+    const restoreSettingsBtn = document.getElementById('restore-settings-btn');
+    if (restoreSettingsBtn) items.push(restoreSettingsBtn);
+
+    const resetSettingsBtn = document.getElementById('reset-settings-btn');
+    if (resetSettingsBtn) items.push(resetSettingsBtn);
+
+    // Updates
+    const autoUpdateCheck = document.getElementById('auto-update-check');
+    if (autoUpdateCheck) items.push(autoUpdateCheck);
+
+    const checkUpdatesBtn = document.getElementById('check-updates-btn');
+    if (checkUpdatesBtn) items.push(checkUpdatesBtn);
+
+    // Header buttons (Save/Close at the end)
+    const saveBtn = document.getElementById('settings-save-btn');
+    if (saveBtn && !saveBtn.disabled) items.push(saveBtn);
+
+    const closeBtn = document.getElementById('settings-close-btn');
+    if (closeBtn && !closeBtn.disabled) items.push(closeBtn);
+
+    return items;
+}
+
+async function handleModalShortcuts(e) {
+    // Tab - Special handling for all modals
+    if (e.key === 'Tab') {
+        // Confirm modal
+        if (!confirmModal.classList.contains('hidden')) {
+            e.preventDefault();
+            const focusedElement = document.activeElement;
+
+            // If nothing is focused (mouse mode), focus cancel button as default
+            if (focusedElement !== confirmOkBtn && focusedElement !== confirmCancelBtn) {
+                confirmCancelBtn.focus();
+                return;
+            }
+
+            if (e.shiftKey) {
+                // Shift+Tab - Cycle backwards
+                if (focusedElement === confirmCancelBtn) {
+                    confirmOkBtn.focus();
+                } else {
+                    confirmCancelBtn.focus();
+                }
+            } else {
+                // Tab - Cycle forwards
+                if (focusedElement === confirmOkBtn) {
+                    confirmCancelBtn.focus();
+                } else {
+                    confirmOkBtn.focus();
+                }
+            }
             return;
         }
 
-        if (e.shiftKey) {
-            // Shift+Tab - Cycle backwards
-            if (focusedElement === confirmCancelBtn) {
-                confirmOkBtn.focus();
-            } else {
-                confirmCancelBtn.focus();
+        // Profile modal
+        if (!profileModal.classList.contains('hidden')) {
+            e.preventDefault();
+            const items = getProfileModalTabbableItems();
+            if (items.length > 0) {
+                const currentIndex = items.indexOf(document.activeElement);
+                let nextIndex;
+
+                if (e.shiftKey) {
+                    // Shift+Tab - backwards
+                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                } else {
+                    // Tab - forwards
+                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                }
+
+                items[nextIndex].focus();
             }
-        } else {
-            // Tab - Cycle forwards
-            if (focusedElement === confirmOkBtn) {
-                confirmCancelBtn.focus();
-            } else {
-                confirmOkBtn.focus();
-            }
+            return;
         }
-        return;
+
+        // Settings modal
+        if (!settingsModal.classList.contains('hidden')) {
+            e.preventDefault();
+            const items = getSettingsModalTabbableItems();
+            if (items.length > 0) {
+                const currentIndex = items.indexOf(document.activeElement);
+                let nextIndex;
+
+                if (e.shiftKey) {
+                    // Shift+Tab - backwards
+                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                } else {
+                    // Tab - forwards
+                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                }
+
+                items[nextIndex].focus();
+            }
+            return;
+        }
     }
 
     // Escape - Close modal or cancel
@@ -495,7 +679,7 @@ function handleModalShortcuts(e) {
 
         // Close profile modal
         if (!profileModal.classList.contains('hidden')) {
-            cancelProfile();
+            await closeModal();
             return;
         }
     }
@@ -517,11 +701,56 @@ function handleModalShortcuts(e) {
             return;
         }
     }
+
+    // Enter - Activate buttons
+    if (e.key === 'Enter') {
+        const activeElement = document.activeElement;
+
+        // Only handle if it's a button (not input fields which handle Enter naturally)
+        if (activeElement && activeElement.tagName === 'BUTTON') {
+            e.preventDefault();
+            activeElement.click();
+            return;
+        }
+    }
+
+    // Space - Activate buttons and toggle checkboxes
+    if (e.key === ' ') {
+        const activeElement = document.activeElement;
+
+        // Handle buttons
+        if (activeElement && activeElement.tagName === 'BUTTON') {
+            e.preventDefault();
+            activeElement.click();
+            return;
+        }
+
+        // Handle checkboxes
+        if (activeElement && activeElement.tagName === 'INPUT' && activeElement.type === 'checkbox') {
+            // Let default behavior handle the toggle
+            return;
+        }
+    }
+
+    // Arrow keys - Navigate dropdowns
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const activeElement = document.activeElement;
+
+        // Handle select dropdowns
+        if (activeElement && activeElement.tagName === 'SELECT') {
+            // Let the browser handle default dropdown navigation
+            return;
+        }
+    }
 }
 
 function handleProfileNavigation(e) {
     const visibleProfiles = getVisibleProfiles();
     const visibleRecentConnections = getVisibleRecentConnections();
+
+    // Reset mouse movement flag when using keyboard navigation
+    // This prevents mouseenter events from interfering when elements scroll under cursor
+    mouseHasMoved = false;
 
     // Tab - Cycle through sections
     if (e.key === 'Tab') {
@@ -542,47 +771,37 @@ function handleProfileNavigation(e) {
 function getAllTabbableItems() {
     const items = [];
 
-    // 1. Search bar
+    // 1. New Profile button
+    const newProfileBtn = document.getElementById('new-profile-btn');
+    if (newProfileBtn) {
+        items.push({ type: 'button', element: newProfileBtn, id: 'new-profile-btn' });
+    }
+
+    // 2. Settings button
+    const settingsBtn = document.getElementById('settings-btn');
+    if (settingsBtn) {
+        items.push({ type: 'button', element: settingsBtn, id: 'settings-btn' });
+    }
+
+    // 3. Search bar
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         items.push({ type: 'input', element: searchInput, id: 'search-input' });
     }
 
-    // 2. Expand/Collapse groups button (comes before filter in DOM)
+    // 4. Expand/Collapse groups button (comes before filter in DOM)
     const expandCollapseBtn = document.getElementById('expand-collapse-btn');
     if (expandCollapseBtn) {
         items.push({ type: 'button', element: expandCollapseBtn, id: 'expand-collapse-btn' });
     }
 
-    // 3. Filter button
+    // 5. Filter button
     const filterBtn = document.getElementById('filter-btn');
     if (filterBtn) {
         items.push({ type: 'button', element: filterBtn, id: 'filter-btn' });
     }
 
-    // 4. Toggle recent button
-    const toggleBtn = document.getElementById('toggle-recent-btn');
-    if (toggleBtn) {
-        items.push({ type: 'button', element: toggleBtn, id: 'toggle-recent-btn' });
-    }
-
-    // 5. Clear button
-    const clearBtn = document.getElementById('clear-recent-btn');
-    if (clearBtn) {
-        items.push({ type: 'button', element: clearBtn, id: 'clear-recent-btn' });
-    }
-
-    // 6. Recent connections (first one)
-    const recentConnections = getVisibleRecentConnections();
-    if (recentConnections.length > 0) {
-        items.push({
-            type: 'recent',
-            element: recentConnections[0],
-            profileId: recentConnections[0].dataset.profileId
-        });
-    }
-
-    // 7. All group headers
+    // 6. All group headers (from profiles list - now comes before recent connections)
     const groupHeaders = document.querySelectorAll('.profile-group-header');
     groupHeaders.forEach(header => {
         items.push({
@@ -591,6 +810,28 @@ function getAllTabbableItems() {
             name: header.dataset.group
         });
     });
+
+    // 7. Toggle recent button
+    const toggleBtn = document.getElementById('toggle-recent-btn');
+    if (toggleBtn) {
+        items.push({ type: 'button', element: toggleBtn, id: 'toggle-recent-btn' });
+    }
+
+    // 8. Clear button
+    const clearBtn = document.getElementById('clear-recent-btn');
+    if (clearBtn) {
+        items.push({ type: 'button', element: clearBtn, id: 'clear-recent-btn' });
+    }
+
+    // 9. Recent connections (first one)
+    const recentConnections = getVisibleRecentConnections();
+    if (recentConnections.length > 0) {
+        items.push({
+            type: 'recent',
+            element: recentConnections[0],
+            profileId: recentConnections[0].dataset.profileId
+        });
+    }
 
     return items;
 }
@@ -604,13 +845,19 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
     const activeElement = document.activeElement;
 
     // Check if any focusable element is currently focused
+    const newProfileBtn = document.getElementById('new-profile-btn');
+    const settingsBtn = document.getElementById('settings-btn');
     const searchInput = document.getElementById('search-input');
     const filterBtn = document.getElementById('filter-btn');
     const expandCollapseBtn = document.getElementById('expand-collapse-btn');
     const toggleBtn = document.getElementById('toggle-recent-btn');
     const clearBtn = document.getElementById('clear-recent-btn');
 
-    if (activeElement === searchInput) {
+    if (activeElement === newProfileBtn) {
+        currentIndex = items.findIndex(item => item.id === 'new-profile-btn');
+    } else if (activeElement === settingsBtn) {
+        currentIndex = items.findIndex(item => item.id === 'settings-btn');
+    } else if (activeElement === searchInput) {
         currentIndex = items.findIndex(item => item.id === 'search-input');
     } else if (activeElement === filterBtn) {
         currentIndex = items.findIndex(item => item.id === 'filter-btn');
@@ -725,21 +972,28 @@ function handleRecentConnectionsNavigation(e, visibleRecentConnections) {
         return;
     }
 
-    // C - Clear recent connections
+    // C - Clear ALL recent connections
     if (e.key === 'c' || e.key === 'C') {
         e.preventDefault();
         clearRecentConnections();
         return;
     }
 
-    // Delete/Backspace - Clear recent connections
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (visibleRecentConnections.length === 0) return;
+
+    // D - Delete selected recent connection (individual)
+    if ((e.key === 'd' || e.key === 'D') && selectedRecentConnectionId) {
         e.preventDefault();
-        clearRecentConnections();
+        removeRecentConnection(selectedRecentConnectionId);
         return;
     }
 
-    if (visibleRecentConnections.length === 0) return;
+    // Delete/Backspace - Delete selected recent connection (individual)
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRecentConnectionId) {
+        e.preventDefault();
+        removeRecentConnection(selectedRecentConnectionId);
+        return;
+    }
 
     // Arrow Left/Right - Navigate recent connections
     if (e.key === 'ArrowLeft') {
@@ -793,29 +1047,81 @@ function handleProfilesNavigation(e, visibleProfiles) {
             return;
         }
 
-        // Arrow Down - Move to next item (group or profile)
+        // Arrow Down - Navigate to first profile in this group
         if (e.key === 'ArrowDown') {
             e.preventDefault();
+            // Find the first profile in the currently selected group
+            const groupHeader = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+            if (groupHeader) {
+                const group = groupHeader.closest('.profile-group');
+                const groupContent = group.querySelector('.profile-group-content');
+
+                // Only navigate into group if it's expanded
+                if (!groupContent.classList.contains('collapsed')) {
+                    const firstProfile = group.querySelector('.profile-card');
+                    if (firstProfile) {
+                        // Clear group selection
+                        selectedGroupName = null;
+                        groupHeader.classList.remove('selected');
+                        // Select first profile in group
+                        selectProfile(firstProfile.dataset.id);
+                        firstProfile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        return;
+                    }
+                }
+            }
+            // If group is collapsed or no profiles, just clear group selection and navigate
+            selectedGroupName = null;
+            const prevHeader = document.querySelector('.profile-group-header.selected');
+            if (prevHeader) {
+                prevHeader.classList.remove('selected');
+            }
             selectNextItem(visibleGroups, visibleProfiles);
             return;
         }
 
-        // Arrow Up - Move to previous item (group or profile)
         if (e.key === 'ArrowUp') {
             e.preventDefault();
+            // Navigate to last profile in previous group
+            const items = getNavigableItems();
+            const currentGroupIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
+
+            if (currentGroupIndex > 0) {
+                // Find previous profiles (going backwards from current group)
+                for (let i = currentGroupIndex - 1; i >= 0; i--) {
+                    if (items[i].type === 'profile') {
+                        // Found a profile, select it
+                        selectedGroupName = null;
+                        const prevHeader = document.querySelector('.profile-group-header.selected');
+                        if (prevHeader) {
+                            prevHeader.classList.remove('selected');
+                        }
+                        selectProfile(items[i].id);
+                        items[i].element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        return;
+                    }
+                }
+            }
+
+            // If no profile found above, wrap to last profile overall
+            selectedGroupName = null;
+            const prevHeader = document.querySelector('.profile-group-header.selected');
+            if (prevHeader) {
+                prevHeader.classList.remove('selected');
+            }
             selectPreviousItem(visibleGroups, visibleProfiles);
             return;
         }
     } else {
-        // We're on a profile, handle profile-specific keys
-        // Arrow Down - Select next item
+        // We're on a profile (or starting navigation), handle profile-specific keys
+        // Arrow Down - Select next profile
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             selectNextItem(visibleGroups, visibleProfiles);
             return;
         }
 
-        // Arrow Up - Select previous item
+        // Arrow Up - Select previous profile
         if (e.key === 'ArrowUp') {
             e.preventDefault();
             selectPreviousItem(visibleGroups, visibleProfiles);
@@ -890,55 +1196,47 @@ function getNavigableItems() {
 }
 
 function selectNextItem(visibleGroups, visibleProfiles) {
-    const items = getNavigableItems();
-    if (items.length === 0) return;
+    // Only navigate through profiles, not group headers
+    if (visibleProfiles.length === 0) return;
 
     let currentIndex = -1;
 
-    // Find current selection
-    if (selectedGroupName) {
-        currentIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
-    } else if (selectedProfileId) {
-        currentIndex = items.findIndex(item => item.type === 'profile' && item.id === selectedProfileId);
+    // Find current selection (only look at profiles)
+    if (selectedProfileId) {
+        currentIndex = visibleProfiles.findIndex(profile => profile.dataset.id === selectedProfileId);
+    } else if (lastHoveredProfileId) {
+        // Start from last hovered profile if no selection exists
+        currentIndex = visibleProfiles.findIndex(profile => profile.dataset.id === lastHoveredProfileId);
     }
 
-    // Move to next item
-    const nextIndex = (currentIndex + 1) % items.length;
-    const nextItem = items[nextIndex];
+    // Move to next profile
+    const nextIndex = (currentIndex + 1) % visibleProfiles.length;
+    const nextProfile = visibleProfiles[nextIndex];
 
-    if (nextItem.type === 'group') {
-        selectGroup(nextItem.name);
-    } else {
-        selectProfile(nextItem.id);
-    }
-
-    nextItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    selectProfile(nextProfile.dataset.id);
+    nextProfile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function selectPreviousItem(visibleGroups, visibleProfiles) {
-    const items = getNavigableItems();
-    if (items.length === 0) return;
+    // Only navigate through profiles, not group headers
+    if (visibleProfiles.length === 0) return;
 
     let currentIndex = -1;
 
-    // Find current selection
-    if (selectedGroupName) {
-        currentIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
-    } else if (selectedProfileId) {
-        currentIndex = items.findIndex(item => item.type === 'profile' && item.id === selectedProfileId);
+    // Find current selection (only look at profiles)
+    if (selectedProfileId) {
+        currentIndex = visibleProfiles.findIndex(profile => profile.dataset.id === selectedProfileId);
+    } else if (lastHoveredProfileId) {
+        // Start from last hovered profile if no selection exists
+        currentIndex = visibleProfiles.findIndex(profile => profile.dataset.id === lastHoveredProfileId);
     }
 
-    // Move to previous item
-    const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-    const prevItem = items[prevIndex];
+    // Move to previous profile
+    const prevIndex = currentIndex <= 0 ? visibleProfiles.length - 1 : currentIndex - 1;
+    const prevProfile = visibleProfiles[prevIndex];
 
-    if (prevItem.type === 'group') {
-        selectGroup(prevItem.name);
-    } else {
-        selectProfile(prevItem.id);
-    }
-
-    prevItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    selectProfile(prevProfile.dataset.id);
+    prevProfile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function selectGroup(groupName) {
@@ -1101,11 +1399,11 @@ function showKeyboardShortcutsHelp() {
             { keys: '↑', action: 'Collapse Section' },
             { keys: '↓', action: 'Expand Section' },
             { keys: 'Enter', action: 'Connect to Selected' },
-            { keys: 'C', action: 'Clear Recent Connections' },
-            { keys: 'Backspace / Delete', action: 'Clear Recent Connections' },
+            { keys: 'D', action: 'Delete Selected Connection' },
+            { keys: 'C', action: 'Clear All Recent Connections' },
         ]},
         { category: 'Profile List', items: [
-            { keys: '↑ / ↓', action: 'Navigate Groups & Profiles' },
+            { keys: '↑ / ↓', action: 'Navigate Profiles' },
             { keys: 'Enter', action: 'Connect (Profile) / Toggle (Group)' },
             { keys: '← / →', action: 'Collapse / Expand Group' },
             { keys: 'E', action: 'Edit Selected Profile' },
@@ -1248,6 +1546,11 @@ async function init() {
     await setupWindowListeners();
     setupEventListeners();
     setupKeyboardShortcutListeners();
+
+    // Track actual mouse movement to distinguish from elements scrolling under cursor
+    document.addEventListener('mousemove', () => {
+        mouseHasMoved = true;
+    });
 
     // Check for updates on launch if enabled
     if (autoUpdateCheck.checked) {
@@ -1432,9 +1735,20 @@ function renderRecentConnections() {
         time.className = 'recent-connection-time';
         time.textContent = formatTimeAgo(recent.connected_at);
 
+        // Delete button (X)
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'recent-connection-delete';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.title = 'Remove from recent connections';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering reconnect
+            removeRecentConnection(recent.profile_id);
+        });
+
         item.appendChild(name);
         item.appendChild(host);
         item.appendChild(time);
+        item.appendChild(deleteBtn);
 
         // Click to reconnect
         item.addEventListener('click', () => {
@@ -1481,6 +1795,28 @@ function formatTimeAgo(timestamp) {
     } catch (error) {
         console.error('Error formatting time ago:', error);
         return 'recently';
+    }
+}
+
+// Remove individual recent connection
+async function removeRecentConnection(profileId) {
+    try {
+        await invoke('remove_recent_connection', { profileId });
+
+        // Remove from local array
+        recentConnections = recentConnections.filter(rc => rc.profile_id !== profileId);
+
+        // Clear selection if the deleted item was selected
+        if (selectedRecentConnectionId === profileId) {
+            selectedRecentConnectionId = null;
+        }
+
+        // Re-render
+        renderRecentConnections();
+        showToast('Removed from recent connections', TOAST_DURATION_SHORT);
+    } catch (error) {
+        console.error('Failed to remove recent connection:', error);
+        showToast('Failed to remove recent connection: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -1679,6 +2015,9 @@ function renderProfiles(filter = '') {
 
         // Clear keyboard selection when hovering with mouse
         header.addEventListener('mouseenter', (e) => {
+            // Only clear keyboard selection if mouse has actually moved
+            if (!mouseHasMoved) return;
+
             if (selectedGroupName) {
                 const previouslySelected = document.querySelector('.profile-group-header.selected');
                 if (previouslySelected) {
@@ -1692,6 +2031,13 @@ function renderProfiles(filter = '') {
     // Attach event listeners to profile cards to clear keyboard selection on hover
     document.querySelectorAll('.profile-card').forEach(card => {
         card.addEventListener('mouseenter', (e) => {
+            // Only clear keyboard selection if mouse has actually moved
+            // (ignore events from elements scrolling under stationary cursor)
+            if (!mouseHasMoved) return;
+
+            // Track last hovered profile for keyboard navigation starting point
+            lastHoveredProfileId = card.dataset.id;
+
             // Clear keyboard selection when hovering with mouse
             if (selectedProfileId) {
                 const previouslySelected = document.querySelector('.profile-card.selected');
@@ -2085,14 +2431,33 @@ function setupEventListeners() {
         }
     });
 
-    // Close filter popup when focus leaves the button (e.g., tabbing away)
-    filterBtn.addEventListener('blur', () => {
-        // Small delay to allow click events to process first
+    // Close filter popup when focus leaves the button and popup area
+    filterBtn.addEventListener('blur', (e) => {
+        // Small delay to allow focus to shift and check new focus target
         setTimeout(() => {
-            if (!filterPopup.classList.contains('hidden')) {
+            const activeElement = document.activeElement;
+            const isInPopup = filterPopup.contains(activeElement);
+            const isFilterBtn = activeElement === filterBtn;
+
+            // Only close if focus moved outside both button and popup
+            if (!isInPopup && !isFilterBtn && !filterPopup.classList.contains('hidden')) {
                 filterPopup.classList.add('hidden');
             }
         }, 100);
+    });
+
+    // Also close popup when focus leaves any popup item
+    document.addEventListener('focusin', (e) => {
+        if (filterPopup.classList.contains('hidden')) return;
+
+        const activeElement = document.activeElement;
+        const isInPopup = filterPopup.contains(activeElement);
+        const isFilterBtn = activeElement === filterBtn;
+
+        // Close if focus moved outside both button and popup
+        if (!isInPopup && !isFilterBtn) {
+            filterPopup.classList.add('hidden');
+        }
     });
 
     clearFiltersBtn.addEventListener('click', () => {
@@ -2353,6 +2718,14 @@ function openSettings() {
     // Capture original settings values and disable Save button initially
     captureSettingsValues();
     settingsSaveBtn.disabled = true;
+
+    // Focus first field for keyboard navigation
+    setTimeout(() => {
+        const firstField = document.getElementById('theme-select');
+        if (firstField) {
+            firstField.focus();
+        }
+    }, 0);
 }
 
 // Force close settings without confirmation
@@ -2656,6 +3029,7 @@ function buildFilterGroupsList() {
                     <input type="checkbox"
                            class="filter-group-checkbox"
                            data-group="${escapeHtml(groupName)}"
+                           tabindex="0"
                            ${isChecked ? 'checked' : ''}>
                     <span class="filter-group-name">${escapeHtml(groupName)}</span>
                 </label>
@@ -2708,6 +3082,14 @@ function toggleFilterPopup() {
         filterPopup.style.top = `${topOffset}px`;
 
         filterPopup.classList.remove('hidden');
+
+        // Focus the first item (Clear All button) when opening
+        setTimeout(() => {
+            const items = getFilterPopupItems();
+            if (items.length > 0) {
+                items[0].focus();
+            }
+        }, 0);
     } else {
         filterPopup.classList.add('hidden');
     }
@@ -2718,6 +3100,109 @@ function clearGroupFilters() {
     saveFilterState();
     buildFilterGroupsList();
     renderProfiles(searchInput.value);
+}
+
+// Get all focusable items in the filter popup
+function getFilterPopupItems() {
+    const items = [];
+
+    // Add Clear All button first
+    if (clearFiltersBtn) {
+        items.push(clearFiltersBtn);
+    }
+
+    // Add all checkboxes
+    const checkboxes = document.querySelectorAll('.filter-group-checkbox');
+    checkboxes.forEach(checkbox => {
+        items.push(checkbox);
+    });
+
+    return items;
+}
+
+// Handle keyboard navigation in filter popup
+function handleFilterPopupKeyboard(e) {
+    const items = getFilterPopupItems();
+    if (items.length === 0) return false;
+
+    const currentIndex = items.indexOf(document.activeElement);
+
+    // Arrow keys - navigate through items
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentIndex < items.length - 1) {
+            items[currentIndex + 1].focus();
+        } else {
+            // Wrap to first item
+            items[0].focus();
+        }
+        return true;
+    }
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+            items[currentIndex - 1].focus();
+        } else {
+            // Wrap to last item
+            items[items.length - 1].focus();
+        }
+        return true;
+    }
+
+    // Enter key
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const focused = document.activeElement;
+
+        // If it's the Clear All button, click it
+        if (focused === clearFiltersBtn) {
+            clearFiltersBtn.click();
+            return true;
+        }
+
+        // If it's a checkbox, toggle it
+        if (focused.classList.contains('filter-group-checkbox')) {
+            focused.checked = !focused.checked;
+            focused.dispatchEvent(new Event('change'));
+            return true;
+        }
+
+        return true;
+    }
+
+    // Space key - toggle checkboxes only (not Clear All button)
+    if (e.key === ' ') {
+        e.preventDefault();
+        const focused = document.activeElement;
+
+        // Only toggle if it's a checkbox (not the Clear All button)
+        if (focused.classList.contains('filter-group-checkbox')) {
+            focused.checked = !focused.checked;
+            focused.dispatchEvent(new Event('change'));
+            return true;
+        }
+
+        return false;
+    }
+
+    // Tab key - close popup and return focus to filter button
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        filterPopup.classList.add('hidden');
+        filterBtn.focus();
+        return true;
+    }
+
+    // Escape key - close popup and refocus filter button
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        filterPopup.classList.add('hidden');
+        filterBtn.focus();
+        return true;
+    }
+
+    return false;
 }
 
 // Window state functions
@@ -3651,6 +4136,14 @@ function openModal(profile = null) {
     } else {
         profileSaveBtn.disabled = false;
     }
+
+    // Focus first field for keyboard navigation
+    setTimeout(() => {
+        const firstField = document.getElementById('profile-name');
+        if (firstField) {
+            firstField.focus();
+        }
+    }, 0);
 }
 
 // Get current form values as an object
