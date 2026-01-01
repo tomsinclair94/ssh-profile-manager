@@ -210,6 +210,27 @@ function validateField(fieldId, value) {
     }
 }
 
+// Clear all validation errors from form fields
+function clearAllValidationErrors() {
+    const formFields = [
+        'profile-name',
+        'profile-description',
+        'profile-host',
+        'profile-port',
+        'profile-username',
+        'profile-key-path',
+        'profile-password',
+        'profile-group'
+    ];
+
+    formFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.classList.remove('validation-error');
+        }
+    });
+}
+
 // Real-time validation (on input)
 function handleRealtimeValidation(fieldId, value) {
     const field = document.getElementById(fieldId);
@@ -377,6 +398,21 @@ function loadKeyboardShortcuts() {
     keyboardShortcutsEnabled = stored === null ? true : stored === 'true';
 }
 
+function loadKeyboardShortcutsCheckbox() {
+    const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    if (keyboardShortcutsCheck) {
+        keyboardShortcutsCheck.checked = keyboardShortcutsEnabled;
+    }
+}
+
+function saveKeyboardShortcutsPreference() {
+    const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    if (keyboardShortcutsCheck) {
+        keyboardShortcutsEnabled = keyboardShortcutsCheck.checked;
+        localStorage.setItem('keyboardShortcutsEnabled', keyboardShortcutsEnabled);
+    }
+}
+
 function setupKeyboardShortcutListeners() {
     document.addEventListener('keydown', (e) => {
         if (!keyboardShortcutsEnabled) return;
@@ -442,6 +478,20 @@ function handleGlobalShortcuts(e) {
     if (e.key === '?' || (e.shiftKey && e.key === '/')) {
         e.preventDefault();
         showKeyboardShortcutsHelp();
+        return;
+    }
+
+    // N - New Profile (single key)
+    if ((e.key === 'n' || e.key === 'N') && !cmdOrCtrl) {
+        e.preventDefault();
+        openModal();
+        return;
+    }
+
+    // S - Open Settings (single key)
+    if ((e.key === 's' || e.key === 'S') && !cmdOrCtrl) {
+        e.preventDefault();
+        openSettings();
         return;
     }
 }
@@ -1384,9 +1434,9 @@ function showKeyboardShortcutsHelp() {
 
     const shortcuts = [
         { category: 'Global', items: [
-            { keys: `${modKey}+N`, action: 'New Profile' },
+            { keys: 'N', action: 'New Profile' },
+            { keys: 'S', action: 'Open Settings' },
             { keys: `${modKey}+F or /`, action: 'Focus Search' },
-            { keys: `${modKey}+,`, action: 'Open Settings' },
             { keys: '?', action: 'Show This Help' },
         ]},
         { category: 'Navigation', items: [
@@ -2357,8 +2407,7 @@ function setupEventListeners() {
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     if (keyboardShortcutsCheck) {
         keyboardShortcutsCheck.addEventListener('change', () => {
-            keyboardShortcutsEnabled = keyboardShortcutsCheck.checked;
-            localStorage.setItem('keyboardShortcutsEnabled', keyboardShortcutsEnabled);
+            // Don't save immediately - just track changes for Save button
             debouncedCheckSettingsChanged();
         });
     }
@@ -2672,13 +2721,15 @@ function updateAuthMethodVisibility() {
 // Get current settings values from localStorage and DOM
 function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
+    const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     return {
         theme: themeSelect.value,
         autoUpdateCheck: autoUpdateCheck.checked,
         terminalPreference: terminalSelect.value,
         customTerminalPath: customTerminalPath.value,
         includeProfiles: includeProfilesCheck.checked,
-        recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5'
+        recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
+        keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true
     };
 }
 
@@ -2712,8 +2763,9 @@ function openSettings() {
         modalContent.scrollTop = 0;
     }
 
-    // Load current recent connections limit into input
+    // Load current settings values into form
     loadRecentConnectionsLimit();
+    loadKeyboardShortcutsCheckbox();
 
     // Capture original settings values and disable Save button initially
     captureSettingsValues();
@@ -2799,6 +2851,14 @@ function revertSettingsUI() {
             : 5;
     }
 
+    // Validate keyboard shortcuts enabled - boolean with safe default
+    const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    if (keyboardShortcutsCheck) {
+        keyboardShortcutsCheck.checked = typeof originalSettingsValues.keyboardShortcutsEnabled === 'boolean'
+            ? originalSettingsValues.keyboardShortcutsEnabled
+            : true;
+    }
+
     updateTerminalVisibility();
 }
 
@@ -2818,6 +2878,9 @@ function saveSettings() {
 
     // Save recent connections limit
     saveRecentConnectionsLimit();
+
+    // Save keyboard shortcuts preference
+    saveKeyboardShortcutsPreference();
 
     // Reload recent connections with new limit
     loadRecentConnections();
@@ -4096,6 +4159,9 @@ function openModal(profile = null) {
     console.log('openModal called with profile:', profile);
     editingProfileId = profile ? profile.id : null;
 
+    // Clear any validation errors from previous modal sessions
+    clearAllValidationErrors();
+
     if (profile) {
         modalTitle.textContent = 'Edit Profile';
         document.getElementById('profile-name').value = profile.name;
@@ -4129,12 +4195,12 @@ function openModal(profile = null) {
 
     // Capture original form values and reset Save button state
     captureFormValues();
-    // For new profiles, enable Save button immediately
+    // For new profiles, disable Save until required fields are populated
     // For editing, disable until changes are made
     if (profile) {
         profileSaveBtn.disabled = true;
     } else {
-        profileSaveBtn.disabled = false;
+        profileSaveBtn.disabled = true; // Will be enabled when required fields populated
     }
 
     // Focus first field for keyboard navigation
@@ -4167,13 +4233,25 @@ function captureFormValues() {
 }
 
 // Check if form has changed from original values
+// Check if all required fields are populated
+function areRequiredFieldsPopulated() {
+    const name = document.getElementById('profile-name').value.trim();
+    const host = document.getElementById('profile-host').value.trim();
+    const username = document.getElementById('profile-username').value.trim();
+    return name && host && username;
+}
+
 function checkFormChanged() {
-    // If creating a new profile, always keep Save button enabled
+    // Check if required fields are populated (for both new and edit)
+    const requiredFieldsPopulated = areRequiredFieldsPopulated();
+
+    // If creating a new profile, enable Save only when required fields are populated
     if (!editingProfileId) {
-        profileSaveBtn.disabled = false;
+        profileSaveBtn.disabled = !requiredFieldsPopulated;
         return;
     }
 
+    // For editing: check both required fields AND changes
     // Compare current values with original values
     const currentValues = getCurrentFormValues();
 
@@ -4182,7 +4260,8 @@ function checkFormChanged() {
         currentValues[key] !== originalFormValues[key]
     );
 
-    profileSaveBtn.disabled = !hasChanged;
+    // Enable Save only if required fields are populated AND something changed
+    profileSaveBtn.disabled = !requiredFieldsPopulated || !hasChanged;
 }
 
 // Check if there are unsaved profile changes
@@ -4567,9 +4646,20 @@ async function openEmbeddedTerminal(profileId) {
             rows: rows
         });
 
-        // Update status to connected
-        terminalStatus.textContent = 'Connected';
-        terminalStatus.className = 'terminal-status connected';
+        // Keep status as "Connecting..." - will update based on terminal output
+        let connectionStatus = 'connecting'; // Track status: 'connecting', 'connected', 'failed'
+
+        // SSH error patterns that indicate connection failure
+        const sshErrorPatterns = [
+            /Connection refused/i,
+            /Network is unreachable/i,
+            /No route to host/i,
+            /Host key verification failed/i,
+            /Permission denied/i,
+            /Could not resolve hostname/i,
+            /Connection timed out/i,
+            /ssh: connect to host .* port \d+: /i
+        ];
 
         // Listen for terminal output events
         const unlisten = await window.__TAURI__.event.listen(
@@ -4578,6 +4668,41 @@ async function openEmbeddedTerminal(profileId) {
                 // Convert Vec<u8> to Uint8Array and write to terminal
                 const data = new Uint8Array(event.payload);
                 term.write(data);
+
+                // Monitor connection status
+                if (connectionStatus === 'connecting') {
+                    const output = new TextDecoder().decode(data);
+
+                    // Check for SSH errors
+                    const hasError = sshErrorPatterns.some(pattern => pattern.test(output));
+                    if (hasError) {
+                        connectionStatus = 'failed';
+                        terminalStatus.textContent = 'Connection Failed';
+                        terminalStatus.className = 'terminal-status failed';
+                        // Update session status
+                        if (activeTerminalSession) {
+                            activeTerminalSession.connectionStatus = 'failed';
+                        }
+                    }
+                    // Check for successful connection indicators
+                    // (password prompt, shell prompt, welcome message, etc.)
+                    else if (
+                        output.includes('password:') ||
+                        output.includes('Password:') ||
+                        output.includes('Welcome') ||
+                        output.includes('Last login') ||
+                        output.match(/[$#>]\s*$/) || // Shell prompt
+                        output.match(/\w+@\w+[:#$]/) // user@host prompt
+                    ) {
+                        connectionStatus = 'connected';
+                        terminalStatus.textContent = 'Connected';
+                        terminalStatus.className = 'terminal-status connected';
+                        // Update session status
+                        if (activeTerminalSession) {
+                            activeTerminalSession.connectionStatus = 'connected';
+                        }
+                    }
+                }
             }
         );
 
@@ -4594,7 +4719,8 @@ async function openEmbeddedTerminal(profileId) {
         // Handle terminal resize
         let resizeTimeout;
         term.onResize(({ cols, rows }) => {
-            // Debounce resize events
+            // PERFORMANCE FIX: Debounce resize events with 250ms delay
+            // Prevents race conditions between resize and I/O operations
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 invoke('resize_terminal', {
@@ -4604,7 +4730,7 @@ async function openEmbeddedTerminal(profileId) {
                 }).catch(err => {
                     console.error('Failed to resize terminal:', err);
                 });
-            }, 100);
+            }, 250);
         });
 
         // Handle window resize with debounce
@@ -4630,7 +4756,7 @@ async function openEmbeddedTerminal(profileId) {
                 } catch (err) {
                     console.error('Failed to fit terminal:', err);
                 }
-            }, 100);
+            }, 250);
         };
         window.addEventListener('resize', handleWindowResize);
 
@@ -4650,7 +4776,8 @@ async function openEmbeddedTerminal(profileId) {
             fitAddon,
             unlisten,
             handleWindowResize,
-            windowResizeTimeout
+            windowResizeTimeout,
+            connectionStatus: 'connecting' // Track connection status
         };
 
         // Focus terminal
@@ -4671,19 +4798,24 @@ async function closeEmbeddedTerminal() {
         return;
     }
 
-    // Show confirmation dialog
-    const confirmed = await customConfirm(
-        'Are you sure you want to close this terminal session?',
-        {
-            title: 'Close Terminal',
-            okText: 'Close',
-            cancelText: 'Cancel',
-            okClass: 'btn-danger'
-        }
-    );
+    // Skip confirmation if connection failed (no established session to lose)
+    const skipConfirmation = activeTerminalSession.connectionStatus === 'failed';
 
-    if (!confirmed) {
-        return; // User cancelled
+    if (!skipConfirmation) {
+        // Show confirmation dialog for active/connecting sessions
+        const confirmed = await customConfirm(
+            'Are you sure you want to close this terminal session?',
+            {
+                title: 'Close Terminal',
+                okText: 'Close',
+                cancelText: 'Cancel',
+                okClass: 'btn-danger'
+            }
+        );
+
+        if (!confirmed) {
+            return; // User cancelled
+        }
     }
 
     const { sessionId, term, unlisten, handleWindowResize, windowResizeTimeout } = activeTerminalSession;

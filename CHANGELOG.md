@@ -5,6 +5,131 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-01-01
+
+### Added
+- **Database Schema Migrations**: Automatic schema versioning and migration system
+  - New `schema_version` table tracks database version
+  - Migration system applies updates automatically on app start
+  - New tables: `active_sessions`, `recent_connections`, `user_settings`
+  - Future-proof architecture for database changes
+- **Recent Connections Tracking**: Automatically tracks and displays recently connected profiles
+  - Backend: `record_connection()`, `get_recent_connections()`, `clear_recent_connections()` commands
+  - Database integration with automatic deduplication (updates timestamp on repeat connections)
+  - Persistent across app restarts
+- **Recent Connections UI**: Visual recent connections bar below profile list
+  - Shows last 5 connections with "time ago" formatting (e.g., "2 minutes ago")
+  - Click to quickly reconnect to recent servers
+  - Individual delete with red X button (hover to reveal, or use 'D' key)
+  - Collapse/expand with up/down arrows
+  - Keyboard shortcuts: C to clear all, D to delete selected
+  - Responsive box sizing: exactly 3 boxes fit at 800px width (adjusts for scrollbar presence)
+- **Keyboard Shortcuts System**: Comprehensive keyboard navigation throughout the app
+  - Global shortcuts: N (new profile), S (settings), / (search), ? (help)
+  - Profile navigation: ↑/↓ (navigate profiles), Enter (connect), E (edit), D (duplicate), Delete (remove)
+  - Recent connections: ←/→ (navigate), ↑ (collapse), ↓ (expand), Enter (connect), D (delete), C (clear all)
+  - Group navigation: Tab (select group header), Enter (toggle), ←/→ (collapse/expand)
+  - Filter popup: ↑/↓ (navigate options), Enter/Space (toggle), Tab/Escape (close)
+  - Modal shortcuts: Escape (close/cancel), Cmd/Ctrl+S (save)
+  - Comprehensive Tab navigation: search → new profile → settings → filter → groups → profiles → recent
+  - Enable/disable in Settings modal
+  - ? key shows help modal with all shortcuts
+- **Embedded Terminal**: Connect via embedded terminal with full PTY support
+  - Cross-platform PTY using `portable-pty` crate (macOS + Windows)
+  - Real terminal emulation with xterm.js 5.3.0 frontend
+  - Full bidirectional I/O, terminal resize support, cleanup on close
+  - Session management with thread-safe registry
+  - Terminal status badges: Connecting (orange) → Connected (green) / Connection Failed (red)
+  - Smart error detection from SSH output
+  - Automatic cleanup on session end
+  - Modal UI with Clear and Close buttons
+  - Single session support (multi-tab planned for v0.7.0)
+
+### Changed
+- **Keyboard Shortcuts**: Changed from Cmd/Ctrl+N and Cmd/Ctrl+, to single keys N and S
+  - N now opens new profile modal (no modifier needed)
+  - S now opens settings modal (no modifier needed)
+  - Cmd/Ctrl+N and Cmd/Ctrl+, still work as alternatives
+- **Settings Modal Behavior**: All settings changes now require explicit Save
+  - Keyboard shortcuts checkbox no longer saves immediately
+  - All checkboxes, text fields, and dropdowns follow Save/Cancel pattern
+  - Matches existing Close/Save pattern for consistency
+- **Profile Modal Save Button**: New profiles disable Save until all required fields populated
+  - Save button disabled on open for new profiles
+  - Enables when name, host, and username are filled
+  - Edit profiles: disabled until changes detected AND required fields populated
+  - Provides clear visual feedback for form completion
+- **Terminal Connection Status**: Intelligent status monitoring based on SSH output
+  - Status stays "Connecting..." until SSH success or failure detected
+  - Detects errors (network unreachable, connection refused, etc.) → "Connection Failed" (red)
+  - Detects success (password prompt, shell prompt, welcome message) → "Connected" (green)
+  - No more premature "Connected" status
+- **Terminal Close Confirmation**: Skip confirmation dialog for failed connections
+  - Failed connections close immediately (no prompt)
+  - Active/connecting sessions still show confirmation
+  - Better UX - no pointless confirmation for connections that never worked
+- **Success Color**: Updated green color from #16c60c to #00CA4E across the app
+  - Softer, less bright green for success buttons and notifications
+  - Applied to toast notifications, terminal badges, and success buttons
+  - Better visual consistency
+- **Recent Connections Box Sizing**: Dynamic width calculation based on scrollbar presence
+  - Uses CSS `calc()` with `--scrollbar-width` variable
+  - Exactly 3 boxes fit at 800px whether scrollbar is present or not
+  - Boxes auto-adjust when scrollbar appears/disappears
+
+### Fixed
+- **Modal Keyboard Navigation**: Tab focus now properly trapped within modals
+  - Tab cycles only through modal elements (doesn't escape to background)
+  - Confirmation dialogs support Tab cycling between buttons
+  - Prevents accidental background interactions
+- **Selection State Management**: All selection states cleared when modals close
+  - Prevents dangerous actions after canceling dialogs
+  - Fixes bug where profile stayed selected after cancel → could accidentally delete wrong profile
+  - Applies to: selectedProfileId, selectedGroupName, selectedRecentConnectionId
+- **Mouse/Keyboard Mode Switching**: Improved focus management
+  - Mouse hover blurs elements (switches to mouse mode)
+  - Tab key refocuses elements (switches to keyboard mode)
+  - Prevents mouse cursor from interfering with keyboard navigation
+- **Validation Error Persistence**: Form validation errors now clear between modal opens
+  - Fixed bug where validation errors from previous session showed on new modal open
+  - Added `clearAllValidationErrors()` function called on modal open
+  - Red borders no longer incorrectly persist
+
+### Performance
+- **PTY Output Batching**: Terminal output now batched to prevent event flooding
+  - Collects data in 32KB buffer
+  - Emits every 16ms (~60fps) OR when buffer reaches 16KB
+  - Reduces event rate from potentially thousands to max 60/second
+  - Maintains smooth terminal rendering while preventing UI freezing
+- **PTY Session Cleanup**: Implemented timeout for reader thread termination
+  - 5-second timeout prevents indefinite blocking during cleanup
+  - Polls thread status every 100ms
+  - Logs warning if thread doesn't exit gracefully
+  - Prevents resource leaks from hung SSH processes
+- **Race Condition Prevention**: Atomic session cleanup
+  - All three registry locks (sessions, writers, pairs) acquired atomically
+  - Prevents race window between sequential lock acquisitions
+  - Eliminates potential for partial cleanup state
+- **Terminal Resize Debouncing**: Increased debounce from 100ms to 250ms
+  - Prevents race conditions between resize and I/O operations
+  - Better stability during rapid window resize
+  - Reduces PTY resize calls for better performance
+
+### Security
+- **MEDIUM**: Reduced temporary script cleanup window from 30s to 5s (CVSS 5.3)
+  - Minimizes exposure time for SSH connection details in temp scripts
+  - Balances cleanup timing with terminal launch requirements
+  - Reduces information disclosure risk on multi-user systems
+- **MEDIUM**: Implemented server-side rate limiting for settings import (CVSS 4.5)
+  - Added 5-second cooldown enforced in Rust backend
+  - Prevents localStorage DoS via rapid import attempts
+  - Client-side rate limiting can be bypassed; server-side cannot
+- **MEDIUM**: Reduced terminal dimension limits to prevent resource exhaustion (CVSS 4.3)
+  - Max columns reduced from 500 to 300
+  - Max rows reduced from 200 to 100
+  - Added total cell limit validation (max 30,000 cells)
+  - Prevents memory exhaustion with extreme terminal sizes
+
 ## [0.5.2] - 2024-12-29
 
 ### Fixed

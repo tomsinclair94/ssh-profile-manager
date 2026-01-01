@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
@@ -16,6 +17,10 @@ use windows_acl::acl::ACL;
 
 // Constants
 const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
+const SETTINGS_IMPORT_RATE_LIMIT_SECS: u64 = 5; // 5 second rate limit for settings import
+
+// Rate limiting for settings import
+static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
 
 // Windows-specific file security function
 #[cfg(target_os = "windows")]
@@ -1231,6 +1236,20 @@ fn export_settings(
 
 #[tauri::command]
 fn import_settings(data: String) -> Result<SettingsImportResult, String> {
+    // Server-side rate limiting (5 seconds between imports)
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    {
+        let mut last_time = LAST_SETTINGS_IMPORT_TIME.lock().unwrap();
+        if now - *last_time < SETTINGS_IMPORT_RATE_LIMIT_SECS {
+            return Err("Rate limit: Please wait 5 seconds between settings imports".to_string());
+        }
+        *last_time = now;
+    }
+
     let import_data: SettingsImport = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse settings data: {}", e))?;
 
@@ -1532,12 +1551,25 @@ async fn create_terminal_session(
     validate_username(&profile.username)?;
     validate_port(profile.port)?;
 
-    // Validate dimensions
-    if cols < 10 || cols > 500 {
-        return Err("Terminal columns must be between 10 and 500".to_string());
+    // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
+    const MAX_COLS: u16 = 300;
+    const MAX_ROWS: u16 = 100;
+    const MAX_TOTAL_CELLS: u32 = 30000; // 300 cols × 100 rows
+
+    if cols < 10 || cols > MAX_COLS {
+        return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
     }
-    if rows < 10 || rows > 200 {
-        return Err("Terminal rows must be between 10 and 200".to_string());
+    if rows < 10 || rows > MAX_ROWS {
+        return Err(format!("Terminal rows must be between 10 and {}", MAX_ROWS));
+    }
+
+    // Validate total cell count to prevent excessive memory usage
+    let total_cells = cols as u32 * rows as u32;
+    if total_cells > MAX_TOTAL_CELLS {
+        return Err(format!(
+            "Terminal dimensions exceed maximum size ({}×{} = {} cells > {} max)",
+            cols, rows, total_cells, MAX_TOTAL_CELLS
+        ));
     }
 
     // Create PTY
@@ -1604,15 +1636,50 @@ async fn create_terminal_session(
     let app_handle_clone = app_handle.clone();
     let reader_handle = thread::spawn(move || {
         let mut buffer = [0u8; 8192];
+        let mut batch_buffer: Vec<u8> = Vec::with_capacity(32768); // 32KB batch buffer
+        let mut last_emit = std::time::Instant::now();
+        const BATCH_INTERVAL_MS: u128 = 16; // ~60fps for smooth rendering
+        const MAX_BATCH_SIZE: usize = 16384; // 16KB max batch before forced emit
+
         loop {
             match reader.read(&mut buffer) {
-                Ok(0) => break, // EOF - SSH process ended
-                Ok(n) => {
-                    // Emit data to frontend
-                    let data = &buffer[..n];
-                    let _ = app_handle_clone.emit(&format!("terminal-output-{}", session_id_clone), data.to_vec());
+                Ok(0) => {
+                    // EOF - SSH process ended, emit any remaining data
+                    if !batch_buffer.is_empty() {
+                        let _ = app_handle_clone.emit(
+                            &format!("terminal-output-{}", session_id_clone),
+                            batch_buffer.clone()
+                        );
+                    }
+                    break;
                 }
-                Err(_) => break, // Error reading
+                Ok(n) => {
+                    // PERFORMANCE FIX: Batch output to reduce event emission rate
+                    // Collect data in buffer and emit periodically or when buffer is full
+                    batch_buffer.extend_from_slice(&buffer[..n]);
+
+                    let elapsed = last_emit.elapsed().as_millis();
+                    let should_emit = elapsed >= BATCH_INTERVAL_MS || batch_buffer.len() >= MAX_BATCH_SIZE;
+
+                    if should_emit {
+                        let _ = app_handle_clone.emit(
+                            &format!("terminal-output-{}", session_id_clone),
+                            batch_buffer.clone()
+                        );
+                        batch_buffer.clear();
+                        last_emit = std::time::Instant::now();
+                    }
+                }
+                Err(_) => {
+                    // Error reading, emit any remaining data before exiting
+                    if !batch_buffer.is_empty() {
+                        let _ = app_handle_clone.emit(
+                            &format!("terminal-output-{}", session_id_clone),
+                            batch_buffer.clone()
+                        );
+                    }
+                    break;
+                }
             }
         }
     });
@@ -1690,12 +1757,25 @@ fn resize_terminal(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    // Validate dimensions
-    if cols < 10 || cols > 500 {
-        return Err("Terminal columns must be between 10 and 500".to_string());
+    // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
+    const MAX_COLS: u16 = 300;
+    const MAX_ROWS: u16 = 100;
+    const MAX_TOTAL_CELLS: u32 = 30000; // 300 cols × 100 rows
+
+    if cols < 10 || cols > MAX_COLS {
+        return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
     }
-    if rows < 10 || rows > 200 {
-        return Err("Terminal rows must be between 10 and 200".to_string());
+    if rows < 10 || rows > MAX_ROWS {
+        return Err(format!("Terminal rows must be between 10 and {}", MAX_ROWS));
+    }
+
+    // Validate total cell count to prevent excessive memory usage
+    let total_cells = cols as u32 * rows as u32;
+    if total_cells > MAX_TOTAL_CELLS {
+        return Err(format!(
+            "Terminal dimensions exceed maximum size ({}×{} = {} cells > {} max)",
+            cols, rows, total_cells, MAX_TOTAL_CELLS
+        ));
     }
 
     let pairs = registry.pty_pairs.lock().unwrap();
@@ -1721,29 +1801,43 @@ fn close_terminal_session(
     registry: State<SessionRegistry>,
     session_id: String,
 ) -> Result<(), String> {
-    // Remove from session registry
-    let session = {
-        let mut sessions = registry.sessions.lock().unwrap();
-        sessions.remove(&session_id)
-    };
+    // SECURITY FIX: Acquire all locks atomically to prevent race conditions
+    // Lock all three registries at once before making any mutations
+    let mut sessions = registry.sessions.lock().unwrap();
+    let mut writers = registry.pty_writers.lock().unwrap();
+    let mut pairs = registry.pty_pairs.lock().unwrap();
 
-    // Remove writer
-    {
-        let mut writers = registry.pty_writers.lock().unwrap();
-        writers.remove(&session_id);
-    }
-
+    // Remove all entries atomically
+    let session = sessions.remove(&session_id);
+    writers.remove(&session_id);
     // Remove PTY pair (this will drop it and send SIGHUP to the SSH process)
-    {
-        let mut pairs = registry.pty_pairs.lock().unwrap();
-        pairs.remove(&session_id);
-    }
+    pairs.remove(&session_id);
+
+    // Release locks before waiting for thread
+    drop(sessions);
+    drop(writers);
+    drop(pairs);
 
     // Wait for reader thread to finish (if it exists)
     if let Some(session) = session {
         if let Some(handle) = session.reader_handle {
-            // Give the thread a moment to exit gracefully
-            let _ = handle.join();
+            // SECURITY FIX: Use timeout to prevent indefinite blocking (5 second max)
+            // If thread doesn't exit gracefully, we'll continue anyway to avoid blocking cleanup
+            let timeout = std::time::Duration::from_secs(5);
+            let start = std::time::Instant::now();
+
+            // Poll join with timeout (Rust doesn't have native join_timeout on JoinHandle)
+            loop {
+                if handle.is_finished() {
+                    let _ = handle.join(); // Clean up the thread handle
+                    break;
+                }
+                if start.elapsed() > timeout {
+                    eprintln!("Warning: Reader thread for session {} did not exit within timeout", session_id);
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
         }
     }
 
@@ -1892,11 +1986,11 @@ fn connect_ssh(
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-                    // Schedule script cleanup after 30 seconds
-                    // This gives the terminal time to read and execute the script
+                    // Schedule script cleanup after 5 seconds
+                    // This gives the terminal time to read and execute the script while minimizing exposure window
                     let script_path_cleanup = script_path.clone();
                     std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(30));
+                        std::thread::sleep(std::time::Duration::from_secs(5));
                         let _ = fs::remove_file(&script_path_cleanup); // Best effort cleanup
                     });
                 } else {
@@ -2049,11 +2143,12 @@ fn connect_ssh(
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-                    // SECURITY: Schedule script cleanup after 30 seconds
+                    // SECURITY: Schedule script cleanup after 5 seconds
                     // This prevents accumulation of temporary scripts while giving the terminal time to read it
+                    // 5 second delay minimizes exposure window while allowing terminal to execute script
                     let script_path_cleanup = script_path.clone();
                     std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(30));
+                        std::thread::sleep(std::time::Duration::from_secs(5));
                         let _ = fs::remove_file(&script_path_cleanup);
                     });
                 } else {
