@@ -1,6 +1,6 @@
 [package]
 name = "ssh-profile-manager"
-version = "0.5.2"
+version = "0.6.0"
 description = "SSH Profile Manager - A lightweight SSH client"
 authors = ["you"]
 license = ""
@@ -34,6 +34,7 @@ rfd = "0.15"
 reqwest = { version = "0.11", features = ["json"] }
 semver = "1.0"
 tokio = { version = "1", features = ["time"] }
+portable-pty = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 windows-acl = "0.3"
