@@ -1,0 +1,79 @@
+# Security Policy
+
+## Supported Versions
+
+We release patches for security vulnerabilities in the following versions:
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.6.x   | :white_check_mark: |
+| < 0.6.0 | :x:                |
+
+## Reporting a Vulnerability
+
+We take the security of SSH Profile Manager seriously. If you discover a security vulnerability, please follow these steps:
+
+### How to Report
+
+**Please do NOT report security vulnerabilities through public GitHub issues.**
+
+Instead, please report them via one of these methods:
+
+1. **GitHub Security Advisories** (Preferred)
+   - Go to the [Security tab](https://github.com/tomsinclair94/ssh-profile-manager/security/advisories)
+   - Click "Report a vulnerability"
+   - Fill out the form with details
+
+2. **Email**
+   - Send details to: [Create an issue with security label if urgent]
+   - Include "SECURITY" in the subject line
+
+### What to Include
+
+Please include the following information in your report:
+
+- Type of vulnerability (e.g., command injection, XSS, path traversal)
+- Full paths of affected source files
+- Location of the affected code (tag/branch/commit or direct URL)
+- Step-by-step instructions to reproduce the issue
+- Proof-of-concept or exploit code (if possible)
+- Impact of the vulnerability (what an attacker could do)
+
+### What to Expect
+
+- **Acknowledgment:** We'll acknowledge receipt within 48 hours
+- **Assessment:** We'll investigate and assess severity within 5 business days
+- **Updates:** We'll keep you informed of progress
+- **Fix Timeline:**
+  - Critical/High: 7 days for patch
+  - Medium: 30 days for patch
+  - Low: Next scheduled release
+- **Disclosure:** We'll coordinate disclosure timing with you
+- **Credit:** We'll credit you in release notes (unless you prefer to remain anonymous)
+
+## Security Features
+
+SSH Profile Manager includes several security measures:
+
+- **Password Storage:** System keychain integration (not stored in database)
+- **Input Validation:** All user inputs validated on backend to prevent injection attacks
+- **Path Traversal Protection:** SSH key paths sanitized and validated
+- **Command Injection Prevention:** Shell commands properly escaped
+- **Rate Limiting:** Protection against DoS via rapid operations
+- **Temp File Security:** Minimal exposure time for temporary connection scripts
+
+## Security Updates
+
+Security updates are released as patch versions (e.g., 0.6.1) and documented in CHANGELOG.md with CVSS scores where applicable.
+
+Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-manager/releases) to be notified of security updates.
+
+## Security Review History
+
+This project undergoes regular security reviews:
+- **v0.6.0:** Comprehensive security review (0 CRITICAL, 0 HIGH, 3 MEDIUM, 2 LOW findings - all MEDIUM/HIGH resolved)
+- **v0.5.2:** Security enhancements (2 MEDIUM, 1 LOW findings resolved)
+- **v0.5.1:** Security fixes (3 MEDIUM XSS/injection fixes)
+- **v0.5.0:** Critical security fixes (2 CRITICAL command injection, 1 HIGH fixes)
+
+See CHANGELOG.md for detailed security fix history.
