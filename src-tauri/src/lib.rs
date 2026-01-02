@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
@@ -18,9 +18,12 @@ use windows_acl::acl::ACL;
 // Constants
 const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
 const SETTINGS_IMPORT_RATE_LIMIT_SECS: u64 = 5; // 5 second rate limit for settings import
+const SESSION_CREATE_RATE_LIMIT_SECS: u64 = 2; // 2 second rate limit for terminal session creation
 
 // Rate limiting for settings import
 static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
+// Rate limiting for terminal session creation
+static LAST_SESSION_CREATE_TIME: Mutex<u64> = Mutex::new(0);
 
 // Windows-specific file security function
 #[cfg(target_os = "windows")]
@@ -126,6 +129,8 @@ pub struct SessionRegistry {
     sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
     pty_writers: Arc<Mutex<HashMap<String, Box<dyn Write + Send>>>>,
     pty_pairs: Arc<Mutex<HashMap<String, Box<dyn portable_pty::MasterPty + Send>>>>,
+    last_activity: Arc<Mutex<HashMap<String, Instant>>>, // Track last data received per session
+    write_rate_limits: Arc<Mutex<HashMap<String, (Instant, u32)>>>, // (last_reset, write_count) per session
 }
 
 impl SessionRegistry {
@@ -134,6 +139,8 @@ impl SessionRegistry {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             pty_writers: Arc::new(Mutex::new(HashMap::new())),
             pty_pairs: Arc::new(Mutex::new(HashMap::new())),
+            last_activity: Arc::new(Mutex::new(HashMap::new())),
+            write_rate_limits: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -1540,6 +1547,23 @@ async fn create_terminal_session(
     cols: u16,
     rows: u16,
 ) -> Result<String, String> {
+    // SECURITY: Rate limiting to prevent thread exhaustion via rapid session creation
+    // Each session spawns 2 threads (reader + blocking reader), so limit to 1 per 2 seconds
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    {
+        let mut last_time = LAST_SESSION_CREATE_TIME.lock().unwrap();
+        if now - *last_time < SESSION_CREATE_RATE_LIMIT_SECS {
+            return Err(format!(
+                "Rate limit: Please wait {} seconds between terminal sessions",
+                SESSION_CREATE_RATE_LIMIT_SECS
+            ));
+        }
+        *last_time = now;
+    }
+
     // Get profile from database
     let profile = db
         .get_profile_by_id(&profile_id)
@@ -1634,52 +1658,163 @@ async fn create_terminal_session(
     // Spawn reader thread to emit terminal output events
     let session_id_clone = session_id.clone();
     let app_handle_clone = app_handle.clone();
+    let activity_tracker = registry.last_activity.clone();
     let reader_handle = thread::spawn(move || {
-        let mut buffer = [0u8; 8192];
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        // Create channel for non-blocking read pattern
+        let (tx, rx) = mpsc::channel();
+
+        // Spawn blocking reader thread
+        thread::spawn(move || {
+            let mut buffer = [0u8; 8192];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(n) => {
+                        if tx.send(Ok(buffer[..n].to_vec())).is_err() {
+                            break; // Main thread disconnected
+                        }
+                        if n == 0 {
+                            break; // EOF
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e));
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Main output batching loop with timeout-based flushing
         let mut batch_buffer: Vec<u8> = Vec::with_capacity(32768); // 32KB batch buffer
         let mut last_emit = std::time::Instant::now();
-        const BATCH_INTERVAL_MS: u128 = 16; // ~60fps for smooth rendering
+        const BATCH_INTERVAL_MS: u128 = 50; // 50ms = instant to humans, efficient batching
         const MAX_BATCH_SIZE: usize = 16384; // 16KB max batch before forced emit
 
         loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => {
-                    // EOF - SSH process ended, emit any remaining data
+            // Use recv_timeout to allow periodic buffer flushing even when no data arrives
+            match rx.recv_timeout(Duration::from_millis(BATCH_INTERVAL_MS as u64)) {
+                Ok(Ok(data)) => {
+                    if data.is_empty() {
+                        // EOF - emit any remaining data and signal session end
+                        if !batch_buffer.is_empty() {
+                            let _ = app_handle_clone.emit(
+                                &format!("terminal-output-{}", session_id_clone),
+                                std::mem::take(&mut batch_buffer) // Take buffer without clone
+                            );
+                        }
+                        // Emit session ended event for frontend auto-close
+                        let _ = app_handle_clone.emit(
+                            &format!("terminal-ended-{}", session_id_clone),
+                            ()
+                        );
+                        break;
+                    }
+                    batch_buffer.extend(data);
+                    // Update last activity timestamp (for hung session detection)
+                    if let Ok(mut activity) = activity_tracker.lock() {
+                        activity.insert(session_id_clone.clone(), Instant::now());
+                    }
+                }
+                Ok(Err(e)) => {
+                    // Read error - emit any remaining data and signal session end with error
                     if !batch_buffer.is_empty() {
                         let _ = app_handle_clone.emit(
                             &format!("terminal-output-{}", session_id_clone),
-                            batch_buffer.clone()
+                            std::mem::take(&mut batch_buffer) // Take buffer without clone
                         );
                     }
+                    let _ = app_handle_clone.emit(
+                        &format!("terminal-ended-{}", session_id_clone),
+                        format!("Connection error: {}", e) // Include error message
+                    );
                     break;
                 }
-                Ok(n) => {
-                    // PERFORMANCE FIX: Batch output to reduce event emission rate
-                    // Collect data in buffer and emit periodically or when buffer is full
-                    batch_buffer.extend_from_slice(&buffer[..n]);
-
-                    let elapsed = last_emit.elapsed().as_millis();
-                    let should_emit = elapsed >= BATCH_INTERVAL_MS || batch_buffer.len() >= MAX_BATCH_SIZE;
-
-                    if should_emit {
-                        let _ = app_handle_clone.emit(
-                            &format!("terminal-output-{}", session_id_clone),
-                            batch_buffer.clone()
-                        );
-                        batch_buffer.clear();
-                        last_emit = std::time::Instant::now();
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // Timeout - check if channel disconnected during wait (prevents 50ms delay on exit)
+                    match rx.try_recv() {
+                        Ok(Ok(data)) => {
+                            // Got data immediately after timeout - process it
+                            if data.is_empty() {
+                                // EOF - emit remaining data and exit
+                                if !batch_buffer.is_empty() {
+                                    let _ = app_handle_clone.emit(
+                                        &format!("terminal-output-{}", session_id_clone),
+                                        std::mem::take(&mut batch_buffer) // Take buffer without clone
+                                    );
+                                }
+                                let _ = app_handle_clone.emit(
+                                    &format!("terminal-ended-{}", session_id_clone),
+                                    ()
+                                );
+                                break;
+                            }
+                            batch_buffer.extend(data);
+                        }
+                        Ok(Err(e)) => {
+                            // Error arrived - emit remaining data and exit with error
+                            if !batch_buffer.is_empty() {
+                                let _ = app_handle_clone.emit(
+                                    &format!("terminal-output-{}", session_id_clone),
+                                    std::mem::take(&mut batch_buffer) // Take buffer without clone
+                                );
+                            }
+                            let _ = app_handle_clone.emit(
+                                &format!("terminal-ended-{}", session_id_clone),
+                                format!("Connection error: {}", e) // Include error message
+                            );
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            // Channel disconnected - emit remaining data and exit
+                            if !batch_buffer.is_empty() {
+                                let _ = app_handle_clone.emit(
+                                    &format!("terminal-output-{}", session_id_clone),
+                                    std::mem::take(&mut batch_buffer) // Take buffer without clone
+                                );
+                            }
+                            let _ = app_handle_clone.emit(
+                                &format!("terminal-ended-{}", session_id_clone),
+                                "Connection terminated unexpectedly".to_string()
+                            );
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Empty) => {
+                            // Truly timed out with no pending data - continue to flush check
+                        }
                     }
                 }
-                Err(_) => {
-                    // Error reading, emit any remaining data before exiting
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    // Reader thread died - emit any remaining data and signal session end
                     if !batch_buffer.is_empty() {
                         let _ = app_handle_clone.emit(
                             &format!("terminal-output-{}", session_id_clone),
-                            batch_buffer.clone()
+                            std::mem::take(&mut batch_buffer) // Take buffer without clone
                         );
                     }
+                    let _ = app_handle_clone.emit(
+                        &format!("terminal-ended-{}", session_id_clone),
+                        "Connection terminated unexpectedly".to_string()
+                    );
                     break;
                 }
+            }
+
+            // PERFORMANCE FIX: Emit buffered data if timeout elapsed or buffer is full
+            // This ensures prompts and small outputs are displayed promptly
+            let elapsed = last_emit.elapsed().as_millis();
+            let should_emit = !batch_buffer.is_empty() &&
+                              (elapsed >= BATCH_INTERVAL_MS || batch_buffer.len() >= MAX_BATCH_SIZE);
+
+            if should_emit {
+                let _ = app_handle_clone.emit(
+                    &format!("terminal-output-{}", session_id_clone),
+                    std::mem::take(&mut batch_buffer) // Take buffer without clone (it's auto-cleared by take)
+                );
+                // No need for batch_buffer.clear() - take() already emptied it
+                last_emit = std::time::Instant::now();
             }
         }
     });
@@ -1703,6 +1838,10 @@ async fn create_terminal_session(
     {
         let mut pairs = registry.pty_pairs.lock().unwrap();
         pairs.insert(session_id.clone(), pty_pair.master);
+    }
+    {
+        let mut activity = registry.last_activity.lock().unwrap();
+        activity.insert(session_id.clone(), Instant::now());
     }
 
     // Record in active_sessions table
@@ -1733,6 +1872,25 @@ fn write_to_terminal(
     session_id: String,
     data: String,
 ) -> Result<(), String> {
+    // SECURITY: Rate limiting to prevent write flooding (100 writes/second max)
+    const MAX_WRITES_PER_SECOND: u32 = 100;
+    {
+        let mut rate_limits = registry.write_rate_limits.lock().unwrap();
+        let (last_reset, count) = rate_limits
+            .entry(session_id.clone())
+            .or_insert((Instant::now(), 0));
+
+        if last_reset.elapsed().as_secs() >= 1 {
+            *last_reset = Instant::now();
+            *count = 0;
+        }
+
+        if *count >= MAX_WRITES_PER_SECOND {
+            return Err("Rate limit exceeded: too many write operations".to_string());
+        }
+        *count += 1;
+    }
+
     let mut writers = registry.pty_writers.lock().unwrap();
 
     let writer = writers
@@ -1802,10 +1960,12 @@ fn close_terminal_session(
     session_id: String,
 ) -> Result<(), String> {
     // SECURITY FIX: Acquire all locks atomically to prevent race conditions
-    // Lock all three registries at once before making any mutations
+    // Lock all registries at once before making any mutations
     let mut sessions = registry.sessions.lock().unwrap();
     let mut writers = registry.pty_writers.lock().unwrap();
     let mut pairs = registry.pty_pairs.lock().unwrap();
+    let mut activity = registry.last_activity.lock().unwrap();
+    let mut rate_limits = registry.write_rate_limits.lock().unwrap();
 
     // Remove all entries atomically
     let session = sessions.remove(&session_id);
@@ -1813,18 +1973,37 @@ fn close_terminal_session(
     // Remove PTY pair (this will drop it and send SIGHUP to the SSH process)
     pairs.remove(&session_id);
 
+    // Check last activity for hung session detection
+    let last_activity_time = activity.remove(&session_id);
+    // Clean up rate limiting data
+    rate_limits.remove(&session_id);
+    let is_potentially_hung = if let Some(last_time) = last_activity_time {
+        // Consider session hung if no data received for 30+ seconds
+        last_time.elapsed() > Duration::from_secs(30)
+    } else {
+        false
+    };
+
     // Release locks before waiting for thread
     drop(sessions);
     drop(writers);
     drop(pairs);
+    drop(activity);
+    drop(rate_limits);
 
     // Wait for reader thread to finish (if it exists)
     if let Some(session) = session {
         if let Some(handle) = session.reader_handle {
-            // SECURITY FIX: Use timeout to prevent indefinite blocking (5 second max)
-            // If thread doesn't exit gracefully, we'll continue anyway to avoid blocking cleanup
-            let timeout = std::time::Duration::from_secs(5);
-            let start = std::time::Instant::now();
+            // SECURITY FIX: Adaptive timeout based on session state
+            // - Normal sessions: 5 second timeout
+            // - Hung sessions (no activity for 30s): 1 second timeout to avoid blocking
+            let timeout = if is_potentially_hung {
+                eprintln!("Warning: Session {} appears hung (no activity for 30s), using reduced cleanup timeout", session_id);
+                Duration::from_secs(1)
+            } else {
+                Duration::from_secs(5)
+            };
+            let start = Instant::now();
 
             // Poll join with timeout (Rust doesn't have native join_timeout on JoinHandle)
             loop {
@@ -1833,10 +2012,14 @@ fn close_terminal_session(
                     break;
                 }
                 if start.elapsed() > timeout {
-                    eprintln!("Warning: Reader thread for session {} did not exit within timeout", session_id);
+                    if is_potentially_hung {
+                        eprintln!("Info: Hung session {} cleanup timed out as expected - inner reader thread may still be blocked", session_id);
+                    } else {
+                        eprintln!("Warning: Reader thread for session {} did not exit within timeout", session_id);
+                    }
                     break;
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                std::thread::sleep(Duration::from_millis(100));
             }
         }
     }

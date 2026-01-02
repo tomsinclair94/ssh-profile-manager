@@ -4635,9 +4635,9 @@ async function openEmbeddedTerminal(profileId) {
         await new Promise(resolve => setTimeout(resolve, 50));
         fitAddon.fit();
 
-        // Get terminal dimensions (reduce rows by 3 to prevent bottom cutoff)
+        // Get terminal dimensions
         const cols = term.cols;
-        const rows = Math.max(term.rows - 3, 10); // Subtract 3 rows for safety, minimum 10
+        const rows = term.rows;
 
         // Create backend terminal session
         const sessionId = await invoke('create_terminal_session', {
@@ -4662,7 +4662,7 @@ async function openEmbeddedTerminal(profileId) {
         ];
 
         // Listen for terminal output events
-        const unlisten = await window.__TAURI__.event.listen(
+        const unlistenOutput = await window.__TAURI__.event.listen(
             `terminal-output-${sessionId}`,
             (event) => {
                 // Convert Vec<u8> to Uint8Array and write to terminal
@@ -4706,6 +4706,49 @@ async function openEmbeddedTerminal(profileId) {
             }
         );
 
+        // Listen for terminal session end event (auto-close on exit/disconnect)
+        const unlistenEnded = await window.__TAURI__.event.listen(
+            `terminal-ended-${sessionId}`,
+            (event) => {
+                // Mark session as ended so we don't prompt on close
+                if (activeTerminalSession) {
+                    activeTerminalSession.sessionEnded = true;
+                    // Disable input immediately to prevent user from typing during cleanup
+                    activeTerminalSession.term.options.disableStdin = true;
+                }
+
+                // Check if session ended due to connection failure or normal exit
+                // Use connectionStatus to determine - if still 'connecting' or 'failed', keep modal open
+                const connectionFailed = connectionStatus === 'connecting' || connectionStatus === 'failed';
+                const hasErrorPayload = event.payload && typeof event.payload === 'string' && event.payload.trim().length > 0;
+
+                if (connectionFailed || hasErrorPayload) {
+                    // Connection failed - keep modal open so user can read output
+                    if (hasErrorPayload) {
+                        showToast(event.payload, 'error');
+                    }
+                } else {
+                    // Normal exit (user typed 'exit' after successful connection) - auto-close after brief delay
+                    setTimeout(() => {
+                        closeEmbeddedTerminal();
+                    }, 100);
+                }
+            }
+        );
+
+        // FALLBACK: Timeout-based connection detection
+        // If no SSH error after 5 seconds, assume connected (handles minimal servers, custom shells)
+        const connectionTimeout = setTimeout(() => {
+            if (connectionStatus === 'connecting') {
+                connectionStatus = 'connected';
+                terminalStatus.textContent = 'Connected';
+                terminalStatus.className = 'terminal-status connected';
+                if (activeTerminalSession) {
+                    activeTerminalSession.connectionStatus = 'connected';
+                }
+            }
+        }, 5000);
+
         // Send user input to backend
         term.onData((data) => {
             invoke('write_to_terminal', {
@@ -4726,39 +4769,28 @@ async function openEmbeddedTerminal(profileId) {
                 invoke('resize_terminal', {
                     sessionId: sessionId,
                     cols: cols,
-                    rows: Math.max(rows - 3, 10) // Subtract 3 rows for safety
+                    rows: rows
                 }).catch(err => {
                     console.error('Failed to resize terminal:', err);
                 });
             }, 250);
         });
 
-        // Handle window resize with debounce
+        // Handle terminal container resize with ResizeObserver (more reliable than window resize)
+        // ResizeObserver fires after layout is complete, eliminating need for double-fit workaround
         let windowResizeTimeout;
-        const handleWindowResize = () => {
+        const resizeObserver = new ResizeObserver(() => {
             clearTimeout(windowResizeTimeout);
             windowResizeTimeout = setTimeout(() => {
                 try {
-                    // Fit terminal to new size
                     fitAddon.fit();
-
-                    // Double-fit after a small delay to ensure proper sizing
-                    // (helps when resizing from small to large)
-                    setTimeout(() => {
-                        try {
-                            fitAddon.fit();
-                            // Scroll to bottom after resize
-                            term.scrollToBottom();
-                        } catch (err) {
-                            console.error('Failed to refit terminal:', err);
-                        }
-                    }, 50);
+                    term.scrollToBottom();
                 } catch (err) {
                     console.error('Failed to fit terminal:', err);
                 }
             }, 250);
-        };
-        window.addEventListener('resize', handleWindowResize);
+        });
+        resizeObserver.observe(terminalContainer);
 
         // Intercept Escape key to close terminal (before xterm processes it)
         term.attachCustomKeyEventHandler((e) => {
@@ -4774,10 +4806,14 @@ async function openEmbeddedTerminal(profileId) {
             sessionId,
             term,
             fitAddon,
-            unlisten,
-            handleWindowResize,
+            unlistenOutput,
+            unlistenEnded,
+            resizeObserver,
+            resizeTimeout,
             windowResizeTimeout,
-            connectionStatus: 'connecting' // Track connection status
+            connectionTimeout, // Timeout for connection detection fallback
+            connectionStatus: 'connecting', // Track connection status
+            sessionEnded: false // Track if session ended naturally (exit/disconnect)
         };
 
         // Focus terminal
@@ -4798,8 +4834,11 @@ async function closeEmbeddedTerminal() {
         return;
     }
 
-    // Skip confirmation if connection failed (no established session to lose)
-    const skipConfirmation = activeTerminalSession.connectionStatus === 'failed';
+    // Skip confirmation if:
+    // - Connection failed (no established session to lose)
+    // - Session ended naturally (user typed exit, connection dropped)
+    const skipConfirmation = activeTerminalSession.connectionStatus === 'failed' ||
+                             activeTerminalSession.sessionEnded === true;
 
     if (!skipConfirmation) {
         // Show confirmation dialog for active/connecting sessions
@@ -4818,7 +4857,7 @@ async function closeEmbeddedTerminal() {
         }
     }
 
-    const { sessionId, term, unlisten, handleWindowResize, windowResizeTimeout } = activeTerminalSession;
+    const { sessionId, term, unlistenOutput, unlistenEnded, resizeObserver, resizeTimeout, windowResizeTimeout, connectionTimeout } = activeTerminalSession;
 
     try {
         // Update status
@@ -4826,17 +4865,26 @@ async function closeEmbeddedTerminal() {
         terminalStatus.textContent = 'Disconnecting...';
         terminalStatus.className = 'terminal-status disconnected';
 
-        // Clear any pending resize timeout
+        // Clear any pending timeouts
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+        }
         if (windowResizeTimeout) {
             clearTimeout(windowResizeTimeout);
         }
+        if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+        }
 
         // Remove event listeners
-        if (unlisten) {
-            unlisten();
+        if (unlistenOutput) {
+            unlistenOutput();
         }
-        if (handleWindowResize) {
-            window.removeEventListener('resize', handleWindowResize);
+        if (unlistenEnded) {
+            unlistenEnded();
+        }
+        if (resizeObserver) {
+            resizeObserver.disconnect();
         }
 
         // Dispose terminal

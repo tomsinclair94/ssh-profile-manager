@@ -1398,8 +1398,8 @@ form {
 
 /* Terminal modal takes up most of the screen */
 .terminal-modal-content {
-    width: 90vw;
-    height: 85vh;
+    width: 88vw; /* Reduced from 90vw for side breathing room */
+    height: 83vh; /* Reduced from 85vh for bottom breathing room */
     max-width: none;
     max-height: none;
     display: flex;
@@ -1409,16 +1409,20 @@ form {
 /* Terminal container fills available space */
 .terminal-container {
     flex: 1;
+    min-height: 0; /* Prevent flex overflow - allows proper shrinking */
     background-color: #000000;
-    padding: 8px;
+    padding: 0 0 0 4px; /* Only left padding for visual spacing - preserve bottom fit */
     overflow: hidden;
     border-radius: 0 0 8px 8px;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
-/* xterm.js terminal fills container */
+/* xterm.js terminal - let FitAddon handle sizing */
 .terminal-container .xterm {
-    height: 100%;
+    flex: 1;
+    min-height: 0; /* Prevent flex overflow */
     width: 100%;
 }
 
