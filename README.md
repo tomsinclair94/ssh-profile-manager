@@ -10,7 +10,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10+-0078D6?style=flat&logo=windows&logoColor=white)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.6.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
 ### [📥 Download Latest Release (v0.6.0)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
@@ -192,7 +192,7 @@ ssh-profile-manager/
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file for details
+GPL-3.0 License - See [LICENSE](LICENSE) file for details
 
 ## Acknowledgements
 
