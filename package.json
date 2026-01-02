@@ -10,7 +10,7 @@
   },
   "keywords": ["ssh", "profile", "manager", "tauri"],
   "author": "",
-  "license": "MIT",
+  "license": "GPL-3.0",
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6"
   },
