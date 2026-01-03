@@ -2950,7 +2950,8 @@ async function checkForUpdates(silent = false) {
             const shouldDownload = await customConfirm(message, {
                 title: 'Update Available',
                 okText: 'Download',
-                cancelText: 'Later'
+                cancelText: 'Later',
+                okClass: 'btn-primary'
             });
 
             if (shouldDownload) {

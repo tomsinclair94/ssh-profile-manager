@@ -85,5 +85,5 @@ jobs:
           # Push tag (this will trigger the release workflow)
           git push origin "$VERSION"
 
-          echo "✅ Created and pushed tag $VERSION"
-          echo "🚀 Release workflow will now build and publish binaries"
+          echo "Created and pushed tag $VERSION"
+          echo "Release workflow will now build and publish binaries"
