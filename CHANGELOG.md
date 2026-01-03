@@ -5,6 +5,24 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2025-01-03
+
+### Changed
+- **README Download Button**: Converted plain download link to bright green shields.io badge
+  - More prominent, GitHub-style download button
+  - `for-the-badge` style for better visibility
+  - Includes GitHub logo for clarity
+
+### Infrastructure
+- **GitHub Actions CI**: Added PR checks workflow with smart conditional execution
+  - Runs `cargo check`, `cargo test`, and build verification on PRs to main
+  - Path filtering skips expensive checks for documentation-only changes
+  - Always runs on `v*-dev` branches for full pre-release validation
+  - Multi-platform testing (macOS aarch64 + Windows x86_64)
+- **Development Agents**: Added `refactoring-specialist` agent to development workflow
+  - Integrated into release process: Code Review → Refactoring → Security Review
+  - Available in `~/.claude/agents/` alongside code-reviewer, security-engineer, rust-engineer, performance-engineer, and debugger
+
 ## [0.6.0] - 2025-01-01
 
 ### Added
