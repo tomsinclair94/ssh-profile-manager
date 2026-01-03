@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - 'v*-dev'  # Always run on dev branches (pre-release validation)
 
 permissions:
   contents: read
