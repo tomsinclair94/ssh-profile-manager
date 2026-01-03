@@ -1,0 +1,67 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - 'v*-dev'  # Run on development branches like v0.6.1-dev, v0.7.0-dev
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check & Test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check --target ${{ matrix.target }}
+
+      - name: Cargo test
+        working-directory: src-tauri
+        run: cargo test --target ${{ matrix.target }}
+
+      - name: Build verification
+        run: npm run build
+
+      - name: Build summary
+        if: success()
+        run: |
+          echo "✅ All checks passed on ${{ matrix.platform }}"
+          echo "- cargo check: passed"
+          echo "- cargo test: passed"
+          echo "- build: successful"
