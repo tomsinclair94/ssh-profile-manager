@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.1] - 2025-01-03
 
 ### Changed
+- **Update Modal Download Button**: Changed from red (`btn-danger`) to green (`btn-primary`)
+  - More intuitive color for positive action (downloading update)
+  - Matches standard UI patterns (green = go/proceed)
 - **README Download Button**: Converted plain download link to bright green shields.io badge
   - More prominent, GitHub-style download button
   - `for-the-badge` style for better visibility
