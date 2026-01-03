@@ -44,7 +44,7 @@ jobs:
       - name: Skip message
         if: steps.filter.outputs.code != 'true'
         run: |
-          echo "ℹ️  No code changes detected - skipping checks"
+          echo "No code changes detected - skipping checks"
           echo "Changed files are documentation/config only"
           exit 0
 
@@ -87,7 +87,7 @@ jobs:
       - name: Build summary
         if: steps.filter.outputs.code == 'true' && success()
         run: |
-          echo "✅ All checks passed on ${{ matrix.platform }}"
+          echo "All checks passed on ${{ matrix.platform }}"
           echo "- cargo check: passed"
           echo "- cargo test: passed"
           echo "- build: successful"
