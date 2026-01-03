@@ -58,17 +58,21 @@ jobs:
           VERSION_NO_V="${VERSION#v}"
 
           # Extract the section for this version from CHANGELOG.md
-          # Find lines between ## [$VERSION_NO_V] and the next ## [
-          NOTES=$(awk "/^## \[$VERSION_NO_V\]/,/^## \[/{if(/^## \[$VERSION_NO_V\]/)f=1; if(f && /^## \[/ && !/^## \[$VERSION_NO_V\]/)exit; if(f)print}" CHANGELOG.md)
+          # 1. Find content between ## [VERSION] and next ## [
+          # 2. Remove markdown headers (##, ###)
+          # 3. Remove blank lines for cleaner output
+          awk "/^## \[$VERSION_NO_V\]/,/^## \[/" CHANGELOG.md | \
+            grep -v '^##' | \
+            awk 'NF' > tag_message.txt
 
-          if [ -z "$NOTES" ]; then
+          if [ ! -s tag_message.txt ]; then
             echo "Warning: Could not find CHANGELOG entry for version $VERSION_NO_V"
-            NOTES="Release $VERSION"
+            echo "Release $VERSION" > tag_message.txt
           fi
 
-          # Write to file for multi-line handling
-          echo "$NOTES" > tag_message.txt
           echo "Tag message prepared from CHANGELOG"
+          echo "Content preview:"
+          head -5 tag_message.txt
 
       - name: Create and push tag
         if: steps.check_release.outputs.is_release == 'true' && steps.check_tag.outputs.tag_exists == 'false'
@@ -80,7 +84,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Create annotated tag with CHANGELOG message
-          git tag -a "$VERSION" -F tag_message.txt
+          # Use --cleanup=verbatim to preserve all content exactly as written
+          git tag -a "$VERSION" --cleanup=verbatim -F tag_message.txt
 
           # Push tag (this will trigger the release workflow)
           git push origin "$VERSION"
