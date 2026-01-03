@@ -6,7 +6,7 @@ on:
       - main
   push:
     branches:
-      - 'v*-dev'  # Run on development branches like v0.6.1-dev, v0.7.0-dev
+      - 'v*-dev'  # Always run on dev branches (pre-release validation)
 
 permissions:
   contents: read
@@ -29,37 +29,63 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check for code changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src-tauri/**'
+              - 'dist/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/pr-checks.yml'
+
+      - name: Skip message
+        if: steps.filter.outputs.code != 'true'
+        run: |
+          echo "ℹ️  No code changes detected - skipping checks"
+          echo "Changed files are documentation/config only"
+          exit 0
+
       - name: Setup Node.js
+        if: steps.filter.outputs.code == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Setup Rust
+        if: steps.filter.outputs.code == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Rust cache
+        if: steps.filter.outputs.code == 'true'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
       - name: Install dependencies
+        if: steps.filter.outputs.code == 'true'
         run: npm install
 
       - name: Cargo check
+        if: steps.filter.outputs.code == 'true'
         working-directory: src-tauri
         run: cargo check --target ${{ matrix.target }}
 
       - name: Cargo test
+        if: steps.filter.outputs.code == 'true'
         working-directory: src-tauri
         run: cargo test --target ${{ matrix.target }}
 
       - name: Build verification
+        if: steps.filter.outputs.code == 'true'
         run: npm run build
 
       - name: Build summary
-        if: success()
+        if: steps.filter.outputs.code == 'true' && success()
         run: |
           echo "✅ All checks passed on ${{ matrix.platform }}"
           echo "- cargo check: passed"
