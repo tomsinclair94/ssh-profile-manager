@@ -2247,25 +2247,26 @@ fn connect_ssh(
 
                 // Create AppleScript based on tab preference
                 let applescript = if use_tabs {
-                    // Open in new tab - just use "do script" which automatically creates
-                    // a new tab in the frontmost window (or new window if none exist)
+                    // Open in new tab - use System Events to trigger Cmd+T (new tab)
+                    format!(
+                        "tell application \"Terminal\"\n\
+                         activate\n\
+                         if (count of windows) > 0 then\n\
+                             tell application \"System Events\" to keystroke \"t\" using command down\n\
+                             delay 0.1\n\
+                             do script \"{}\" in front window\n\
+                         else\n\
+                             do script \"{}\"\n\
+                         end if\n\
+                         end tell",
+                        applescript_escaped, applescript_escaped
+                    )
+                } else {
+                    // Always open in new window - just use basic "do script"
                     format!(
                         "tell application \"Terminal\"\n\
                          do script \"{}\"\n\
                          activate\n\
-                         end tell",
-                        applescript_escaped
-                    )
-                } else {
-                    // Always open in new window - use System Events to create new window first
-                    format!(
-                        "tell application \"Terminal\"\n\
-                         activate\n\
-                         tell application \"System Events\" to tell process \"Terminal\"\n\
-                             click menu item \"New Window\" of menu \"Shell\" of menu bar 1\n\
-                         end tell\n\
-                         delay 0.1\n\
-                         do script \"{}\" in front window\n\
                          end tell",
                         applescript_escaped
                     )
