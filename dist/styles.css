@@ -603,8 +603,9 @@ button.keyboard-selected {
     min-width: 0;
 }
 
-/* User value: can truncate freely */
+/* User value: minimum 16 characters, can truncate beyond that */
 .profile-info-item:nth-child(1) .profile-info-value {
+    min-width: 16ch;
     overflow: hidden;
     text-overflow: ellipsis;
 }
