@@ -57,22 +57,34 @@ jobs:
           # Remove 'v' prefix for CHANGELOG lookup (CHANGELOG uses [0.6.0] not [v0.6.0])
           VERSION_NO_V="${VERSION#v}"
 
-          # Extract the section for this version from CHANGELOG.md
-          # 1. Find content between ## [VERSION] and next ## [
-          # 2. Remove markdown headers (##, ###)
-          # 3. Remove blank lines for cleaner output
-          awk "/^## \[$VERSION_NO_V\]/,/^## \[/" CHANGELOG.md | \
-            grep -v '^##' | \
-            awk 'NF' > tag_message.txt
+          # Extract the section for this version from CHANGELOG.md using line numbers
+          # This approach is more reliable than awk patterns with shell variables
+          START_LINE=$(grep -n "^## \[${VERSION_NO_V}\]" CHANGELOG.md | cut -d: -f1)
+
+          if [ -z "$START_LINE" ]; then
+            echo "Warning: Could not find CHANGELOG entry for version $VERSION_NO_V"
+            echo "Release $VERSION" > tag_message.txt
+          else
+            # Find the next version header after START_LINE
+            END_LINE=$(grep -n "^## \[" CHANGELOG.md | awk -F: -v start="$START_LINE" '$1 > start {print $1; exit}')
+
+            if [ -z "$END_LINE" ]; then
+              # No next version found, extract to end of file
+              sed -n "${START_LINE},\$p" CHANGELOG.md | grep -v '^##' | awk 'NF' > tag_message.txt
+            else
+              # Extract between START_LINE and END_LINE (exclusive)
+              sed -n "${START_LINE},$((END_LINE-1))p" CHANGELOG.md | grep -v '^##' | awk 'NF' > tag_message.txt
+            fi
+          fi
 
           if [ ! -s tag_message.txt ]; then
-            echo "Warning: Could not find CHANGELOG entry for version $VERSION_NO_V"
+            echo "Warning: CHANGELOG extraction produced empty content"
             echo "Release $VERSION" > tag_message.txt
           fi
 
           echo "Tag message prepared from CHANGELOG"
           echo "Content preview:"
-          head -5 tag_message.txt
+          head -10 tag_message.txt
 
       - name: Create and push tag
         if: steps.check_release.outputs.is_release == 'true' && steps.check_tag.outputs.tag_exists == 'false'
