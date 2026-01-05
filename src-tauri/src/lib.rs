@@ -2156,12 +2156,10 @@ fn connect_ssh(
              .replace('`', "\\`")
         }
 
-        // Build the escaped SSH command
+        // Build the escaped SSH command for use in shell contexts
         let escaped_args: Vec<String> = ssh_args.iter()
             .map(|arg| shell_escape(arg))
             .collect();
-        // Run SSH and exit shell when done - this closes the tab
-        let ssh_cmd_str = format!("ssh {} ; exit", escaped_args.join(" "));
 
         match terminal_pref.as_str() {
             "custom" => {
@@ -2244,10 +2242,12 @@ fn connect_ssh(
                 // Default to tabs enabled (true) if not specified
                 let use_tabs = use_tabs_in_terminal.unwrap_or(true);
 
-                // Create AppleScript based on tab preference
-                // After SSH exits, use osascript to close the current tab
-                let close_command = "osascript -e 'tell application \"Terminal\" to close front window'";
-                let ssh_with_close = format!("{} ; {}", ssh_cmd_str, close_command);
+                // Create command that closes tab after SSH exits
+                // Use AppleScript to close the current tab (not entire window)
+                // Don't use 'exit' before osascript - let osascript close the tab
+                let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
+                let close_command = "osascript -e 'tell application \"Terminal\" to close (selected tab of front window)'";
+                let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
                 let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
 
                 let applescript = if use_tabs {
