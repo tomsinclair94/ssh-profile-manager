@@ -2160,8 +2160,8 @@ fn connect_ssh(
         let escaped_args: Vec<String> = ssh_args.iter()
             .map(|arg| shell_escape(arg))
             .collect();
-        // Use 'exec' to replace shell with SSH - when SSH exits, shell exits and tab closes
-        let ssh_cmd_str = format!("exec ssh {}", escaped_args.join(" "));
+        // Run SSH and exit shell when done - this closes the tab
+        let ssh_cmd_str = format!("ssh {} ; exit", escaped_args.join(" "));
 
         match terminal_pref.as_str() {
             "custom" => {
