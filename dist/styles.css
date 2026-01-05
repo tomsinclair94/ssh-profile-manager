@@ -579,8 +579,12 @@ button.keyboard-selected {
     min-width: 0;
 }
 
-/* Host and Auth fields (second and third items) - never shrink */
-.profile-info-item:nth-child(2),
+/* Host field (second item) - can truncate but minimum 32 characters */
+.profile-info-item:nth-child(2) {
+    flex-shrink: 0;
+}
+
+/* Auth field (third item) - never shrinks, always full */
 .profile-info-item:nth-child(3) {
     flex-shrink: 0;
 }
@@ -597,8 +601,14 @@ button.keyboard-selected {
     min-width: 0;
 }
 
-/* Host and Auth values never truncate */
-.profile-info-item:nth-child(2) .profile-info-value,
+/* Host value: minimum 32 characters, can truncate beyond that */
+.profile-info-item:nth-child(2) .profile-info-value {
+    min-width: 32ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Auth value: never truncates, always shows in full */
 .profile-info-item:nth-child(3) .profile-info-value {
     overflow: visible;
     text-overflow: clip;
