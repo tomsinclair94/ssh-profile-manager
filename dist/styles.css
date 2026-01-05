@@ -573,21 +573,24 @@ button.keyboard-selected {
     flex-shrink: 1;
 }
 
-/* User field (first item) - can shrink but doesn't grow, minimum size enforced */
+/* User field (first item) - shrinks faster than Host */
 .profile-info-item:nth-child(1) {
-    flex: 0 1 auto;
-    min-width: calc(16ch + 4ch);
+    flex: 0 2 auto;
+    min-width: 0;
     overflow: hidden;
 }
 
-/* Host field (second item) - never shrinks */
+/* Host field (second item) - shrinks slower, only after User is compressed */
 .profile-info-item:nth-child(2) {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
 }
 
-/* Auth field (third item) - never shrinks, always full */
+/* Auth field (third item) - NEVER shrinks, always full width, never cut off */
 .profile-info-item:nth-child(3) {
     flex: 0 0 auto;
+    overflow: visible;
 }
 
 .profile-info-label {
@@ -603,16 +606,15 @@ button.keyboard-selected {
     min-width: 0;
 }
 
-/* User value: minimum 16 characters, can truncate beyond that */
+/* User value: minimum 16ch, sizes naturally otherwise */
 .profile-info-item:nth-child(1) .profile-info-value {
     min-width: 16ch;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    display: block;
 }
 
-/* Host value: up to 80ch, but gracefully truncates if needed */
+/* Host value: up to 80ch max, can shrink with ellipsis */
 .profile-info-item:nth-child(2) .profile-info-value {
     max-width: 80ch;
     overflow: hidden;
@@ -620,12 +622,12 @@ button.keyboard-selected {
     white-space: nowrap;
 }
 
-/* Auth value: never truncates, always shows in full */
+/* Auth value: NEVER truncates, always visible, never gets cut off */
 .profile-info-item:nth-child(3) .profile-info-value {
+    flex-shrink: 0;
     overflow: visible;
     text-overflow: clip;
     white-space: nowrap;
-    flex-shrink: 0;
 }
 
 .profile-card-description {
