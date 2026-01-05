@@ -526,13 +526,24 @@ button.keyboard-selected {
     .profile-info-item {
         /* Let items size naturally based on content */
         flex: 0 1 auto;
-        max-width: calc(50% - 8px);
+        max-width: 70%;
     }
 
     .profile-info-value {
         flex: 1;
         min-width: 0;
-        max-width: 400px;
+        max-width: 600px;
+    }
+}
+
+/* Larger screens: allow even more space for long values */
+@media (min-width: 1200px) {
+    .profile-info-item {
+        max-width: 80%;
+    }
+
+    .profile-info-value {
+        max-width: 800px;
     }
 }
 
@@ -1173,21 +1184,13 @@ form {
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
-.input-group .btn-icon {
+.input-group .btn-toggle-password {
     flex-shrink: 0;
+    min-width: 60px;
     padding: 8px 12px;
-    min-width: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-.input-group .btn-icon .icon-eye {
-    font-size: 18px;
-    line-height: 1;
-}
-
-.input-group .btn-icon:focus {
+.input-group .btn-toggle-password:focus {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);

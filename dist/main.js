@@ -2472,15 +2472,14 @@ function setupEventListeners() {
     // Toggle password visibility
     togglePasswordBtn.addEventListener('click', () => {
         const passwordInput = document.getElementById('profile-password');
-        const eyeIcon = togglePasswordBtn.querySelector('.icon-eye');
 
         if (passwordInput.type === 'password') {
             passwordInput.type = 'text';
-            eyeIcon.textContent = '👁️‍🗨️';
+            togglePasswordBtn.textContent = 'Hide';
             togglePasswordBtn.title = 'Hide password';
         } else {
             passwordInput.type = 'password';
-            eyeIcon.textContent = '👁';
+            togglePasswordBtn.textContent = 'Show';
             togglePasswordBtn.title = 'Show password';
         }
     });
