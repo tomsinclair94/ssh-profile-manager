@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*' # Triggers on version tags like v0.1.0, v1.0.0, etc.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v0.6.2)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -22,8 +28,19 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,7 +66,7 @@ jobs:
         run: |
           # Get the tag annotation message
           git fetch --tags --force
-          NOTES=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+          NOTES=$(git tag -l --format='%(contents)' ${{ steps.tag.outputs.tag }})
           # Write to file for multi-line handling
           echo "$NOTES" > release_notes.txt
           # Set output for use in next step
@@ -62,8 +79,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: '${{ github.ref_name }}'
+          tagName: ${{ steps.tag.outputs.tag }}
+          releaseName: '${{ steps.tag.outputs.tag }}'
           releaseBody: ${{ steps.release_notes.outputs.notes }}
           releaseDraft: false
           prerelease: false
