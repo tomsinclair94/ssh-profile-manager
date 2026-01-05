@@ -2437,8 +2437,12 @@ fn connect_ssh(
             },
             "default" | _ => {
                 // Default: Try Windows Terminal first, fall back to cmd
+                // Respect tab setting for Windows Terminal
+                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+                let command_type = if use_tabs { "new-tab" } else { "new-window" };
+
                 match Command::new("wt")
-                    .arg("new-tab")
+                    .arg(command_type)
                     .arg("--title")
                     .arg(&profile.name)
                     .arg("ssh")
@@ -2452,7 +2456,7 @@ fn connect_ssh(
                             .arg("/c")
                             .arg("start")
                             .arg("cmd")
-                            .arg("/k")
+                            .arg("/c")
                             .arg("ssh")
                             .args(&ssh_args)
                             .spawn()
