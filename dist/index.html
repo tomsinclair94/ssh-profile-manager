@@ -204,7 +204,12 @@
                     <!-- Password (shown when auth-method is 'password') -->
                     <div class="form-group hidden" id="password-group">
                         <label for="profile-password">Password</label>
-                        <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
+                        <div class="input-group">
+                            <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
+                            <button type="button" class="btn btn-secondary btn-icon" id="toggle-password-btn" title="Show password">
+                                <span class="icon-eye">👁</span>
+                            </button>
+                        </div>
                         <small>Stored securely in system keychain</small>
                     </div>
 

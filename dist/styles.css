@@ -518,16 +518,21 @@ button.keyboard-selected {
     .profile-card-header,
     .profile-card-info,
     .profile-card-description {
-        max-width: calc(100% - 20px);
+        /* Allow full width minus some padding */
+        max-width: 100%;
+        padding-right: 16px;
     }
 
     .profile-info-item {
-        max-width: 30%;
+        /* Let items size naturally based on content */
+        flex: 0 1 auto;
+        max-width: calc(50% - 8px);
     }
 
     .profile-info-value {
         flex: 1;
         min-width: 0;
+        max-width: 400px;
     }
 }
 
@@ -1163,6 +1168,26 @@ form {
 }
 
 .input-group .btn-browse:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.input-group .btn-icon {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    min-width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.input-group .btn-icon .icon-eye {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.input-group .btn-icon:focus {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);

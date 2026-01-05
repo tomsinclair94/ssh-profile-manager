@@ -388,6 +388,7 @@ let toastElement;
 let toastMessage;
 let saveProfileBtn;
 let browseKeyBtn;
+let togglePasswordBtn;
 let checkUpdatesBtn;
 let autoUpdateCheck;
 let filterBtn;
@@ -552,6 +553,9 @@ function getProfileModalTabbableItems() {
     if (passwordGroup && !passwordGroup.classList.contains('hidden')) {
         const profilePassword = document.getElementById('profile-password');
         if (profilePassword) items.push(profilePassword);
+
+        const togglePasswordBtn = document.getElementById('toggle-password-btn');
+        if (togglePasswordBtn) items.push(togglePasswordBtn);
     }
 
     const profileGroup = document.getElementById('profile-group');
@@ -1575,6 +1579,7 @@ async function init() {
     toastMessage = document.getElementById('toast-message');
     saveProfileBtn = document.getElementById('save-profile-btn');
     browseKeyBtn = document.getElementById('browse-key-btn');
+    togglePasswordBtn = document.getElementById('toggle-password-btn');
     checkUpdatesBtn = document.getElementById('check-updates-btn');
     autoUpdateCheck = document.getElementById('auto-update-check');
     filterBtn = document.getElementById('filter-btn');
@@ -2462,6 +2467,22 @@ function setupEventListeners() {
     // Browse for SSH key file
     browseKeyBtn.addEventListener('click', async () => {
         await browseSshKey();
+    });
+
+    // Toggle password visibility
+    togglePasswordBtn.addEventListener('click', () => {
+        const passwordInput = document.getElementById('profile-password');
+        const eyeIcon = togglePasswordBtn.querySelector('.icon-eye');
+
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.textContent = '👁️‍🗨️';
+            togglePasswordBtn.title = 'Hide password';
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.textContent = '👁';
+            togglePasswordBtn.title = 'Show password';
+        }
     });
 
     // Update checker
