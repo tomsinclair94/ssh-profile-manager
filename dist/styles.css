@@ -573,15 +573,16 @@ button.keyboard-selected {
     flex-shrink: 1;
 }
 
-/* User field (first item) - can shrink and truncate */
+/* User field (first item) - shrinks first and fastest */
 .profile-info-item:nth-child(1) {
-    flex-shrink: 1;
+    flex-shrink: 3;
     min-width: 0;
 }
 
-/* Host field (second item) - can truncate but minimum 32 characters */
+/* Host field (second item) - can shrink but only after User field */
 .profile-info-item:nth-child(2) {
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 /* Auth field (third item) - never shrinks, always full */
@@ -601,9 +602,9 @@ button.keyboard-selected {
     min-width: 0;
 }
 
-/* Host value: minimum 32 characters, can truncate beyond that */
+/* Host value: can truncate but preserves up to 32 chars when possible */
 .profile-info-item:nth-child(2) .profile-info-value {
-    min-width: 32ch;
+    max-width: max-content;
     overflow: hidden;
     text-overflow: ellipsis;
 }
