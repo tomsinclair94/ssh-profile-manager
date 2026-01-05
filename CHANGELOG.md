@@ -5,6 +5,60 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2025-01-05
+
+### Changed
+- **Green Color Scheme**: Updated success color from various greens to consistent #34C759 (macOS-style green)
+  - Base button color: #34C759, hover: #2A9F47
+  - Applied to success buttons, toast notifications, and terminal status indicators
+- **Settings Modal Behavior**: Save button no longer closes settings modal
+  - Allows multiple saves without re-opening modal
+  - Button disables after save until new changes detected
+  - Improved user experience for iterative settings adjustments
+
+### Added
+- **Password Export Toggle**: New "Include Passwords in Export" checkbox in Profile Management
+  - Defaults to checked (enabled)
+  - Persisted to localStorage as user preference
+  - Requires clicking Save to apply (follows settings pattern)
+  - Settings Management respects this toggle when including profiles in backup
+- **Enhanced Username Validation**: Username field now supports @ symbol
+  - Max length increased from 32 to 128 characters
+  - Supports formats like `user@proxyuser` for complex SSH scenarios
+  - Backend and frontend validation updated
+- **Backend Password Retrieval**: Added `get_profile_password` command
+  - Retrieves passwords from system keychain for editing profiles
+  - Enables password field population when editing existing profiles
+
+### Fixed
+- **Hostname Validation**: Reduced max length from 128 to 64 characters (more realistic limit)
+- **Group Name Validation**: Increased max length from 32 to 64 characters (more flexibility)
+- **Field Tooltips**: Updated all validation tooltips to reflect new character limits and rules
+- **Windows Scrollbar**: Hidden persistent scrollbar arrows in Recent Connections on Windows
+  - Arrows no longer show when scrolling not needed
+  - CSS: `scrollbar-button { display: none }`
+- **Windows Button Hover**: Fixed text rendering issues during button hover scale animation
+  - Added `backface-visibility: hidden` and `-webkit-font-smoothing: subpixel-antialiased`
+  - Text no longer appears blurry or zoomed during hover
+- **Windows Icons**: Regenerated all icons with transparent backgrounds (PNG32/RGBA format)
+  - Removed white box background visible on Windows
+  - All icon sizes regenerated from SVG: 32x32, 128x128, 128x128@2x, Square logos (30-310px), StoreLogo, icon.ico
+  - Icons now match macOS appearance with clean transparency
+
+### Security
+- **Password Export Warning**: Updated security warnings to reflect conditional password inclusion
+  - Profile Management warning: Only warns when "Include Passwords in Export" is enabled
+  - Settings Management warning: References Profile Management toggle state
+  - More accurate risk communication to users
+
+### Known Issues
+- **Password Authentication Not Working**: Passwords are not being stored in system keychain despite success messages
+  - The keyring library reports success but macOS Keychain Access shows no entries created
+  - Passwords cannot be retrieved when editing profiles or exporting
+  - Export shows `password: null` even with "Include Passwords" enabled
+  - **Workaround**: Use SSH Key authentication or None (Keyboard-Interactive) instead
+  - **Fix planned for v0.6.3**: Will investigate keychain permissions and alternative storage methods
+
 ## [0.6.1] - 2025-01-03
 
 ### Changed

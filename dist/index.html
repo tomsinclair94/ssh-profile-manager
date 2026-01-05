@@ -19,7 +19,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.6.1</span>
+                    <span class="version">v0.6.2</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -141,13 +141,13 @@
                                     <div class="tooltip-title">Hostname / IP Requirements</div>
                                     <ul class="tooltip-rules">
                                         <li>Valid hostname OR IPv4 address</li>
-                                        <li>Hostname: letters, numbers, dots, hyphens (max 128 chars)</li>
+                                        <li>Hostname: letters, numbers, dots, hyphens (max 64 chars)</li>
                                         <li>IPv4: four octets (0-255) separated by dots</li>
                                         <li>Example: example.com or 192.168.1.1</li>
                                     </ul>
                                 </div>
                             </div>
-                            <span class="char-counter" id="profile-host-counter">0 / 128</span>
+                            <span class="char-counter" id="profile-host-counter">0 / 64</span>
                         </div>
 
                         <div class="form-group">
@@ -174,12 +174,12 @@
                                 <div class="tooltip-title">Username Requirements</div>
                                 <ul class="tooltip-rules">
                                     <li>Letters and numbers allowed</li>
-                                    <li>Special characters: _ - .</li>
-                                    <li>Maximum 32 characters</li>
+                                    <li>Special characters: _ - . @</li>
+                                    <li>Maximum 128 characters</li>
                                 </ul>
                             </div>
                         </div>
-                        <span class="char-counter" id="profile-username-counter">0 / 32</span>
+                        <span class="char-counter" id="profile-username-counter">0 / 128</span>
                     </div>
 
                     <div class="form-group">
@@ -217,11 +217,11 @@
                                 <ul class="tooltip-rules">
                                     <li>Letters, numbers, and spaces allowed</li>
                                     <li>Special characters: - _ ( ) . [ ]</li>
-                                    <li>Maximum 32 characters</li>
+                                    <li>Maximum 64 characters</li>
                                 </ul>
                             </div>
                         </div>
-                        <span class="char-counter" id="profile-group-counter">0 / 32</span>
+                        <span class="char-counter" id="profile-group-counter">0 / 64</span>
                     </div>
                 </form>
             </div>
@@ -323,13 +323,19 @@
                     <!-- Import/Export Settings -->
                     <div class="settings-section">
                         <h3>Profile Management</h3>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="include-passwords-check" checked>
+                                <span>Include Passwords in Export</span>
+                            </label>
+                        </div>
                         <div class="settings-actions">
                             <button id="export-profiles-btn" class="btn btn-secondary">Export Profiles</button>
                             <button id="import-profiles-btn" class="btn btn-secondary">Import Profiles</button>
                             <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All Profiles</button>
                             <input type="file" id="import-file-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.<br><strong>Security Warning:</strong> Exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.<br><strong>Security Warning:</strong> When "Include Passwords in Export" is enabled, exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
                     </div>
 
                     <!-- Settings Management -->
@@ -347,7 +353,7 @@
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Warning:</strong> Backups with profiles contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Warning:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups will contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
                     </div>
 
                     <!-- Updates Section -->
@@ -375,7 +381,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.1" target="_blank" class="about-value version-link">0.6.1</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.2" target="_blank" class="about-value version-link">0.6.2</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
