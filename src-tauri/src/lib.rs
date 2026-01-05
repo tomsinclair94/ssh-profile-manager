@@ -2247,23 +2247,26 @@ fn connect_ssh(
 
                 // Create AppleScript based on tab preference
                 let applescript = if use_tabs {
-                    // Open in new tab if Terminal has existing windows, otherwise new window
+                    // Open in new tab - just use "do script" which automatically creates
+                    // a new tab in the frontmost window (or new window if none exist)
                     format!(
                         "tell application \"Terminal\"\n\
-                         if (count of windows) > 0 then\n\
-                             do script \"{}\" in window 1\n\
-                         else\n\
-                             do script \"{}\"\n\
-                         end if\n\
+                         do script \"{}\"\n\
                          activate\n\
                          end tell",
-                        applescript_escaped, applescript_escaped
+                        applescript_escaped
                     )
                 } else {
-                    // Always open in new window
+                    // Always open in new window - use System Events to create new window first
                     format!(
-                        "tell application \"Terminal\" to do script \"{}\"\n\
-                         tell application \"Terminal\" to activate",
+                        "tell application \"Terminal\"\n\
+                         activate\n\
+                         tell application \"System Events\" to tell process \"Terminal\"\n\
+                             click menu item \"New Window\" of menu \"Shell\" of menu bar 1\n\
+                         end tell\n\
+                         delay 0.1\n\
+                         do script \"{}\" in front window\n\
+                         end tell",
                         applescript_escaped
                     )
                 };
