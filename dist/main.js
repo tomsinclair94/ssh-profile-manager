@@ -2046,15 +2046,15 @@ function renderProfiles(filter = '') {
                     <div class="profile-card-info">
                         <div class="profile-info-item">
                             <span class="profile-info-label">User:</span>
-                            <span>${escapeHtml(profile.username)}</span>
+                            <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
                         </div>
                         <div class="profile-info-item">
                             <span class="profile-info-label">Host:</span>
-                            <span>${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
+                            <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
                         </div>
                         <div class="profile-info-item">
                             <span class="profile-info-label">Auth:</span>
-                            <span>${escapeHtml(profile.auth_method || 'key')}</span>
+                            <span class="profile-info-value" title="${escapeHtml(profile.auth_method || 'key')}">${escapeHtml(profile.auth_method || 'key')}</span>
                         </div>
                     </div>
                     ${profile.description ? `<div class="profile-card-description" title="${escapeHtml(profile.description)}">${escapeHtml(profile.description)}</div>` : ''}
