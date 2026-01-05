@@ -573,10 +573,10 @@ button.keyboard-selected {
     flex-shrink: 1;
 }
 
-/* User field (first item) - can shrink but doesn't grow */
+/* User field (first item) - can shrink but doesn't grow, minimum size enforced */
 .profile-info-item:nth-child(1) {
     flex: 0 1 auto;
-    min-width: 0;
+    min-width: calc(16ch + 4ch);
     overflow: hidden;
 }
 
@@ -608,6 +608,8 @@ button.keyboard-selected {
     min-width: 16ch;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
 }
 
 /* Host value: up to 80ch, but gracefully truncates if needed */
