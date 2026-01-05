@@ -2160,7 +2160,8 @@ fn connect_ssh(
         let escaped_args: Vec<String> = ssh_args.iter()
             .map(|arg| shell_escape(arg))
             .collect();
-        let ssh_cmd_str = format!("ssh {}", escaped_args.join(" "));
+        // Use 'exec' to replace shell with SSH - when SSH exits, shell exits and tab closes
+        let ssh_cmd_str = format!("exec ssh {}", escaped_args.join(" "));
 
         match terminal_pref.as_str() {
             "custom" => {
@@ -2291,11 +2292,12 @@ fn connect_ssh(
         match terminal_pref.as_str() {
             "cmd" => {
                 // Use Command Prompt - pass args directly to avoid shell escaping issues
+                // Use /c to close window after SSH session ends
                 Command::new("cmd")
                     .arg("/c")
                     .arg("start")
                     .arg("cmd")
-                    .arg("/k")
+                    .arg("/c")
                     .arg("ssh")
                     .args(&ssh_args)
                     .spawn()
@@ -2318,11 +2320,11 @@ fn connect_ssh(
                     .collect::<Vec<String>>()
                     .join(" ");
 
+                // Remove -NoExit so PowerShell closes after SSH session ends
                 Command::new("cmd")
                     .arg("/c")
                     .arg("start")
                     .arg("powershell")
-                    .arg("-NoExit")
                     .arg("-Command")
                     .arg(&ssh_command)
                     .spawn()
