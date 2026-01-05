@@ -25,7 +25,30 @@
 - ✅ Profile Content Auto-sizing - Improved responsive layout with tooltips and flexible sizing
 - ✅ Windows Terminal Tab Setting - Fixed default case to respect user preference
 
+#### UI Enhancements (v0.6.3-dev branch)
+- ✅ Password Visibility Toggle - Show/Hide button (text-based, fixed 65px width)
+- ✅ Profile Card Spacing - Better horizontal space utilization on wide screens
+- ✅ Field Sizing - User/Host/Auth fields size naturally to content
+- ✅ Auth Field Protection - Never truncates or gets cut off
+- ⚠️ **IN PROGRESS:** User/Host field truncation behavior refinement
+
 ### Remaining Tasks
+
+#### Profile Card Field Truncation (In Progress)
+**Status:** Near completion, needs final tuning
+
+**Current Behavior:**
+- User field: Minimum 16ch, sizes naturally when short
+- Host field: Up to 80ch, can truncate
+- Auth field: Never truncates, always full
+
+**Issue to Resolve:**
+- Need to fine-tune truncation priority and ellipsis display
+- User field should show ellipsis when truncated
+- Host field should shrink with ellipsis before Auth gets affected
+- Short usernames (e.g., "username" = 8 chars) should not have gaps
+
+**Commits:** 24 commits total (13 new commits for UI enhancements)
 
 #### Windows Testing (Requires Windows Machine)
 **Status:** Code review completed, manual testing required
@@ -67,7 +90,8 @@
 
 ### Branch Status
 - **Files Modified:** lib.rs, Cargo.toml, index.html, main.js, styles.css, icon.ico, TODO.md
-- **Commits:** 11 commits
+- **Commits:** 24 commits (11 bug fixes + 13 UI enhancements)
+- **Last Updated:** 2025-01-05
 
 ---
 
