@@ -168,8 +168,8 @@ fn validate_hostname(host: &str) -> Result<(), String> {
     if host.is_empty() {
         return Err("Hostname cannot be empty".to_string());
     }
-    if host.len() > 128 {
-        return Err("Hostname too long (max 128 characters)".to_string());
+    if host.len() > 64 {
+        return Err("Hostname too long (max 64 characters)".to_string());
     }
     // Check for dangerous characters that could break shell commands
     if host.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>')) {
@@ -186,16 +186,16 @@ fn validate_username(username: &str) -> Result<(), String> {
     if username.is_empty() {
         return Err("Username cannot be empty".to_string());
     }
-    if username.len() > 32 {
-        return Err("Username too long (max 32 characters)".to_string());
+    if username.len() > 128 {
+        return Err("Username too long (max 128 characters)".to_string());
     }
     // Check for dangerous characters
     if username.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>' | ' ')) {
         return Err("Username contains invalid characters".to_string());
     }
-    // Allow alphanumeric, underscore, hyphen, dot (common in usernames)
-    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.') {
-        return Err("Username can only contain letters, numbers, underscores, hyphens, and dots".to_string());
+    // Allow alphanumeric, underscore, hyphen, dot, and @ (for formats like user@proxyuser)
+    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '@') {
+        return Err("Username can only contain letters, numbers, underscores, hyphens, dots, and @".to_string());
     }
     Ok(())
 }
@@ -269,8 +269,8 @@ fn validate_group(group: &str) -> Result<(), String> {
     if group.is_empty() {
         return Ok(()); // Group is optional
     }
-    if group.len() > 32 {
-        return Err("Group name too long (max 32 characters)".to_string());
+    if group.len() > 64 {
+        return Err("Group name too long (max 64 characters)".to_string());
     }
     // Same pattern as profile name but shorter
     if !group.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']')) {
@@ -846,6 +846,21 @@ fn delete_password(profile_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_profile_password(profile_id: String) -> Result<String, String> {
+    println!("Attempting to retrieve password for profile: {}", profile_id);
+    match get_password(&profile_id) {
+        Ok(password) => {
+            println!("Password retrieved successfully: {} chars", password.len());
+            Ok(password)
+        }
+        Err(e) => {
+            println!("Failed to retrieve password: {}", e);
+            Err(e)
+        }
+    }
+}
+
 // Export/Import structures
 #[derive(Debug, Serialize, Deserialize)]
 struct ProfileExport {
@@ -981,11 +996,26 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
+        println!("Auth method is password, checking password field...");
         if let Some(password) = profile.password {
+            println!("Password provided: {} chars", password.len());
             if !password.is_empty() {
-                store_password(&id, &password)?;
+                println!("Attempting to store password for profile: {}", id);
+                match store_password(&id, &password) {
+                    Ok(_) => println!("Password stored successfully"),
+                    Err(e) => {
+                        println!("Failed to store password: {}", e);
+                        return Err(format!("Failed to store password: {}", e));
+                    }
+                }
+            } else {
+                println!("Password is empty, not storing");
             }
+        } else {
+            println!("No password provided");
         }
+    } else {
+        println!("Auth method is not password: {}", profile.auth_method);
     }
 
     Ok(id)
@@ -1075,14 +1105,14 @@ fn delete_profile(db: State<Database>, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn export_profiles(db: State<Database>) -> Result<String, String> {
+fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<String, String> {
     let profiles = db.get_all_profiles()
         .map_err(|e| format!("Failed to get profiles: {}", e))?;
 
     let mut export_profiles = Vec::new();
 
     for profile in profiles {
-        let password = if profile.auth_method == "password" {
+        let password = if include_passwords && profile.auth_method == "password" {
             get_password(&profile.id).ok()
         } else {
             None
@@ -1193,6 +1223,7 @@ fn export_settings(
     collapsed_groups: Option<Vec<String>>,
     terminal_preference: String,
     include_profiles: bool,
+    include_passwords: bool,
     db: State<Database>,
 ) -> Result<String, String> {
     // Detect current OS
@@ -1230,9 +1261,13 @@ fn export_settings(
         let mut profile_exports = Vec::new();
 
         for profile in all_profiles {
-            let password = match &profile.auth_method as &str {
-                "password" => get_password(&profile.id).ok(),
-                _ => None,
+            let password = if include_passwords {
+                match &profile.auth_method as &str {
+                    "password" => get_password(&profile.id).ok(),
+                    _ => None,
+                }
+            } else {
+                None
             };
 
             profile_exports.push(ProfileExport {
@@ -2431,6 +2466,7 @@ pub fn run() {
             create_profile,
             update_profile,
             delete_profile,
+            get_profile_password,
             export_profiles,
             import_profiles,
             save_profiles_to_file,

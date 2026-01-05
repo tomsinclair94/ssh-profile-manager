@@ -56,7 +56,7 @@ const VALIDATION = {
     },
     hostname: {
         pattern: /^[a-zA-Z0-9.\-_]+$/,
-        maxLength: 128,
+        maxLength: 64,
         message: 'Only letters, numbers, dots, hyphens, underscores allowed'
     },
     ipv4: {
@@ -70,13 +70,13 @@ const VALIDATION = {
         message: 'Must be between 1 and 65535'
     },
     username: {
-        pattern: /^[a-zA-Z0-9_\-.]+$/,
-        maxLength: 32,
-        message: 'Only letters, numbers, underscores, hyphens, dots allowed'
+        pattern: /^[a-zA-Z0-9_\-.@]+$/,
+        maxLength: 128,
+        message: 'Only letters, numbers, underscores, hyphens, dots, @ allowed'
     },
     group: {
         pattern: /^[a-zA-Z0-9\s\-_().\[\]]+$/,
-        maxLength: 32,
+        maxLength: 64,
         message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] allowed'
     }
 };
@@ -401,6 +401,7 @@ let restoreSettingsBtn;
 let restoreSettingsInput;
 let resetSettingsBtn;
 let includeProfilesCheck;
+let includePasswordsCheck;
 let profileCountBadge;
 let terminalSelect;
 let customTerminalGroup;
@@ -1587,6 +1588,7 @@ async function init() {
     restoreSettingsInput = document.getElementById('restore-settings-input');
     resetSettingsBtn = document.getElementById('reset-settings-btn');
     includeProfilesCheck = document.getElementById('include-profiles-check');
+    includePasswordsCheck = document.getElementById('include-passwords-check');
     profileCountBadge = document.getElementById('profile-count-badge');
     terminalSelect = document.getElementById('terminal-select');
     customTerminalGroup = document.getElementById('custom-terminal-group');
@@ -2471,6 +2473,10 @@ function setupEventListeners() {
         debouncedCheckSettingsChanged();
     });
 
+    includePasswordsCheck.addEventListener('change', () => {
+        debouncedCheckSettingsChanged();
+    });
+
     // Expand/collapse all groups button
     expandCollapseBtn.addEventListener('click', () => {
         toggleExpandCollapseAll();
@@ -2746,6 +2752,7 @@ function getCurrentSettingsValues() {
         terminalPreference: terminalSelect.value,
         customTerminalPath: customTerminalPath.value,
         includeProfiles: includeProfilesCheck.checked,
+        includePasswords: includePasswordsCheck.checked,
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true
     };
@@ -2784,6 +2791,7 @@ function openSettings() {
     // Load current settings values into form
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
+    loadIncludePasswordsPreference();
 
     // Capture original settings values and disable Save button initially
     captureSettingsValues();
@@ -2894,6 +2902,9 @@ function saveSettings() {
     // Save include profiles preference
     saveIncludeProfilesPreference();
 
+    // Save include passwords preference
+    saveIncludePasswordsPreference();
+
     // Save recent connections limit
     saveRecentConnectionsLimit();
 
@@ -2903,8 +2914,9 @@ function saveSettings() {
     // Reload recent connections with new limit
     loadRecentConnections();
 
-    // Close modal after saving
-    forceCloseSettings();
+    // Capture new settings values and disable Save button
+    captureSettingsValues();
+    settingsSaveBtn.disabled = true;
 
     showToast('Settings saved successfully!');
 }
@@ -2938,6 +2950,21 @@ function saveAutoUpdatePreference() {
 
 function saveIncludeProfilesPreference() {
     localStorage.setItem('includeProfiles', includeProfilesCheck.checked);
+}
+
+function loadIncludePasswordsPreference() {
+    const includePasswords = localStorage.getItem('includePasswords');
+    // Default to true (checked) if not set
+    if (includePasswords === null) {
+        includePasswordsCheck.checked = true;
+        saveIncludePasswordsPreference();
+    } else {
+        includePasswordsCheck.checked = includePasswords === 'true';
+    }
+}
+
+function saveIncludePasswordsPreference() {
+    localStorage.setItem('includePasswords', includePasswordsCheck.checked);
 }
 
 async function checkForUpdates(silent = false) {
@@ -3501,7 +3528,10 @@ async function exportProfiles() {
         // Show loading feedback
         showToast('Exporting profiles...', TOAST_DURATION_LOADING);
 
-        const data = await invoke('export_profiles');
+        // Check if passwords should be included (read from localStorage)
+        const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+
+        const data = await invoke('export_profiles', { includePasswords });
         const defaultFilename = `sshpm-profiles-${new Date().toISOString().split('T')[0]}.json`;
 
         // Call Tauri backend to show save dialog and write file
@@ -3734,6 +3764,9 @@ async function backupSettings() {
             collapsedGroups = JSON.parse(collapsedGroupsData);
         }
 
+        // Check if passwords should be included (from Profile Management setting)
+        const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+
         const data = await invoke('export_settings', {
             theme,
             autoUpdateCheck,
@@ -3742,6 +3775,7 @@ async function backupSettings() {
             collapsedGroups,
             terminalPreference: terminalPreference,
             includeProfiles,
+            includePasswords,
             windowWidth,
             windowHeight
         });
@@ -4123,6 +4157,7 @@ async function resetSettings() {
         // Reset to defaults
         localStorage.setItem('theme', 'system');
         localStorage.setItem('autoUpdateCheck', 'true');
+        localStorage.setItem('includePasswords', 'true');
         localStorage.setItem('filteredGroups', '[]');
         localStorage.setItem('collapsedGroups', '[]');
         localStorage.setItem('terminalPreference', 'default');
@@ -4174,7 +4209,7 @@ async function browseSshKey() {
 }
 
 // Open modal for new or edit profile
-function openModal(profile = null) {
+async function openModal(profile = null) {
     console.log('openModal called with profile:', profile);
     editingProfileId = profile ? profile.id : null;
 
@@ -4191,6 +4226,23 @@ function openModal(profile = null) {
         document.getElementById('profile-auth-method').value = profile.auth_method || 'none';
         document.getElementById('profile-key-path').value = profile.key_path || '';
         document.getElementById('profile-group').value = profile.group || '';
+
+        // Retrieve password from keychain if auth method is password
+        if (profile.auth_method === 'password') {
+            console.log('Profile has password auth, attempting to retrieve password for:', profile.id);
+            try {
+                const password = await invoke('get_profile_password', { profileId: profile.id });
+                console.log('Password retrieved successfully, length:', password ? password.length : 0);
+                document.getElementById('profile-password').value = password || '';
+            } catch (error) {
+                console.error('Failed to retrieve password:', error);
+                document.getElementById('profile-password').value = '';
+            }
+        } else {
+            console.log('Profile auth method is not password:', profile.auth_method);
+            document.getElementById('profile-password').value = '';
+        }
+
         deleteProfileBtn.classList.remove('hidden');
     } else {
         modalTitle.textContent = 'New Profile';

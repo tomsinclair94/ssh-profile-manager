@@ -13,7 +13,7 @@
     --border-color: #3e3e42;
     --text-color: #cccccc;
     --text-muted: #858585;
-    --success-color: #00CA4E;
+    --success-color: #34C759;
     --danger-color: #e81123;
     --radius: 6px;
 }
@@ -616,6 +616,8 @@ button.keyboard-selected {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
+    backface-visibility: hidden; /* Fix text rendering on Windows during hover scale */
+    -webkit-font-smoothing: subpixel-antialiased; /* Improve text rendering on Windows */
 }
 
 .btn-primary {
@@ -676,9 +678,9 @@ button.keyboard-selected {
 }
 
 .btn-success:hover {
-    background-color: #13a309;
+    background-color: #2A9F47;
     transform: scale(1.05);
-    box-shadow: 0 2px 6px rgba(22, 198, 12, 0.4);
+    box-shadow: 0 2px 6px rgba(52, 199, 89, 0.4);
 }
 
 .btn-info {
@@ -1439,7 +1441,7 @@ form {
 }
 
 .terminal-status.connected {
-    background-color: #00CA4E;
+    background-color: #34C759;
     color: #ffffff;
 }
 
@@ -1530,6 +1532,10 @@ form {
 .recent-connections-list::-webkit-scrollbar {
     height: 14px;
     -webkit-appearance: none;
+}
+
+.recent-connections-list::-webkit-scrollbar-button {
+    display: none; /* Hide scrollbar arrows on Windows */
 }
 
 .recent-connections-list::-webkit-scrollbar-track {
