@@ -317,7 +317,13 @@
                                 <button type="button" class="btn btn-secondary btn-browse" id="browse-terminal-btn">Browse</button>
                             </div>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles.</p>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="use-tabs-in-terminal-check" checked>
+                                <span>Open profiles in new tabs (when supported)</span>
+                            </label>
+                        </div>
+                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).</p>
                     </div>
 
                     <!-- Import/Export Settings -->

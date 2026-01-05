@@ -898,6 +898,8 @@ struct SettingsData {
 #[derive(Debug, Serialize, Deserialize)]
 struct SettingsOsSpecific {
     terminal_preference: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    use_tabs_in_terminal: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1222,6 +1224,7 @@ fn export_settings(
     filtered_groups: Option<Vec<String>>,
     collapsed_groups: Option<Vec<String>>,
     terminal_preference: String,
+    use_tabs_in_terminal: Option<bool>,
     include_profiles: bool,
     include_passwords: bool,
     db: State<Database>,
@@ -1248,6 +1251,7 @@ fn export_settings(
 
     let settings_os_specific = SettingsOsSpecific {
         terminal_preference,
+        use_tabs_in_terminal,
     };
 
     // Validate before exporting
@@ -2091,6 +2095,7 @@ fn connect_ssh(
     profile_id: String,
     terminal_preference: Option<String>,
     custom_terminal_path: Option<String>,
+    use_tabs_in_terminal: Option<bool>,
     app_handle: tauri::AppHandle
 ) -> Result<(), String> {
     let profile = db
@@ -2237,11 +2242,35 @@ fn connect_ssh(
                 // Use default Terminal.app
                 let applescript_escaped = applescript_escape(&ssh_cmd_str);
 
+                // Default to tabs enabled (true) if not specified
+                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+
+                // Create AppleScript based on tab preference
+                let applescript = if use_tabs {
+                    // Open in new tab if Terminal has existing windows, otherwise new window
+                    format!(
+                        "tell application \"Terminal\"\n\
+                         if (count of windows) > 0 then\n\
+                             do script \"{}\" in window 1\n\
+                         else\n\
+                             do script \"{}\"\n\
+                         end if\n\
+                         activate\n\
+                         end tell",
+                        applescript_escaped, applescript_escaped
+                    )
+                } else {
+                    // Always open in new window
+                    format!(
+                        "tell application \"Terminal\" to do script \"{}\"\n\
+                         tell application \"Terminal\" to activate",
+                        applescript_escaped
+                    )
+                };
+
                 Command::new("osascript")
                     .arg("-e")
-                    .arg(format!("tell application \"Terminal\" to do script \"{}\"", applescript_escaped))
-                    .arg("-e")
-                    .arg("tell application \"Terminal\" to activate")
+                    .arg(applescript)
                     .spawn()
                     .map_err(|e| format!("Failed to launch terminal: {}", e))?;
             }
@@ -2297,8 +2326,14 @@ fn connect_ssh(
             },
             "windows_terminal" => {
                 // Use Windows Terminal (wt.exe) - pass args directly (safest method)
+                // Default to tabs enabled (true) if not specified
+                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+
+                // Use 'new-tab' for tabs, 'new-window' for separate windows
+                let command_type = if use_tabs { "new-tab" } else { "new-window" };
+
                 match Command::new("wt")
-                    .arg("new-tab")
+                    .arg(command_type)
                     .arg("--title")
                     .arg(&profile.name)
                     .arg("ssh")

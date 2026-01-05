@@ -2477,6 +2477,14 @@ function setupEventListeners() {
         debouncedCheckSettingsChanged();
     });
 
+    // Use tabs in terminal checkbox
+    const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
+    if (useTabsInTerminalCheck) {
+        useTabsInTerminalCheck.addEventListener('change', () => {
+            debouncedCheckSettingsChanged();
+        });
+    }
+
     // Expand/collapse all groups button
     expandCollapseBtn.addEventListener('click', () => {
         toggleExpandCollapseAll();
@@ -2746,6 +2754,7 @@ function updateAuthMethodVisibility() {
 function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     return {
         theme: themeSelect.value,
         autoUpdateCheck: autoUpdateCheck.checked,
@@ -2754,7 +2763,8 @@ function getCurrentSettingsValues() {
         includeProfiles: includeProfilesCheck.checked,
         includePasswords: includePasswordsCheck.checked,
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
-        keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true
+        keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
+        useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true
     };
 }
 
@@ -2792,6 +2802,7 @@ function openSettings() {
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
     loadIncludePasswordsPreference();
+    loadUseTabsInTerminalPreference();
 
     // Capture original settings values and disable Save button initially
     captureSettingsValues();
@@ -2905,6 +2916,9 @@ function saveSettings() {
     // Save include passwords preference
     saveIncludePasswordsPreference();
 
+    // Save use tabs in terminal preference
+    saveUseTabsInTerminalPreference();
+
     // Save recent connections limit
     saveRecentConnectionsLimit();
 
@@ -2965,6 +2979,27 @@ function loadIncludePasswordsPreference() {
 
 function saveIncludePasswordsPreference() {
     localStorage.setItem('includePasswords', includePasswordsCheck.checked);
+}
+
+function loadUseTabsInTerminalPreference() {
+    const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
+    if (useTabsInTerminalCheck) {
+        const useTabsInTerminal = localStorage.getItem('useTabsInTerminal');
+        // Default to true (checked) if not set
+        if (useTabsInTerminal === null) {
+            useTabsInTerminalCheck.checked = true;
+            saveUseTabsInTerminalPreference();
+        } else {
+            useTabsInTerminalCheck.checked = useTabsInTerminal === 'true';
+        }
+    }
+}
+
+function saveUseTabsInTerminalPreference() {
+    const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
+    if (useTabsInTerminalCheck) {
+        localStorage.setItem('useTabsInTerminal', useTabsInTerminalCheck.checked);
+    }
 }
 
 async function checkForUpdates(silent = false) {
@@ -3752,6 +3787,7 @@ async function backupSettings() {
 
         // Always include terminal preference (OS-specific setting, will be tagged with OS)
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
+        const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -3774,6 +3810,7 @@ async function backupSettings() {
             filteredGroups,
             collapsedGroups,
             terminalPreference: terminalPreference,
+            useTabsInTerminal: useTabsInTerminal,
             includeProfiles,
             includePasswords,
             windowWidth,
@@ -3988,9 +4025,14 @@ async function restoreSettings(file) {
                 ? result.settings_os_specific.terminal_preference
                 : 'default';
             localStorage.setItem('terminalPreference', termPref);
+
+            // Restore use_tabs_in_terminal if present (default to true if not specified)
+            const useTabsInTerminal = result.settings_os_specific.use_tabs_in_terminal !== false;
+            localStorage.setItem('useTabsInTerminal', useTabsInTerminal.toString());
         } else {
-            // No OS-specific settings in backup (different OS or old format) - use default
+            // No OS-specific settings in backup (different OS or old format) - use defaults
             localStorage.setItem('terminalPreference', 'default');
+            localStorage.setItem('useTabsInTerminal', 'true');
         }
 
         // Restore window state if available with validation
@@ -4548,6 +4590,7 @@ async function connectToProfile(id) {
         // Get terminal preference from localStorage
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
         const customTerminalPath = localStorage.getItem('customTerminalPath') || null;
+        const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
 
         // Route to embedded terminal or external terminal
         if (terminalPreference === 'embedded') {
@@ -4556,7 +4599,8 @@ async function connectToProfile(id) {
             await invoke('connect_ssh', {
                 profileId: id,
                 terminalPreference: terminalPreference,
-                customTerminalPath: customTerminalPath
+                customTerminalPath: customTerminalPath,
+                useTabsInTerminal: useTabsInTerminal
             });
         }
 
