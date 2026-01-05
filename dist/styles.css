@@ -573,9 +573,9 @@ button.keyboard-selected {
     flex-shrink: 1;
 }
 
-/* User field (first item) - shrinks and can be compressed */
+/* User field (first item) - can shrink but doesn't grow */
 .profile-info-item:nth-child(1) {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
 }
