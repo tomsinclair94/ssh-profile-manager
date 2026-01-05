@@ -86,3 +86,79 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
+
+  create-installer-bundle:
+    name: Create Installer Bundle
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          # Remove 'v' prefix for version number
+          VERSION="${TAG#v}"
+
+          echo "Downloading release assets for $TAG..."
+
+          # Create directory for downloads
+          mkdir -p installers
+
+          # Download all release assets
+          gh release download "$TAG" --dir installers
+
+          echo "Downloaded files:"
+          ls -lh installers/
+
+      - name: Create installer bundle zip
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+
+          cd installers
+
+          # Create zip with all installer files (DMG, MSI, EXE)
+          ZIP_NAME="SSH.Profile.Manager_${VERSION}_installers.zip"
+
+          echo "Creating bundle: $ZIP_NAME"
+          zip -r "$ZIP_NAME" *.dmg *.msi *.exe 2>/dev/null || true
+
+          # Verify zip was created
+          if [ -f "$ZIP_NAME" ]; then
+            echo "Bundle created successfully:"
+            ls -lh "$ZIP_NAME"
+            unzip -l "$ZIP_NAME"
+          else
+            echo "Error: Failed to create bundle zip"
+            exit 1
+          fi
+
+          cd ..
+
+      - name: Upload installer bundle to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          ZIP_NAME="SSH.Profile.Manager_${VERSION}_installers.zip"
+
+          echo "Uploading $ZIP_NAME to release $TAG..."
+          gh release upload "$TAG" "installers/$ZIP_NAME" --clobber
+
+          echo "Bundle uploaded successfully!"
+          echo "Release assets:"
+          gh release view "$TAG" --json assets --jq '.assets[].name'
