@@ -573,6 +573,18 @@ button.keyboard-selected {
     flex-shrink: 1;
 }
 
+/* User field (first item) - can shrink and truncate */
+.profile-info-item:nth-child(1) {
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+/* Host and Auth fields (second and third items) - never shrink */
+.profile-info-item:nth-child(2),
+.profile-info-item:nth-child(3) {
+    flex-shrink: 0;
+}
+
 .profile-info-label {
     font-weight: 500;
     flex-shrink: 0;
@@ -583,6 +595,15 @@ button.keyboard-selected {
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+}
+
+/* Host and Auth values never truncate */
+.profile-info-item:nth-child(2) .profile-info-value,
+.profile-info-item:nth-child(3) .profile-info-value {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .profile-card-description {
