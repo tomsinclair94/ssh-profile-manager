@@ -2241,12 +2241,15 @@ fn connect_ssh(
             },
             "default" | _ => {
                 // Use default Terminal.app
-                let applescript_escaped = applescript_escape(&ssh_cmd_str);
-
                 // Default to tabs enabled (true) if not specified
                 let use_tabs = use_tabs_in_terminal.unwrap_or(true);
 
                 // Create AppleScript based on tab preference
+                // After SSH exits, use osascript to close the current tab
+                let close_command = "osascript -e 'tell application \"Terminal\" to close front window'";
+                let ssh_with_close = format!("{} ; {}", ssh_cmd_str, close_command);
+                let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
+
                 let applescript = if use_tabs {
                     // Open in new tab - use System Events to trigger Cmd+T (new tab)
                     format!(
@@ -2260,7 +2263,7 @@ fn connect_ssh(
                              do script \"{}\"\n\
                          end if\n\
                          end tell",
-                        applescript_escaped, applescript_escaped
+                        ssh_with_close_escaped, ssh_with_close_escaped
                     )
                 } else {
                     // Always open in new window - just use basic "do script"
@@ -2269,7 +2272,7 @@ fn connect_ssh(
                          do script \"{}\"\n\
                          activate\n\
                          end tell",
-                        applescript_escaped
+                        ssh_with_close_escaped
                     )
                 };
 
