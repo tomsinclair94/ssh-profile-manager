@@ -17,19 +17,57 @@
   - macOS Terminal: Cmd+T via AppleScript
   - Windows Terminal: `wt new-tab` vs `wt new-window`
   - Persists to localStorage, exports/imports correctly
-  - **Known Issue:** Auto-close after SSH exit not working on macOS
 
-### Active Bugs (v0.6.3)
+#### Bug Fixes (v0.6.3-dev branch)
+- ✅ Auto-Close Terminal Tabs (macOS) - Fixed AppleScript to close selected tab instead of window
+- ✅ Password Authentication - Added keyring native features (apple-native, windows-native, linux-native)
+- ✅ Windows Icon Background - Regenerated .ico with transparency using ImageMagick
+- ✅ Profile Content Auto-sizing - Improved responsive layout with tooltips and flexible sizing
+- ✅ Windows Terminal Tab Setting - Fixed default case to respect user preference
 
-1. **Fix Auto-Close Terminal Tabs** (macOS) - Current osascript approach not working
-2. **Password Authentication Not Working** - Passwords not being stored in keychain (keyring library reports success but macOS Keychain shows no entries)
-3. **Windows Icon Background** - Icon still has white background
-4. **Profile Content Auto-sizing** - Optimize display of User/Host/Auth fields
-5. **Windows Testing** - Full testing to find Windows-specific bugs
+### Remaining Tasks
+
+#### Windows Testing (Requires Windows Machine)
+**Status:** Code review completed, manual testing required
+
+**Test Checklist:**
+1. **Windows Terminal Integration**
+   - [ ] Test new-tab mode with "Open profiles in new tabs" enabled
+   - [ ] Test new-window mode with setting disabled
+   - [ ] Verify SSH sessions work correctly
+   - [ ] Check tab/window auto-close after SSH exits
+
+2. **Command Prompt (cmd)**
+   - [ ] Test SSH connections launch correctly
+   - [ ] Verify window closes after SSH session ends
+
+3. **PowerShell**
+   - [ ] Test SSH connections with PowerShell
+   - [ ] Verify proper argument escaping (test with spaces, quotes)
+   - [ ] Check window closes after session
+
+4. **Icon Display**
+   - [ ] Verify app icon has transparent background (no white box)
+   - [ ] Check taskbar, start menu, and title bar icons
+
+5. **Password Authentication**
+   - [ ] Create profile with password auth
+   - [ ] Verify password saves to Windows Credential Manager
+   - [ ] Edit profile and verify password retrieves correctly
+   - [ ] Export/import profiles with passwords
+
+6. **Custom Terminal**
+   - [ ] Test with custom terminal path (if available)
+   - [ ] Verify batch script execution and cleanup
+
+7. **General UI**
+   - [ ] Check profile card info display (User/Host/Auth)
+   - [ ] Verify tooltips show full values on hover
+   - [ ] Test responsive layout at different window sizes
 
 ### Branch Status
-- **Files Modified:** lib.rs, index.html, main.js
-- **Commits:** 6 commits
+- **Files Modified:** lib.rs, Cargo.toml, index.html, main.js, styles.css, icon.ico, TODO.md
+- **Commits:** 11 commits
 
 ---
 
