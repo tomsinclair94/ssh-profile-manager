@@ -80,6 +80,33 @@
 - Easy rollback to specific phases if needed
 - Branch keeps experimental work isolated from stable `main`
 
+## GitHub Repository Secrets
+
+The automated release workflow requires the following repository secret:
+
+### PAT_TOKEN (Required)
+
+**Purpose:** Personal Access Token (PAT) used by the auto-tag workflow to trigger the release workflow.
+
+**Why needed:** GitHub's default `GITHUB_TOKEN` doesn't trigger other workflows (security feature to prevent recursive workflow loops). Using a PAT allows the auto-tag workflow to create tags that trigger the release workflow.
+
+**Setup:**
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Click "Generate new token (classic)"
+3. Token name: `SSH Profile Manager Auto-Tag`
+4. Expiration: Choose appropriate duration (recommend 1 year)
+5. Scopes: Check `repo` (Full control of private repositories)
+6. Click "Generate token" and copy the token
+7. Go to repository Settings → Secrets and variables → Actions
+8. Click "New repository secret"
+9. Name: `PAT_TOKEN`
+10. Value: Paste the token
+11. Click "Add secret"
+
+**Permissions:** `repo` scope (allows creating tags and triggering workflows)
+
+**Used by:** `.github/workflows/auto-tag.yml`
+
 ## Quick Start
 
 ```bash
