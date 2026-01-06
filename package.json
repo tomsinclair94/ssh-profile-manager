@@ -1,6 +1,6 @@
 {
   "name": "ssh-profile-manager",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Lightweight SSH Profile Manager",
   "type": "module",
   "scripts": {

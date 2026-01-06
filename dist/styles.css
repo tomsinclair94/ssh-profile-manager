@@ -450,7 +450,6 @@ body {
     grid-template-areas:
         "header"
         "info"
-        "description"
         "actions";
     gap: 8px;
 }
@@ -509,42 +508,18 @@ button.keyboard-selected {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1;
     min-width: 0;
 }
 
 /* Constrain profile info when buttons are on right (>= 800px) */
 @media (min-width: 800px) {
     .profile-card-header,
-    .profile-card-info,
-    .profile-card-description {
+    .profile-card-info {
         /* Allow full width minus some padding */
         max-width: 100%;
         padding-right: 16px;
     }
 
-    .profile-info-item {
-        /* Let items size naturally based on content */
-        flex: 0 1 auto;
-        max-width: 70%;
-    }
-
-    .profile-info-value {
-        flex: 1;
-        min-width: 0;
-        max-width: 600px;
-    }
-}
-
-/* Larger screens: allow even more space for long values */
-@media (min-width: 1200px) {
-    .profile-info-item {
-        max-width: 80%;
-    }
-
-    .profile-info-value {
-        max-width: 800px;
-    }
 }
 
 .profile-card-group {
@@ -558,9 +533,10 @@ button.keyboard-selected {
 .profile-card-info {
     grid-area: info;
     display: flex;
-    gap: 16px;
+    flex-direction: column;
+    gap: 6px;
     font-size: 14px;
-    flex-wrap: nowrap;
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -569,28 +545,8 @@ button.keyboard-selected {
     align-items: center;
     gap: 6px;
     color: var(--text-muted);
-    min-width: 0;
-    flex-shrink: 1;
-}
-
-/* User field (first item) - shrinks faster than Host */
-.profile-info-item:nth-child(1) {
-    flex: 0 2 auto;
-    min-width: 0;
     overflow: hidden;
-}
-
-/* Host field (second item) - shrinks slower, only after User is compressed */
-.profile-info-item:nth-child(2) {
-    flex: 0 1 auto;
     min-width: 0;
-    overflow: hidden;
-}
-
-/* Auth field (third item) - NEVER shrinks, always full width, never cut off */
-.profile-info-item:nth-child(3) {
-    flex: 0 0 auto;
-    overflow: visible;
 }
 
 .profile-info-label {
@@ -606,57 +562,6 @@ button.keyboard-selected {
     min-width: 0;
 }
 
-/* User value: minimum 16ch, sizes naturally otherwise */
-.profile-info-item:nth-child(1) .profile-info-value {
-    min-width: 16ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Host value: up to 80ch max, can shrink with ellipsis */
-.profile-info-item:nth-child(2) .profile-info-value {
-    max-width: 80ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Auth value: NEVER truncates, always visible, never gets cut off */
-.profile-info-item:nth-child(3) .profile-info-value {
-    flex-shrink: 0;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: nowrap;
-}
-
-.profile-card-description {
-    grid-area: description;
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.4;
-}
-
-/* Narrow screens (< 800px): single line with dynamic ellipsis */
-@media (max-width: 799px) {
-    .profile-card-description {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-}
-
-/* Wide screens (>= 800px): allow wrapping up to 2 lines */
-@media (min-width: 800px) {
-    .profile-card-description {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        white-space: normal;
-        word-wrap: break-word;
-    }
-}
 
 .profile-card-actions {
     grid-area: actions;
@@ -671,8 +576,7 @@ button.keyboard-selected {
         grid-template-columns: 1fr auto;
         grid-template-areas:
             "header actions"
-            "info actions"
-            "description actions";
+            "info actions";
         gap: 8px 16px;
     }
 

@@ -2045,10 +2045,10 @@ function renderProfiles(filter = '') {
         grouped[groupName].forEach(profile => {
             html += `
                 <div class="profile-card" data-id="${profile.id}">
-                    <div class="profile-card-header">
+                    <div class="profile-card-header"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
                         <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
                     </div>
-                    <div class="profile-card-info">
+                    <div class="profile-card-info"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
                         <div class="profile-info-item">
                             <span class="profile-info-label">User:</span>
                             <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
@@ -2057,12 +2057,7 @@ function renderProfiles(filter = '') {
                             <span class="profile-info-label">Host:</span>
                             <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
                         </div>
-                        <div class="profile-info-item">
-                            <span class="profile-info-label">Auth:</span>
-                            <span class="profile-info-value" title="${escapeHtml(profile.auth_method || 'key')}">${escapeHtml(profile.auth_method || 'key')}</span>
-                        </div>
                     </div>
-                    ${profile.description ? `<div class="profile-card-description" title="${escapeHtml(profile.description)}">${escapeHtml(profile.description)}</div>` : ''}
                     <div class="profile-card-actions">
                         <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
                         <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
