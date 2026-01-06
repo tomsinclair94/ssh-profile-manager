@@ -3498,7 +3498,7 @@ function populateTerminalOptions() {
         terminalSelect.innerHTML = `
             <option value="default">Default (Terminal.app)</option>
             <option value="custom">Custom Terminal</option>
-            <option value="embedded">Embedded Terminal</option>
+            <option value="embedded">Embedded Terminal (beta)</option>
         `;
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
@@ -3507,7 +3507,7 @@ function populateTerminalOptions() {
             <option value="powershell">PowerShell</option>
             <option value="windows_terminal">Windows Terminal</option>
             <option value="custom">Custom Terminal</option>
-            <option value="embedded">Embedded Terminal</option>
+            <option value="embedded">Embedded Terminal (beta)</option>
         `;
     } else {
         // Unknown OS - show minimal options

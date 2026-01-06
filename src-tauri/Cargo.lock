@@ -4266,7 +4266,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-profile-manager"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
