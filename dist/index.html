@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' ipc://localhost https://api.github.com; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' ipc://localhost https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
     <!-- xterm.js for embedded terminal -->
@@ -19,7 +19,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.6.2</span>
+                    <span class="version">v0.6.3</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -204,7 +204,10 @@
                     <!-- Password (shown when auth-method is 'password') -->
                     <div class="form-group hidden" id="password-group">
                         <label for="profile-password">Password</label>
-                        <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
+                        <div class="input-group">
+                            <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
+                            <button type="button" class="btn btn-secondary btn-toggle-password" id="toggle-password-btn" title="Show password">Show</button>
+                        </div>
                         <small>Stored securely in system keychain</small>
                     </div>
 
@@ -317,7 +320,13 @@
                                 <button type="button" class="btn btn-secondary btn-browse" id="browse-terminal-btn">Browse</button>
                             </div>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles.</p>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="use-tabs-in-terminal-check" checked>
+                                <span>Open profiles in new tabs (when supported)</span>
+                            </label>
+                        </div>
+                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).</p>
                     </div>
 
                     <!-- Import/Export Settings -->
@@ -381,7 +390,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.2" target="_blank" class="about-value version-link">0.6.2</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.3" target="_blank" class="about-value version-link">0.6.3</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>

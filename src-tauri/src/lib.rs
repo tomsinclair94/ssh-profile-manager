@@ -614,7 +614,7 @@ impl Database {
     }
 
     fn get_all_profiles(&self) -> SqlResult<Vec<Profile>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
             "SELECT id, name, description, host, port, username, auth_method, key_path, group_name
              FROM profiles ORDER BY group_name, name"
@@ -640,7 +640,7 @@ impl Database {
     }
 
     fn create_profile(&self, profile: &Profile) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
             "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_name)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -660,7 +660,7 @@ impl Database {
     }
 
     fn update_profile(&self, profile: &Profile) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
             "UPDATE profiles
              SET name = ?2, description = ?3, host = ?4, port = ?5,
@@ -682,13 +682,13 @@ impl Database {
     }
 
     fn delete_profile(&self, id: &str) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute("DELETE FROM profiles WHERE id = ?1", [id])?;
         Ok(())
     }
 
     fn get_profile_by_id(&self, id: &str) -> SqlResult<Option<Profile>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
             "SELECT id, name, description, host, port, username, auth_method, key_path, group_name
              FROM profiles WHERE id = ?1"
@@ -717,7 +717,7 @@ impl Database {
 
     // Recent connections methods
     fn get_recent_connections(&self, limit: Option<usize>) -> SqlResult<Vec<RecentConnection>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         let limit_val = limit.unwrap_or(5).min(20); // Max 20, default 5
 
         let mut stmt = conn.prepare(
@@ -746,7 +746,7 @@ impl Database {
     }
 
     fn record_connection(&self, profile_id: &str) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
 
         // Check if this profile already exists in recent_connections
         let exists: bool = conn.query_row(
@@ -773,20 +773,20 @@ impl Database {
     }
 
     fn clear_recent_connections(&self) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute("DELETE FROM recent_connections", [])?;
         Ok(())
     }
 
     fn remove_recent_connection(&self, profile_id: &str) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute("DELETE FROM recent_connections WHERE profile_id = ?1", [profile_id])?;
         Ok(())
     }
 
     // User settings methods
     fn get_setting(&self, key: &str) -> SqlResult<Option<UserSetting>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
             "SELECT key, value, updated_at FROM user_settings WHERE key = ?1"
         )?;
@@ -807,7 +807,7 @@ impl Database {
     }
 
     fn save_setting(&self, key: &str, value: &str) -> SqlResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().expect("Database lock poisoned");
 
         // Use INSERT OR REPLACE for upsert behavior
         conn.execute(
@@ -848,13 +848,16 @@ fn delete_password(profile_id: &str) -> Result<(), String> {
 
 #[tauri::command]
 fn get_profile_password(profile_id: String) -> Result<String, String> {
+    #[cfg(debug_assertions)]
     println!("Attempting to retrieve password for profile: {}", profile_id);
     match get_password(&profile_id) {
         Ok(password) => {
+            #[cfg(debug_assertions)]
             println!("Password retrieved successfully: {} chars", password.len());
             Ok(password)
         }
         Err(e) => {
+            #[cfg(debug_assertions)]
             println!("Failed to retrieve password: {}", e);
             Err(e)
         }
@@ -898,6 +901,8 @@ struct SettingsData {
 #[derive(Debug, Serialize, Deserialize)]
 struct SettingsOsSpecific {
     terminal_preference: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    use_tabs_in_terminal: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -996,25 +1001,35 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
+        #[cfg(debug_assertions)]
         println!("Auth method is password, checking password field...");
         if let Some(password) = profile.password {
+            #[cfg(debug_assertions)]
             println!("Password provided: {} chars", password.len());
             if !password.is_empty() {
+                #[cfg(debug_assertions)]
                 println!("Attempting to store password for profile: {}", id);
                 match store_password(&id, &password) {
-                    Ok(_) => println!("Password stored successfully"),
+                    Ok(_) => {
+                        #[cfg(debug_assertions)]
+                        println!("Password stored successfully");
+                    },
                     Err(e) => {
+                        #[cfg(debug_assertions)]
                         println!("Failed to store password: {}", e);
                         return Err(format!("Failed to store password: {}", e));
                     }
                 }
             } else {
+                #[cfg(debug_assertions)]
                 println!("Password is empty, not storing");
             }
         } else {
+            #[cfg(debug_assertions)]
             println!("No password provided");
         }
     } else {
+        #[cfg(debug_assertions)]
         println!("Auth method is not password: {}", profile.auth_method);
     }
 
@@ -1139,6 +1154,16 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
     let import_data: ImportData = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
 
+    // SECURITY: Validate profile count to prevent resource exhaustion
+    const MAX_IMPORT_PROFILES: usize = 1000;
+    if import_data.profiles.len() > MAX_IMPORT_PROFILES {
+        return Err(format!(
+            "Import exceeds maximum of {} profiles (received {})",
+            MAX_IMPORT_PROFILES,
+            import_data.profiles.len()
+        ));
+    }
+
     // Delete all existing profiles first
     let existing_profiles = db.get_all_profiles()
         .map_err(|e| format!("Failed to get existing profiles: {}", e))?;
@@ -1222,6 +1247,7 @@ fn export_settings(
     filtered_groups: Option<Vec<String>>,
     collapsed_groups: Option<Vec<String>>,
     terminal_preference: String,
+    use_tabs_in_terminal: Option<bool>,
     include_profiles: bool,
     include_passwords: bool,
     db: State<Database>,
@@ -1248,6 +1274,7 @@ fn export_settings(
 
     let settings_os_specific = SettingsOsSpecific {
         terminal_preference,
+        use_tabs_in_terminal,
     };
 
     // Validate before exporting
@@ -1296,6 +1323,16 @@ fn export_settings(
 
 #[tauri::command]
 fn import_settings(data: String) -> Result<SettingsImportResult, String> {
+    // SECURITY: Validate payload size to prevent resource exhaustion
+    const MAX_SETTINGS_JSON_SIZE: usize = 1024 * 1024; // 1MB
+    if data.len() > MAX_SETTINGS_JSON_SIZE {
+        return Err(format!(
+            "Settings import exceeds maximum size of {} bytes (received {} bytes)",
+            MAX_SETTINGS_JSON_SIZE,
+            data.len()
+        ));
+    }
+
     // Server-side rate limiting (5 seconds between imports)
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1303,7 +1340,8 @@ fn import_settings(data: String) -> Result<SettingsImportResult, String> {
         .as_secs();
 
     {
-        let mut last_time = LAST_SETTINGS_IMPORT_TIME.lock().unwrap();
+        let mut last_time = LAST_SETTINGS_IMPORT_TIME.lock()
+            .map_err(|e| format!("Rate limit lock poisoned: {}", e))?;
         if now - *last_time < SETTINGS_IMPORT_RATE_LIMIT_SECS {
             return Err("Rate limit: Please wait 5 seconds between settings imports".to_string());
         }
@@ -1607,7 +1645,8 @@ async fn create_terminal_session(
         .unwrap()
         .as_secs();
     {
-        let mut last_time = LAST_SESSION_CREATE_TIME.lock().unwrap();
+        let mut last_time = LAST_SESSION_CREATE_TIME.lock()
+            .map_err(|e| format!("Rate limit lock poisoned: {}", e))?;
         if now - *last_time < SESSION_CREATE_RATE_LIMIT_SECS {
             return Err(format!(
                 "Rate limit: Please wait {} seconds between terminal sessions",
@@ -1881,24 +1920,29 @@ async fn create_terminal_session(
 
     // Store in registry
     {
-        let mut sessions = registry.sessions.lock().unwrap();
+        let mut sessions = registry.sessions.lock()
+            .map_err(|e| format!("Session registry lock poisoned: {}", e))?;
         sessions.insert(session_id.clone(), terminal_session);
     }
     {
-        let mut writers = registry.pty_writers.lock().unwrap();
+        let mut writers = registry.pty_writers.lock()
+            .map_err(|e| format!("Writer registry lock poisoned: {}", e))?;
         writers.insert(session_id.clone(), writer);
     }
     {
-        let mut pairs = registry.pty_pairs.lock().unwrap();
+        let mut pairs = registry.pty_pairs.lock()
+            .map_err(|e| format!("PTY pairs registry lock poisoned: {}", e))?;
         pairs.insert(session_id.clone(), pty_pair.master);
     }
     {
-        let mut activity = registry.last_activity.lock().unwrap();
+        let mut activity = registry.last_activity.lock()
+            .map_err(|e| format!("Activity registry lock poisoned: {}", e))?;
         activity.insert(session_id.clone(), Instant::now());
     }
 
     // Record in active_sessions table
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock()
+        .expect("Database lock poisoned");
     conn.execute(
         "INSERT INTO active_sessions (id, profile_id, tab_id, started_at, last_activity_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         (
@@ -1928,7 +1972,8 @@ fn write_to_terminal(
     // SECURITY: Rate limiting to prevent write flooding (100 writes/second max)
     const MAX_WRITES_PER_SECOND: u32 = 100;
     {
-        let mut rate_limits = registry.write_rate_limits.lock().unwrap();
+        let mut rate_limits = registry.write_rate_limits.lock()
+            .map_err(|e| format!("Rate limit lock poisoned: {}", e))?;
         let (last_reset, count) = rate_limits
             .entry(session_id.clone())
             .or_insert((Instant::now(), 0));
@@ -1944,7 +1989,8 @@ fn write_to_terminal(
         *count += 1;
     }
 
-    let mut writers = registry.pty_writers.lock().unwrap();
+    let mut writers = registry.pty_writers.lock()
+        .map_err(|e| format!("Writer registry lock poisoned: {}", e))?;
 
     let writer = writers
         .get_mut(&session_id)
@@ -1989,7 +2035,8 @@ fn resize_terminal(
         ));
     }
 
-    let pairs = registry.pty_pairs.lock().unwrap();
+    let pairs = registry.pty_pairs.lock()
+        .map_err(|e| format!("PTY pairs registry lock poisoned: {}", e))?;
 
     let pty = pairs
         .get(&session_id)
@@ -2014,11 +2061,16 @@ fn close_terminal_session(
 ) -> Result<(), String> {
     // SECURITY FIX: Acquire all locks atomically to prevent race conditions
     // Lock all registries at once before making any mutations
-    let mut sessions = registry.sessions.lock().unwrap();
-    let mut writers = registry.pty_writers.lock().unwrap();
-    let mut pairs = registry.pty_pairs.lock().unwrap();
-    let mut activity = registry.last_activity.lock().unwrap();
-    let mut rate_limits = registry.write_rate_limits.lock().unwrap();
+    let mut sessions = registry.sessions.lock()
+        .map_err(|e| format!("Session registry lock poisoned: {}", e))?;
+    let mut writers = registry.pty_writers.lock()
+        .map_err(|e| format!("Writer registry lock poisoned: {}", e))?;
+    let mut pairs = registry.pty_pairs.lock()
+        .map_err(|e| format!("PTY pairs registry lock poisoned: {}", e))?;
+    let mut activity = registry.last_activity.lock()
+        .map_err(|e| format!("Activity registry lock poisoned: {}", e))?;
+    let mut rate_limits = registry.write_rate_limits.lock()
+        .map_err(|e| format!("Rate limit lock poisoned: {}", e))?;
 
     // Remove all entries atomically
     let session = sessions.remove(&session_id);
@@ -2078,7 +2130,8 @@ fn close_terminal_session(
     }
 
     // Remove from active_sessions table
-    let conn = db.conn.lock().unwrap();
+    let conn = db.conn.lock()
+        .expect("Database lock poisoned");
     conn.execute("DELETE FROM active_sessions WHERE id = ?1", [&session_id])
         .map_err(|e| format!("Failed to remove session from database: {}", e))?;
 
@@ -2091,6 +2144,7 @@ fn connect_ssh(
     profile_id: String,
     terminal_preference: Option<String>,
     custom_terminal_path: Option<String>,
+    use_tabs_in_terminal: Option<bool>,
     app_handle: tauri::AppHandle
 ) -> Result<(), String> {
     let profile = db
@@ -2151,11 +2205,10 @@ fn connect_ssh(
              .replace('`', "\\`")
         }
 
-        // Build the escaped SSH command
+        // Build the escaped SSH command for use in shell contexts
         let escaped_args: Vec<String> = ssh_args.iter()
             .map(|arg| shell_escape(arg))
             .collect();
-        let ssh_cmd_str = format!("ssh {}", escaped_args.join(" "));
 
         match terminal_pref.as_str() {
             "custom" => {
@@ -2222,11 +2275,11 @@ fn connect_ssh(
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-                    // Schedule script cleanup after 5 seconds
+                    // Schedule script cleanup after 2 seconds
                     // This gives the terminal time to read and execute the script while minimizing exposure window
                     let script_path_cleanup = script_path.clone();
                     std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(5));
+                        std::thread::sleep(std::time::Duration::from_secs(2));
                         let _ = fs::remove_file(&script_path_cleanup); // Best effort cleanup
                     });
                 } else {
@@ -2235,13 +2288,46 @@ fn connect_ssh(
             },
             "default" | _ => {
                 // Use default Terminal.app
-                let applescript_escaped = applescript_escape(&ssh_cmd_str);
+                // Default to tabs enabled (true) if not specified
+                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+
+                // Create command that closes tab after SSH exits
+                // Use AppleScript to close the current tab (not entire window)
+                // Don't use 'exit' before osascript - let osascript close the tab
+                let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
+                let close_command = "osascript -e 'tell application \"Terminal\" to close (selected tab of front window)'";
+                let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
+                let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
+
+                let applescript = if use_tabs {
+                    // Open in new tab - use System Events to trigger Cmd+T (new tab)
+                    format!(
+                        "tell application \"Terminal\"\n\
+                         activate\n\
+                         if (count of windows) > 0 then\n\
+                             tell application \"System Events\" to keystroke \"t\" using command down\n\
+                             delay 0.1\n\
+                             do script \"{}\" in front window\n\
+                         else\n\
+                             do script \"{}\"\n\
+                         end if\n\
+                         end tell",
+                        ssh_with_close_escaped, ssh_with_close_escaped
+                    )
+                } else {
+                    // Always open in new window - just use basic "do script"
+                    format!(
+                        "tell application \"Terminal\"\n\
+                         do script \"{}\"\n\
+                         activate\n\
+                         end tell",
+                        ssh_with_close_escaped
+                    )
+                };
 
                 Command::new("osascript")
                     .arg("-e")
-                    .arg(format!("tell application \"Terminal\" to do script \"{}\"", applescript_escaped))
-                    .arg("-e")
-                    .arg("tell application \"Terminal\" to activate")
+                    .arg(applescript)
                     .spawn()
                     .map_err(|e| format!("Failed to launch terminal: {}", e))?;
             }
@@ -2258,11 +2344,12 @@ fn connect_ssh(
         match terminal_pref.as_str() {
             "cmd" => {
                 // Use Command Prompt - pass args directly to avoid shell escaping issues
+                // Use /c to close window after SSH session ends
                 Command::new("cmd")
                     .arg("/c")
                     .arg("start")
                     .arg("cmd")
-                    .arg("/k")
+                    .arg("/c")
                     .arg("ssh")
                     .args(&ssh_args)
                     .spawn()
@@ -2285,11 +2372,11 @@ fn connect_ssh(
                     .collect::<Vec<String>>()
                     .join(" ");
 
+                // Remove -NoExit so PowerShell closes after SSH session ends
                 Command::new("cmd")
                     .arg("/c")
                     .arg("start")
                     .arg("powershell")
-                    .arg("-NoExit")
                     .arg("-Command")
                     .arg(&ssh_command)
                     .spawn()
@@ -2297,8 +2384,14 @@ fn connect_ssh(
             },
             "windows_terminal" => {
                 // Use Windows Terminal (wt.exe) - pass args directly (safest method)
+                // Default to tabs enabled (true) if not specified
+                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+
+                // Use 'new-tab' for tabs, 'new-window' for separate windows
+                let command_type = if use_tabs { "new-tab" } else { "new-window" };
+
                 match Command::new("wt")
-                    .arg("new-tab")
+                    .arg(command_type)
                     .arg("--title")
                     .arg(&profile.name)
                     .arg("ssh")
@@ -2379,12 +2472,12 @@ fn connect_ssh(
                         .spawn()
                         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-                    // SECURITY: Schedule script cleanup after 5 seconds
+                    // SECURITY: Schedule script cleanup after 2 seconds
                     // This prevents accumulation of temporary scripts while giving the terminal time to read it
-                    // 5 second delay minimizes exposure window while allowing terminal to execute script
+                    // 2 second delay minimizes exposure window while allowing terminal to execute script
                     let script_path_cleanup = script_path.clone();
                     std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(5));
+                        std::thread::sleep(std::time::Duration::from_secs(2));
                         let _ = fs::remove_file(&script_path_cleanup);
                     });
                 } else {
@@ -2393,8 +2486,12 @@ fn connect_ssh(
             },
             "default" | _ => {
                 // Default: Try Windows Terminal first, fall back to cmd
+                // Respect tab setting for Windows Terminal
+                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+                let command_type = if use_tabs { "new-tab" } else { "new-window" };
+
                 match Command::new("wt")
-                    .arg("new-tab")
+                    .arg(command_type)
                     .arg("--title")
                     .arg(&profile.name)
                     .arg("ssh")
@@ -2408,7 +2505,7 @@ fn connect_ssh(
                             .arg("/c")
                             .arg("start")
                             .arg("cmd")
-                            .arg("/k")
+                            .arg("/c")
                             .arg("ssh")
                             .args(&ssh_args)
                             .spawn()

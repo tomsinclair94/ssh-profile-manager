@@ -5,6 +5,73 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2025-01-06
+
+### Added
+- **Terminal Tab Setting**: New "Open profiles in new tabs" checkbox in Settings modal
+  - macOS: Opens profiles in new Terminal.app tabs (Cmd+T) instead of new windows
+  - Windows: Uses `wt new-tab` for Windows Terminal instead of `wt new-window`
+  - Setting persists to localStorage and included in settings backup/restore
+- **Password Visibility Toggle**: Show/hide button for password fields
+  - Text-based toggle with fixed 65px width for consistent layout
+  - Improves usability when entering/verifying passwords
+
+### Changed
+- **Profile Card Layout**: Redesigned for better space utilization and readability
+  - User and Host now stacked vertically instead of horizontally
+  - Removed Auth field from card display (less critical information)
+  - Description moved to tooltip (shows on hover)
+  - Improved tooltips: field values show on text hover, description shows on card header hover
+  - Better responsive behavior with long values
+
+### Fixed
+- **Password Authentication**: Password storage now works correctly with system keychain
+  - Added keyring native features (apple-native, windows-native, linux-native) to Cargo.toml
+  - Passwords properly stored and retrieved from macOS Keychain / Windows Credential Manager
+  - Resolves v0.6.2 known issue where passwords reported success but weren't actually saved
+- **Auto-Close Terminal Tabs (macOS)**: Terminal tabs now close correctly after SSH session ends
+  - Fixed AppleScript to close selected tab instead of entire window
+  - Custom terminals continue to use separate windows (tabs not supported)
+- **Windows Icon Transparency**: Regenerated icon.ico with proper transparency
+  - Removed white background box visible in Windows taskbar/title bar
+  - Regenerated using ImageMagick with PNG32/RGBA format
+- **Windows Terminal Tab Preference**: Fixed default case to respect user's tab setting
+  - Previously always opened new windows when using default preference
+  - Now correctly uses user's "Open profiles in new tabs" setting
+
+### Security
+- **CRITICAL**: Fixed mutex poisoning risk across 26 instances (CVSS 7.5)
+  - Replaced all `.unwrap()` calls on mutex locks with proper error handling
+  - Database methods use `.expect()` with descriptive messages
+  - Registry/rate limit mutexes use `.map_err()` for graceful error conversion
+  - Prevents application crashes from poisoned mutexes
+- **CRITICAL**: Reduced temporary script exposure window from 5s to 2s (CVSS 6.5)
+  - macOS custom terminal scripts and Windows batch scripts cleanup faster
+  - Minimizes window for information disclosure on multi-user systems
+  - Scripts still readable by terminal but exposure time reduced 60%
+- **MEDIUM**: Removed password operation logging from production builds (CVSS 4.0)
+  - Password retrieval/storage operations no longer logged in release builds
+  - Logs gated behind `#[cfg(debug_assertions)]` compile-time flag
+  - Reduces information leakage risk
+- **MEDIUM**: Fixed CSP inconsistency between HTML and Tauri config (CVSS 3.5)
+  - Synchronized Content Security Policy across index.html and tauri.conf.json
+  - Added `https://cdn.jsdelivr.net` for xterm.js CDN resources
+  - Added `frame-ancestors 'none'` for clickjacking protection
+- **MEDIUM**: Added profile import size validation (CVSS 4.5)
+  - Maximum 1000 profiles per import to prevent resource exhaustion
+  - Rejects oversized imports with clear error message
+- **MEDIUM**: Added settings import size validation (CVSS 4.5)
+  - Maximum 1MB JSON payload for settings import
+  - Prevents DoS via massive backup files
+
+### Infrastructure
+- **Auto-Tag CHANGELOG Extraction**: Fixed release workflow CHANGELOG parsing
+  - Corrected version number extraction to handle bracketed format `[X.X.X]`
+  - Auto-tagging now creates releases with correct CHANGELOG content
+- **Installer Bundle Zip**: Release artifacts now include bundled zip for easier distribution
+  - Windows: MSI + zip archive
+  - macOS: DMG + app bundle in zip
+
 ## [0.6.2] - 2025-01-05
 
 ### Changed
