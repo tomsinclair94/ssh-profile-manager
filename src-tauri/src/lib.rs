@@ -2163,26 +2163,8 @@ fn close_terminal_session(
     Ok(())
 }
 
-#[tauri::command]
-fn connect_ssh(
-    db: State<Database>,
-    profile_id: String,
-    terminal_preference: Option<String>,
-    custom_terminal_path: Option<String>,
-    use_tabs_in_terminal: Option<bool>,
-    app_handle: tauri::AppHandle
-) -> Result<(), String> {
-    let profile = db
-        .get_profile_by_id(&profile_id)
-        .map_err(|e| format!("Failed to get profile: {}", e))?
-        .ok_or_else(|| "Profile not found".to_string())?;
-
-    // Validate inputs before connecting (defense in depth)
-    validate_hostname(&profile.host)?;
-    validate_username(&profile.username)?;
-    validate_port(profile.port)?;
-
-    // Build SSH command arguments safely
+// Helper function: Build SSH command arguments from profile
+fn build_ssh_args(profile: &Profile) -> Result<Vec<String>, String> {
     let mut ssh_args: Vec<String> = vec![];
 
     // Add port if not default
@@ -2202,163 +2184,369 @@ fn connect_ssh(
         }
     }
 
-    // Build connection string (already validated above)
+    // Build connection string (already validated)
     let connection = format!("{}@{}", profile.username, profile.host);
     ssh_args.push(connection);
 
-    // Default to "default" if no preference specified
-    let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
+    Ok(ssh_args)
+}
 
-    // Open in system terminal
+// Helper function: Shell escape for bash/sh contexts
+fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+// Helper function: AppleScript escape
+fn applescript_escape(s: &str) -> String {
+    s.replace('\\', "\\\\")
+     .replace('"', "\\\"")
+     .replace('\n', "\\n")
+     .replace('\r', "\\r")
+     .replace('$', "\\$")
+     .replace('`', "\\`")
+}
+
+// Helper function: Escape strings for bash double-quote context
+fn escape_bash_double_quote(s: &str) -> String {
+    s.replace('\\', "\\\\")
+     .replace('"', "\\\"")
+     .replace('$', "\\$")
+     .replace('`', "\\`")
+}
+
+#[cfg(target_os = "macos")]
+fn launch_macos_custom_terminal(
+    custom_path: &str,
+    ssh_args: &[String],
+    profile_name: &str,
+) -> Result<(), String> {
+    use std::process::Command;
+    use std::fs;
+
+    // Re-validate path immediately before use (TOCTOU protection)
+    let validated_path = validate_terminal_path(custom_path)?;
+
+    // Create temporary script
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
+
+    let script_content = format!(
+        "#!/bin/bash\n\
+         echo \"Connecting to {}...\"\n\
+         ssh {}\n\
+         echo \"\"\n\
+         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+         exec bash\n",
+        escape_bash_double_quote(profile_name),
+        ssh_args.iter()
+            .map(|arg| shell_escape(arg))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+
+    // Write and make executable
+    fs::write(&script_path, script_content)
+        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script_path)
+            .map_err(|e| format!("Failed to get script permissions: {}", e))?
+            .permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&script_path, perms)
+            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+    }
+
+    // Launch terminal
+    Command::new("open")
+        .arg("-n")
+        .arg("-a")
+        .arg(&validated_path)
+        .arg(&script_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+
+    // Schedule cleanup
+    let script_path_cleanup = script_path.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let _ = fs::remove_file(&script_path_cleanup);
+    });
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn launch_macos_default_terminal(
+    ssh_args: &[String],
+    use_tabs: bool,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    let escaped_args: Vec<String> = ssh_args.iter()
+        .map(|arg| shell_escape(arg))
+        .collect();
+
+    // Build command with auto-close
+    let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
+    let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
+    let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
+    let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
+
+    let applescript = if use_tabs {
+        format!(
+            "tell application \"Terminal\"\n\
+             activate\n\
+             if (count of windows) > 0 then\n\
+                 tell application \"System Events\" to keystroke \"t\" using command down\n\
+                 delay 0.1\n\
+                 do script \"{}\" in front window\n\
+             else\n\
+                 do script \"{}\"\n\
+             end if\n\
+             end tell",
+            ssh_with_close_escaped, ssh_with_close_escaped
+        )
+    } else {
+        format!(
+            "tell application \"Terminal\"\n\
+             do script \"{}\"\n\
+             activate\n\
+             end tell",
+            ssh_with_close_escaped
+        )
+    };
+
+    Command::new("osascript")
+        .arg("-e")
+        .arg(applescript)
+        .spawn()
+        .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_cmd(ssh_args: &[String]) -> Result<(), String> {
+    use std::process::Command;
+
+    Command::new("cmd")
+        .arg("/c")
+        .arg("start")
+        .arg("cmd")
+        .arg("/c")
+        .arg("ssh")
+        .args(ssh_args)
+        .spawn()
+        .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
+    use std::process::Command;
+
+    let mut ps_args = vec!["ssh".to_string()];
+    ps_args.extend(ssh_args.iter().cloned());
+
+    let ssh_command = ps_args.iter()
+        .map(|arg| {
+            if arg.contains(' ') || arg.contains('\'') {
+                format!("'{}'", arg.replace('\'', "''"))
+            } else {
+                arg.clone()
+            }
+        })
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    Command::new("cmd")
+        .arg("/c")
+        .arg("start")
+        .arg("powershell")
+        .arg("-Command")
+        .arg(&ssh_command)
+        .spawn()
+        .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_terminal(
+    ssh_args: &[String],
+    profile_name: &str,
+    use_tabs: bool,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    let command_type = if use_tabs { "new-tab" } else { "new-window" };
+
+    Command::new("wt")
+        .arg(command_type)
+        .arg("--title")
+        .arg(profile_name)
+        .arg("ssh")
+        .args(ssh_args)
+        .spawn()
+        .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_custom_terminal(
+    custom_path: &str,
+    ssh_args: &[String],
+    profile_name: &str,
+) -> Result<(), String> {
+    use std::process::Command;
+    use std::fs;
+
+    // Re-validate path (TOCTOU protection)
+    let validated_path = validate_terminal_path(custom_path)?;
+
+    // Helper functions for batch escaping
+    fn escape_batch_echo(s: &str) -> String {
+        s.replace('^', "^^")
+         .replace('&', "^&")
+         .replace('|', "^|")
+         .replace('<', "^<")
+         .replace('>', "^>")
+         .replace('%', "%%")
+         .replace('!', "^!")
+    }
+
+    fn escape_batch_arg(s: &str) -> String {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    }
+
+    // Create temporary script
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+
+    let script_content = format!(
+        "@echo off\r\n\
+         echo Connecting to {}...\r\n\
+         ssh {}\r\n\
+         echo.\r\n\
+         echo Connection closed.\r\n\
+         pause\r\n",
+        escape_batch_echo(profile_name),
+        ssh_args.iter()
+            .map(|arg| escape_batch_arg(arg))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+
+    // Write script
+    fs::write(&script_path, script_content)
+        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
+
+    // Set Windows ACL
+    set_file_permissions_windows(&script_path)?;
+
+    // Launch terminal
+    Command::new("cmd")
+        .arg("/c")
+        .arg("start")
+        .arg("")
+        .arg(&validated_path)
+        .arg(&script_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+
+    // Schedule cleanup
+    let script_path_cleanup = script_path.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let _ = fs::remove_file(&script_path_cleanup);
+    });
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_default_terminal(
+    ssh_args: &[String],
+    profile_name: &str,
+    use_tabs: bool,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    let command_type = if use_tabs { "new-tab" } else { "new-window" };
+
+    match Command::new("wt")
+        .arg(command_type)
+        .arg("--title")
+        .arg(profile_name)
+        .arg("ssh")
+        .args(ssh_args)
+        .spawn()
+    {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            // Fall back to cmd.exe
+            Command::new("cmd")
+                .arg("/c")
+                .arg("start")
+                .arg("cmd")
+                .arg("/c")
+                .arg("ssh")
+                .args(ssh_args)
+                .spawn()
+                .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            Ok(())
+        }
+    }
+}
+
+#[tauri::command]
+fn connect_ssh(
+    db: State<Database>,
+    profile_id: String,
+    terminal_preference: Option<String>,
+    custom_terminal_path: Option<String>,
+    use_tabs_in_terminal: Option<bool>,
+    app_handle: tauri::AppHandle
+) -> Result<(), String> {
+    // Load and validate profile
+    let profile = db
+        .get_profile_by_id(&profile_id)
+        .map_err(|e| format!("Failed to get profile: {}", e))?
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    validate_hostname(&profile.host)?;
+    validate_username(&profile.username)?;
+    validate_port(profile.port)?;
+
+    // Build SSH arguments
+    let ssh_args = build_ssh_args(&profile)?;
+
+    // Get terminal preference (default to "default")
+    let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
+    let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+
+    // Launch terminal based on OS and preference
     #[cfg(target_os = "macos")]
     {
-        // Properly escape the SSH command for shell
-        // Each argument must be shell-escaped to prevent injection
-        fn shell_escape(s: &str) -> String {
-            // Replace single quotes with '\'' and wrap in single quotes
-            format!("'{}'", s.replace('\'', "'\\''"))
-        }
-
-        // Properly escape strings for AppleScript
-        fn applescript_escape(s: &str) -> String {
-            s.replace('\\', "\\\\")
-             .replace('"', "\\\"")
-             .replace('\n', "\\n")
-             .replace('\r', "\\r")
-             // Note: Single quotes don't need escaping inside AppleScript double-quoted strings
-             .replace('$', "\\$")
-             .replace('`', "\\`")
-        }
-
-        // Build the escaped SSH command for use in shell contexts
-        let escaped_args: Vec<String> = ssh_args.iter()
-            .map(|arg| shell_escape(arg))
-            .collect();
-
         match terminal_pref.as_str() {
             "custom" => {
-                // Use custom terminal app
                 if let Some(custom_path) = custom_terminal_path {
-                    // SECURITY: Re-validate path immediately before use to prevent TOCTOU attacks
-                    // An attacker could swap the validated file between load-time validation and connection-time use
-                    let validated_path = validate_terminal_path(&custom_path)?;
-
-                    // For custom terminals, we use a temporary shell script approach
-                    // This works with any terminal that can execute a shell script
-                    // and is more reliable than trying to pass commands via AppleScript
-
-                    // Helper function to escape strings for bash double-quote context
-                    fn escape_bash_double_quote(s: &str) -> String {
-                        s.replace('\\', "\\\\")
-                         .replace('"', "\\\"")
-                         .replace('$', "\\$")
-                         .replace('`', "\\`")
-                    }
-
-                    // Create a temporary directory for our script
-                    let temp_dir = std::env::temp_dir();
-                    let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
-
-                    // Build the shell script content
-                    // The script will execute SSH and then keep the shell open
-                    let script_content = format!(
-                        "#!/bin/bash\n\
-                         echo \"Connecting to {}...\"\n\
-                         ssh {}\n\
-                         echo \"\"\n\
-                         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
-                         exec bash\n",
-                        escape_bash_double_quote(&profile.name),
-                        ssh_args.iter()
-                            .map(|arg| shell_escape(arg))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-
-                    // Write the script file
-                    fs::write(&script_path, script_content)
-                        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
-
-                    // Make the script executable
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        let mut perms = fs::metadata(&script_path)
-                            .map_err(|e| format!("Failed to get script permissions: {}", e))?
-                            .permissions();
-                        perms.set_mode(0o700); // rwx------
-                        fs::set_permissions(&script_path, perms)
-                            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
-                    }
-
-                    // Launch the terminal with the script
-                    Command::new("open")
-                        .arg("-n")  // Open new instance
-                        .arg("-a")
-                        .arg(&validated_path)
-                        .arg(&script_path)
-                        .spawn()
-                        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
-
-                    // Schedule script cleanup after 2 seconds
-                    // This gives the terminal time to read and execute the script while minimizing exposure window
-                    let script_path_cleanup = script_path.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(2));
-                        let _ = fs::remove_file(&script_path_cleanup); // Best effort cleanup
-                    });
+                    launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
                 } else {
                     return Err("Custom terminal selected but no path provided".to_string());
                 }
-            },
+            }
             "default" | _ => {
-                // Use default Terminal.app
-                // Default to tabs enabled (true) if not specified
-                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
-
-                // Create command that closes tab/window after SSH exits
-                // Use System Events to send Cmd+W (close tab/window shortcut)
-                // This is more reliable than trying to use Terminal's close command on tabs
-                let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
-                let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
-                let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
-                let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
-
-                let applescript = if use_tabs {
-                    // Open in new tab - use System Events to trigger Cmd+T (new tab)
-                    format!(
-                        "tell application \"Terminal\"\n\
-                         activate\n\
-                         if (count of windows) > 0 then\n\
-                             tell application \"System Events\" to keystroke \"t\" using command down\n\
-                             delay 0.1\n\
-                             do script \"{}\" in front window\n\
-                         else\n\
-                             do script \"{}\"\n\
-                         end if\n\
-                         end tell",
-                        ssh_with_close_escaped, ssh_with_close_escaped
-                    )
-                } else {
-                    // Always open in new window - just use basic "do script"
-                    format!(
-                        "tell application \"Terminal\"\n\
-                         do script \"{}\"\n\
-                         activate\n\
-                         end tell",
-                        ssh_with_close_escaped
-                    )
-                };
-
-                Command::new("osascript")
-                    .arg("-e")
-                    .arg(applescript)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+                launch_macos_default_terminal(&ssh_args, use_tabs)?;
             }
         }
 
-        // Minimize the app window after launching terminal
+        // Minimize app window
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.minimize();
         }
@@ -2367,186 +2555,26 @@ fn connect_ssh(
     #[cfg(target_os = "windows")]
     {
         match terminal_pref.as_str() {
-            "cmd" => {
-                // Use Command Prompt - pass args directly to avoid shell escaping issues
-                // Use /c to close window after SSH session ends
-                Command::new("cmd")
-                    .arg("/c")
-                    .arg("start")
-                    .arg("cmd")
-                    .arg("/c")
-                    .arg("ssh")
-                    .args(&ssh_args)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
-            },
-            "powershell" => {
-                // Use PowerShell - pass args directly
-                let mut ps_args = vec!["ssh".to_string()];
-                ps_args.extend(ssh_args.clone());
-
-                let ssh_command = ps_args.iter()
-                    .map(|arg| {
-                        // PowerShell escaping: wrap in single quotes and escape single quotes
-                        if arg.contains(' ') || arg.contains('\'') {
-                            format!("'{}'", arg.replace('\'', "''"))
-                        } else {
-                            arg.clone()
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .join(" ");
-
-                // Remove -NoExit so PowerShell closes after SSH session ends
-                Command::new("cmd")
-                    .arg("/c")
-                    .arg("start")
-                    .arg("powershell")
-                    .arg("-Command")
-                    .arg(&ssh_command)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
-            },
-            "windows_terminal" => {
-                // Use Windows Terminal (wt.exe) - pass args directly (safest method)
-                // Default to tabs enabled (true) if not specified
-                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
-
-                // Use 'new-tab' for tabs, 'new-window' for separate windows
-                let command_type = if use_tabs { "new-tab" } else { "new-window" };
-
-                match Command::new("wt")
-                    .arg(command_type)
-                    .arg("--title")
-                    .arg(&profile.name)
-                    .arg("ssh")
-                    .args(&ssh_args)
-                    .spawn()
-                {
-                    Ok(_) => {},
-                    Err(_) => {
-                        // Windows Terminal not found
-                        return Err("Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string());
-                    }
-                }
-            },
+            "cmd" => launch_windows_cmd(&ssh_args)?,
+            "powershell" => launch_windows_powershell(&ssh_args)?,
+            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs)?,
             "custom" => {
-                // Use custom terminal
                 if let Some(custom_path) = custom_terminal_path {
-                    // SECURITY: Re-validate path immediately before use to prevent TOCTOU attacks
-                    // An attacker could swap the validated file between load-time validation and connection-time use
-                    let validated_path = validate_terminal_path(&custom_path)?;
-
-                    // For custom terminals, we use a temporary batch script approach
-                    // This works with any terminal that can execute batch scripts
-                    // and is more reliable than assuming cmd.exe-style argument support
-
-                    // Helper function to escape strings for Windows batch echo context
-                    // SECURITY: Prevents command injection in batch file echo statements
-                    fn escape_batch_echo(s: &str) -> String {
-                        s.replace('^', "^^")  // Escape the escape character first
-                         .replace('&', "^&")
-                         .replace('|', "^|")
-                         .replace('<', "^<")
-                         .replace('>', "^>")
-                         .replace('%', "%%")
-                         .replace('!', "^!")
-                    }
-
-                    // Helper function to escape arguments for batch script execution
-                    // SECURITY: Wraps arguments in quotes and escapes internal quotes
-                    fn escape_batch_arg(s: &str) -> String {
-                        format!("\"{}\"", s.replace('"', "\"\""))
-                    }
-
-                    // Create a temporary directory for our script
-                    let temp_dir = std::env::temp_dir();
-                    let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
-
-                    // Build the batch script content
-                    // The script will execute SSH and then pause to keep the window open
-                    let script_content = format!(
-                        "@echo off\r\n\
-                         echo Connecting to {}...\r\n\
-                         ssh {}\r\n\
-                         echo.\r\n\
-                         echo Connection closed.\r\n\
-                         pause\r\n",
-                        escape_batch_echo(&profile.name),
-                        ssh_args.iter()
-                            .map(|arg| escape_batch_arg(arg))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-
-                    // Write the script file
-                    fs::write(&script_path, script_content)
-                        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
-
-                    // SECURITY: Set Windows ACL to restrict file access to current user only
-                    // This prevents other users on the system from reading the temporary script
-                    set_file_permissions_windows(&script_path)?;
-
-                    // Launch the terminal with the script
-                    Command::new("cmd")
-                        .arg("/c")
-                        .arg("start")
-                        .arg("")  // Empty title
-                        .arg(&validated_path)
-                        .arg(&script_path)
-                        .spawn()
-                        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
-
-                    // SECURITY: Schedule script cleanup after 2 seconds
-                    // This prevents accumulation of temporary scripts while giving the terminal time to read it
-                    // 2 second delay minimizes exposure window while allowing terminal to execute script
-                    let script_path_cleanup = script_path.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(2));
-                        let _ = fs::remove_file(&script_path_cleanup);
-                    });
+                    launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
                 } else {
                     return Err("Custom terminal selected but no path provided".to_string());
                 }
-            },
-            "default" | _ => {
-                // Default: Try Windows Terminal first, fall back to cmd
-                // Respect tab setting for Windows Terminal
-                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
-                let command_type = if use_tabs { "new-tab" } else { "new-window" };
-
-                match Command::new("wt")
-                    .arg(command_type)
-                    .arg("--title")
-                    .arg(&profile.name)
-                    .arg("ssh")
-                    .args(&ssh_args)
-                    .spawn()
-                {
-                    Ok(_) => {},
-                    Err(_) => {
-                        // Windows Terminal not found, fall back to cmd.exe
-                        Command::new("cmd")
-                            .arg("/c")
-                            .arg("start")
-                            .arg("cmd")
-                            .arg("/c")
-                            .arg("ssh")
-                            .args(&ssh_args)
-                            .spawn()
-                            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-                    }
-                }
             }
+            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs)?,
         }
 
-        // Minimize the app window after launching terminal
+        // Minimize app window
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.minimize();
         }
     }
 
-    // Record connection in recent_connections table (for all external terminals)
+    // Record connection
     db.record_connection(&profile_id)
         .map_err(|e| format!("Failed to record recent connection: {}", e))?;
 
