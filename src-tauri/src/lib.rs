@@ -2331,13 +2331,18 @@ fn launch_macos_default_terminal(
 fn launch_windows_cmd(ssh_args: &[String]) -> Result<(), String> {
     use std::process::Command;
 
+    // Build SSH command with explicit exit to ensure auto-close
+    let mut full_command = vec!["ssh".to_string()];
+    full_command.extend(ssh_args.iter().cloned());
+    full_command.push("&".to_string());
+    full_command.push("exit".to_string());
+
     Command::new("cmd")
         .arg("/c")
         .arg("start")
         .arg("cmd")
         .arg("/c")
-        .arg("ssh")
-        .args(ssh_args)
+        .args(&full_command)
         .spawn()
         .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
 
@@ -2362,12 +2367,15 @@ fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
         .collect::<Vec<String>>()
         .join(" ");
 
+    // Add explicit exit to ensure auto-close
+    let full_command = format!("{}; exit", ssh_command);
+
     Command::new("cmd")
         .arg("/c")
         .arg("start")
         .arg("powershell")
         .arg("-Command")
-        .arg(&ssh_command)
+        .arg(&full_command)
         .spawn()
         .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
 
@@ -2382,14 +2390,38 @@ fn launch_windows_terminal(
 ) -> Result<(), String> {
     use std::process::Command;
 
-    let command_type = if use_tabs { "new-tab" } else { "new-window" };
+    // Build SSH command with explicit exit for auto-close
+    let mut ps_args = vec!["ssh".to_string()];
+    ps_args.extend(ssh_args.iter().cloned());
 
-    Command::new("wt")
-        .arg(command_type)
-        .arg("--title")
+    let ssh_command = ps_args.iter()
+        .map(|arg| {
+            if arg.contains(' ') || arg.contains('\'') {
+                format!("'{}'", arg.replace('\'', "''"))
+            } else {
+                arg.clone()
+            }
+        })
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    let full_command = format!("{}; exit", ssh_command);
+
+    let mut cmd = Command::new("wt");
+
+    if use_tabs {
+        // Use -w 0 to target the most recently used window (forces tab creation)
+        cmd.arg("-w").arg("0").arg("new-tab");
+    } else {
+        // new-window doesn't need window targeting
+        cmd.arg("new-window");
+    }
+
+    cmd.arg("--title")
         .arg(profile_name)
-        .arg("ssh")
-        .args(ssh_args)
+        .arg("powershell")
+        .arg("-Command")
+        .arg(&full_command)
         .spawn()
         .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
 
@@ -2431,9 +2463,14 @@ fn launch_windows_custom_terminal(
         "@echo off\r\n\
          echo Connecting to {}...\r\n\
          ssh {}\r\n\
-         echo.\r\n\
-         echo Connection closed.\r\n\
-         pause\r\n",
+         if errorlevel 1 (\r\n\
+             echo.\r\n\
+             echo Connection failed. Press any key to close...\r\n\
+             pause >nul\r\n\
+         ) else (\r\n\
+             echo.\r\n\
+             echo Connection closed.\r\n\
+         )\r\n",
         escape_batch_echo(profile_name),
         ssh_args.iter()
             .map(|arg| escape_batch_arg(arg))
