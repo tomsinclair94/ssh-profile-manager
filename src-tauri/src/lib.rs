@@ -488,7 +488,19 @@ pub struct Database {
 
 impl Database {
     fn new(path: PathBuf) -> SqlResult<Self> {
-        let conn = Connection::open(path)?;
+        let conn = Connection::open(&path)?;
+
+        // Set file permissions to 0600 (owner read/write only) for security
+        #[cfg(unix)]
+        {
+            use std::fs;
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(metadata) = fs::metadata(&path) {
+                let mut permissions = metadata.permissions();
+                permissions.set_mode(0o600);
+                let _ = fs::set_permissions(&path, permissions);
+            }
+        }
 
         // Enable foreign keys
         conn.execute("PRAGMA foreign_keys = ON", [])?;
@@ -1656,6 +1668,19 @@ async fn create_terminal_session(
         *last_time = now;
     }
 
+    // SECURITY: Limit concurrent sessions to prevent resource exhaustion
+    const MAX_CONCURRENT_SESSIONS: usize = 5;
+    {
+        let sessions = registry.sessions.lock()
+            .map_err(|e| format!("Session registry lock poisoned: {}", e))?;
+        if sessions.len() >= MAX_CONCURRENT_SESSIONS {
+            return Err(format!(
+                "Maximum concurrent sessions reached ({}). Please close an existing session before creating a new one.",
+                MAX_CONCURRENT_SESSIONS
+            ));
+        }
+    }
+
     // Get profile from database
     let profile = db
         .get_profile_by_id(&profile_id)
@@ -1668,9 +1693,9 @@ async fn create_terminal_session(
     validate_port(profile.port)?;
 
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
-    const MAX_COLS: u16 = 300;
-    const MAX_ROWS: u16 = 100;
-    const MAX_TOTAL_CELLS: u32 = 30000; // 300 cols × 100 rows
+    const MAX_COLS: u16 = 250;
+    const MAX_ROWS: u16 = 80;
+    const MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
 
     if cols < 10 || cols > MAX_COLS {
         return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
@@ -2015,9 +2040,9 @@ fn resize_terminal(
     rows: u16,
 ) -> Result<(), String> {
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
-    const MAX_COLS: u16 = 300;
-    const MAX_ROWS: u16 = 100;
-    const MAX_TOTAL_CELLS: u32 = 30000; // 300 cols × 100 rows
+    const MAX_COLS: u16 = 250;
+    const MAX_ROWS: u16 = 80;
+    const MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
 
     if cols < 10 || cols > MAX_COLS {
         return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
