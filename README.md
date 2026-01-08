@@ -129,7 +129,7 @@ SSH Profile Manager supports comprehensive keyboard navigation throughout the ap
 ## Development
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v16+)
+- [Bun](https://bun.sh/) (latest)
 - [Rust](https://www.rust-lang.org/tools/install)
 - **macOS:** Xcode Command Line Tools
 - **Windows:** Microsoft C++ Build Tools
