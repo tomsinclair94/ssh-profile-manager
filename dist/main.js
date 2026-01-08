@@ -3503,12 +3503,20 @@ function populateTerminalOptions() {
     const os = getOS();
     terminalSelect.innerHTML = ''; // Clear existing options
 
+    // Get the help text element for terminal settings
+    // Find the help text that follows the use-tabs checkbox
+    const terminalSection = document.getElementById('use-tabs-in-terminal-check')?.closest('.settings-section');
+    const helpText = terminalSection?.querySelector('p.settings-help');
+
     if (os === 'macos') {
         terminalSelect.innerHTML = `
             <option value="default">Default (Terminal.app)</option>
             <option value="custom">Custom Terminal</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
+        if (helpText) {
+            helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).';
+        }
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
             <option value="default">Default (System Default)</option>
@@ -3518,11 +3526,17 @@ function populateTerminalOptions() {
             <option value="custom">Custom Terminal</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
+        if (helpText) {
+            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows.<br><strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.';
+        }
     } else {
         // Unknown OS - show minimal options
         terminalSelect.innerHTML = `
             <option value="default">Default Terminal</option>
         `;
+        if (helpText) {
+            helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles.';
+        }
     }
 }
 

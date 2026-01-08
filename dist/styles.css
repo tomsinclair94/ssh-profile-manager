@@ -1507,7 +1507,7 @@ form {
 .recent-connections-list {
     display: flex;
     gap: 12px;
-    overflow-x: scroll; /* Force scrollbar to always show */
+    overflow-x: auto; /* Show scrollbar only when needed */
     overflow-y: hidden;
     padding-bottom: 18px; /* Space for scrollbar with gap */
     margin-bottom: -10px; /* Pull up to remove extra space */
@@ -1527,7 +1527,10 @@ form {
 }
 
 .recent-connections-list::-webkit-scrollbar-button {
-    display: none; /* Hide scrollbar arrows on Windows */
+    display: none !important; /* Hide scrollbar arrows on Windows */
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
 }
 
 .recent-connections-list::-webkit-scrollbar-track {

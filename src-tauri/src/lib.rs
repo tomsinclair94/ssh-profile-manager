@@ -2191,11 +2191,13 @@ fn build_ssh_args(profile: &Profile) -> Result<Vec<String>, String> {
 }
 
 // Helper function: Shell escape for bash/sh contexts
+#[cfg(target_os = "macos")]
 fn shell_escape(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 // Helper function: AppleScript escape
+#[cfg(target_os = "macos")]
 fn applescript_escape(s: &str) -> String {
     s.replace('\\', "\\\\")
      .replace('"', "\\\"")
@@ -2206,6 +2208,7 @@ fn applescript_escape(s: &str) -> String {
 }
 
 // Helper function: Escape strings for bash double-quote context
+#[cfg(target_os = "macos")]
 fn escape_bash_double_quote(s: &str) -> String {
     s.replace('\\', "\\\\")
      .replace('"', "\\\"")
@@ -2390,38 +2393,20 @@ fn launch_windows_terminal(
 ) -> Result<(), String> {
     use std::process::Command;
 
-    // Build SSH command with explicit exit for auto-close
-    let mut ps_args = vec!["ssh".to_string()];
-    ps_args.extend(ssh_args.iter().cloned());
-
-    let ssh_command = ps_args.iter()
-        .map(|arg| {
-            if arg.contains(' ') || arg.contains('\'') {
-                format!("'{}'", arg.replace('\'', "''"))
-            } else {
-                arg.clone()
-            }
-        })
-        .collect::<Vec<String>>()
-        .join(" ");
-
-    let full_command = format!("{}; exit", ssh_command);
-
     let mut cmd = Command::new("wt");
 
     if use_tabs {
-        // Use -w 0 to target the most recently used window (forces tab creation)
-        cmd.arg("-w").arg("0").arg("new-tab");
+        // Use -w last to target the most recently used window, nt for new-tab
+        cmd.arg("-w").arg("last").arg("nt");
     } else {
-        // new-window doesn't need window targeting
-        cmd.arg("new-window");
+        // Use -w new to create a new window
+        cmd.arg("-w").arg("new");
     }
 
     cmd.arg("--title")
         .arg(profile_name)
-        .arg("powershell")
-        .arg("-Command")
-        .arg(&full_command)
+        .arg("ssh")
+        .args(ssh_args)
         .spawn()
         .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
 
@@ -2513,16 +2498,23 @@ fn launch_windows_default_terminal(
 ) -> Result<(), String> {
     use std::process::Command;
 
-    let command_type = if use_tabs { "new-tab" } else { "new-window" };
+    // Try Windows Terminal first
+    let mut wt_cmd = Command::new("wt");
 
-    match Command::new("wt")
-        .arg(command_type)
-        .arg("--title")
+    if use_tabs {
+        // Use -w last to target the most recently used window, nt for new-tab
+        wt_cmd.arg("-w").arg("last").arg("nt");
+    } else {
+        // Use -w new to create a new window
+        wt_cmd.arg("-w").arg("new");
+    }
+
+    wt_cmd.arg("--title")
         .arg(profile_name)
         .arg("ssh")
-        .args(ssh_args)
-        .spawn()
-    {
+        .args(ssh_args);
+
+    match wt_cmd.spawn() {
         Ok(_) => Ok(()),
         Err(_) => {
             // Fall back to cmd.exe
