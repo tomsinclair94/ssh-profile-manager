@@ -28,11 +28,14 @@ bun run build    # Production build
 - Profile card UI redesign
 - Auto-tag workflow fix (PAT_TOKEN)
 
-**Next Release (v0.6.4) - Focus:**
-- Fix Windows Terminal tab/window mode issues (HIGH priority)
-- Fix auto-close terminal behavior on macOS/Windows (MEDIUM priority)
-- Windows icon background fix (MEDIUM priority)
-- Address code review items from v0.6.3 (LOW priority)
+**Next Release (v0.6.4) - Status: In Development**
+- ✅ Fix Windows Terminal tab/window mode issues (HIGH priority) - **COMPLETED, PENDING TESTING**
+- ✅ Fix auto-close terminal behavior on Windows (MEDIUM priority) - **COMPLETED, PENDING TESTING**
+- ⏸️ Fix auto-close terminal behavior on macOS (MEDIUM priority) - **DEFERRED** (needs macOS testing)
+- ⏳ Windows icon background fix (MEDIUM priority) - **PENDING** (awaiting screenshot)
+- ⏳ Address code review items from v0.6.3 (LOW priority) - **PENDING**
+
+**Note:** Windows testing blocked on ARM64 Windows VM - requires clang/LLVM installation for Tauri CLI compilation.
 
 ## Version Management
 

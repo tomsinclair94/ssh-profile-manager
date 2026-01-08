@@ -121,15 +121,22 @@ See v0.6.4 section below for details.
 
 ## v0.6.4 - Bug Fix Release (In Development)
 
-**Status:** Planning
+**Status:** Implementation Complete - Pending Testing
 **Started:** 2025-01-06
+**Updated:** 2025-01-08
 **Focus:** Fix Windows Terminal tab issues and auto-close behavior discovered during v0.6.3 testing
+
+**Progress:**
+- ✅ Windows Terminal tab/window mode fixes implemented (commit f4b4c38)
+- ✅ Auto-close behavior fixes implemented for all Windows terminal types
+- ⏳ Testing blocked on ARM64 Windows VM (requires clang/LLVM for Tauri CLI compilation)
+- 🔨 Installing build tools to enable testing
 
 ### Issues to Fix
 
 #### 1. Windows Terminal Tab Mode Not Working
 **Priority:** HIGH
-**Status:** Not started
+**Status:** ✅ Fixed - Pending Testing
 
 **Problem:**
 - Setting "Open profiles in new tabs" enabled still opens new windows in Windows Terminal
@@ -137,38 +144,38 @@ See v0.6.4 section below for details.
 - Users shouldn't need to change Windows Terminal settings for the app to work correctly
 
 **Root Cause:**
-- App currently uses `wt new-tab` command which doesn't force tab behavior without Windows Terminal configuration change
-- Need to ensure proper command arguments to force tab behavior
+- App used `wt new-tab` command which doesn't force tab behavior without Windows Terminal configuration change
+- Needed proper command arguments to force tab behavior
 
-**Solution:**
-- Investigate Windows Terminal CLI arguments to force tab creation in existing window
-- May need to use `wt -w 0 new-tab` to target the most recently used window (window ID 0)
-- Update lib.rs Windows Terminal command construction
+**Solution Implemented:**
+- Updated `launch_windows_terminal()` to use `wt -w 0 new-tab` to target the most recently used window (window ID 0)
+- This forces tab creation in existing window without requiring user to change Windows Terminal settings
+- Location: `src-tauri/src/lib.rs:2412-2414` (commit f4b4c38)
 
 ---
 
 #### 2. Windows Terminal Window Mode Error
 **Priority:** HIGH
-**Status:** Not started
+**Status:** ✅ Fixed - Pending Testing
 
 **Problem:**
 - When "Open profiles in new tabs" is disabled (force new window mode), error occurs: "window not found"
 - New window mode should work without requiring existing window
 
 **Root Cause:**
-- Current implementation may be incorrectly targeting a window ID when window mode is selected
+- Implementation was incorrectly targeting a window ID when window mode was selected
 - `wt new-window` should not reference any window ID
 
-**Solution:**
-- Review lib.rs Windows Terminal window mode command
-- Ensure `wt new-window` is used correctly without window ID targeting
-- Test both modes independently
+**Solution Implemented:**
+- Updated `launch_windows_terminal()` to use `wt new-window` without window ID targeting
+- Tab and window modes now properly separated with correct arguments
+- Location: `src-tauri/src/lib.rs:2416-2417` (commit f4b4c38)
 
 ---
 
 #### 3. Auto-Close Terminal Tab Not Working (macOS)
 **Priority:** MEDIUM
-**Status:** Not started
+**Status:** ⏸️ Deferred - Requires macOS Environment
 
 **Problem:**
 - AppleScript error when trying to close tab after SSH session ends:
@@ -181,7 +188,8 @@ See v0.6.4 section below for details.
 - AppleScript syntax for closing tabs may be incorrect
 - May need different approach (close window instead, or use different AppleScript object reference)
 
-**Solution:**
+**Next Steps:**
+- Deferred to when macOS environment is available for testing
 - Review AppleScript in lib.rs for macOS terminal auto-close
 - Test alternative approaches:
   - `close (selected tab of window 1)`
@@ -192,23 +200,34 @@ See v0.6.4 section below for details.
 
 #### 4. Auto-Close Terminal Tab Not Working (Windows)
 **Priority:** MEDIUM
-**Status:** Not started
+**Status:** ✅ Fixed - Pending Testing
 
 **Problem:**
 - After SSH session ends, terminal displays: "You can now close this terminal with Ctrl+D"
 - Window/tab doesn't close automatically
 
 **Root Cause:**
-- Windows Terminal/CMD/PowerShell don't auto-close after SSH process exits
-- May need to use different command line arguments or wrapper script approach
+- Windows Terminal/CMD/PowerShell don't auto-close after SSH process exits by default
+- Needed explicit exit commands after SSH session
 
-**Solution:**
-- Investigate Windows Terminal auto-close behavior
-- Possible approaches:
-  - Add `exit` command after SSH in batch script
-  - Use PowerShell `-NoExit` parameter control
-  - Check Windows Terminal profile settings for close behavior
-- Test with CMD, PowerShell, and Windows Terminal separately
+**Solution Implemented:**
+All Windows terminal types now auto-close after SSH session ends:
+
+1. **CMD** - Added `& exit` after SSH command
+   - Location: `src-tauri/src/lib.rs:2334-2338`
+
+2. **PowerShell** - Added `; exit` after SSH command
+   - Location: `src-tauri/src/lib.rs:2370-2371`
+
+3. **Windows Terminal** - Uses PowerShell wrapper with `; exit`
+   - Location: `src-tauri/src/lib.rs:2393-2408`
+
+4. **Custom Terminal** - Batch script auto-closes on success, pauses only on errors
+   - Shows "Connection failed. Press any key to close..." on SSH errors
+   - Auto-closes silently on successful disconnect
+   - Location: `src-tauri/src/lib.rs:2436-2447`
+
+All changes in commit f4b4c38
 
 ---
 
