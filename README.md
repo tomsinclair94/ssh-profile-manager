@@ -141,16 +141,16 @@ git clone https://github.com/tomsinclair94/ssh-profile-manager.git
 cd ssh-profile-manager
 
 # Install dependencies
-npm install
+bun install
 
 # Run in development mode
-npm run dev
+bun run dev
 ```
 
 ### Building
 ```bash
 # Build for production
-npm run build
+bun run build
 
 # Output locations:
 # macOS: src-tauri/target/release/bundle/macos/

@@ -35,7 +35,7 @@ jobs:
               - 'src-tauri/**'
               - 'dist/**'
               - 'package.json'
-              - 'package-lock.json'
+              - 'bun.lock'
               - '.github/workflows/pr-checks.yml'
 
       - name: Skip message
@@ -45,11 +45,11 @@ jobs:
           echo "Changed files are documentation/config only"
           exit 0
 
-      - name: Setup Node.js
+      - name: Setup Bun
         if: steps.filter.outputs.code == 'true'
-        uses: actions/setup-node@v4
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
+          bun-version: latest
 
       - name: Setup Rust
         if: steps.filter.outputs.code == 'true'
@@ -65,7 +65,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.filter.outputs.code == 'true'
-        run: npm install
+        run: bun install --frozen-lockfile
 
       - name: Cargo check
         if: steps.filter.outputs.code == 'true'
@@ -79,7 +79,7 @@ jobs:
 
       - name: Build verification
         if: steps.filter.outputs.code == 'true'
-        run: npm run build
+        run: bun run build
 
       - name: Build summary
         if: steps.filter.outputs.code == 'true' && success()
