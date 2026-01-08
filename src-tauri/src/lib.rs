@@ -2291,11 +2291,11 @@ fn connect_ssh(
                 // Default to tabs enabled (true) if not specified
                 let use_tabs = use_tabs_in_terminal.unwrap_or(true);
 
-                // Create command that closes tab after SSH exits
-                // Use AppleScript to close the current tab (not entire window)
-                // Don't use 'exit' before osascript - let osascript close the tab
+                // Create command that closes tab/window after SSH exits
+                // Use System Events to send Cmd+W (close tab/window shortcut)
+                // This is more reliable than trying to use Terminal's close command on tabs
                 let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
-                let close_command = "osascript -e 'tell application \"Terminal\" to close (selected tab of front window)'";
+                let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
                 let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
                 let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
 
