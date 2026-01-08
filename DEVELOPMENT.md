@@ -110,8 +110,8 @@ The automated release workflow requires the following repository secret:
 ## Quick Start
 
 ```bash
-npm run dev      # Development with hot reload
-npm run build    # Production build
+bun run dev      # Development with hot reload
+bun run build    # Production build
 ```
 
 ## Project Structure
