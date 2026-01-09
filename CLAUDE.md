@@ -111,6 +111,14 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Double-submit prevention: `isSubmitting` flag
 - Collapsible groups: localStorage
 
+**Password Authentication Limitations:**
+- Passwords are stored securely in the system keychain for reference and export purposes
+- **IMPORTANT:** Stored passwords are NOT automatically passed to SSH during connection
+- Users must manually enter passwords when prompted by SSH in the terminal
+- Automatic password passing would require additional tools (e.g., `sshpass`) which introduce security risks
+- For automated connections, SSH key authentication is strongly recommended
+- Future versions may implement SSH agent integration for improved password handling
+
 ## Database Schema
 ```sql
 CREATE TABLE profiles (

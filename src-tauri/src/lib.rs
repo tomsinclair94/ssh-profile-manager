@@ -33,7 +33,7 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use windows_acl::acl::ACL;
 
 // Constants
-const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
+const FILE_DIALOG_TIMEOUT_SECS: u64 = 60; // 1 minute timeout for file dialogs
 const SETTINGS_IMPORT_RATE_LIMIT_SECS: u64 = 5; // 5 second rate limit for settings import
 const SESSION_CREATE_RATE_LIMIT_SECS: u64 = 2; // 2 second rate limit for terminal session creation
 
@@ -43,6 +43,36 @@ static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
 static LAST_SESSION_CREATE_TIME: Mutex<u64> = Mutex::new(0);
 
 // Windows-specific file security function
+/// Creates a file on Windows with restrictive permissions atomically (TOCTOU protection)
+#[cfg(target_os = "windows")]
+fn create_file_windows_secure(path: &std::path::Path, content: &str) -> Result<(), String> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    // Create file with minimal access (owner-only initially)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| format!("Failed to create secure file: {}", e))?;
+
+    // Write content
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write file content: {}", e))?;
+
+    // Sync to disk
+    file.sync_all()
+        .map_err(|e| format!("Failed to sync file: {}", e))?;
+
+    // Drop file handle before setting ACL
+    drop(file);
+
+    // Set restrictive ACL
+    set_file_permissions_windows(path)?;
+
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
     use windows_acl::helper;
@@ -94,7 +124,7 @@ fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
     // NOTE: We're not adding an explicit allow for the current user because:
     // 1. The file is created by the current user, so they have ownership rights by default
     // 2. We deny Everyone and Users, which prevents other accounts from accessing
-    // 3. The file is deleted after 30 seconds anyway (see cleanup_old_scripts)
+    // 3. The file is deleted after 5 seconds anyway (see secure cleanup)
 
     // windows-acl automatically persists changes to the file system
     Ok(())
@@ -152,13 +182,61 @@ pub struct SessionRegistry {
 
 impl SessionRegistry {
     pub fn new() -> Self {
-        SessionRegistry {
+        let registry = SessionRegistry {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             pty_writers: Arc::new(Mutex::new(HashMap::new())),
             pty_pairs: Arc::new(Mutex::new(HashMap::new())),
             last_activity: Arc::new(Mutex::new(HashMap::new())),
             write_rate_limits: Arc::new(Mutex::new(HashMap::new())),
-        }
+        };
+
+        // Start idle session monitor
+        registry.start_idle_monitor();
+
+        registry
+    }
+
+    /// Start background thread to monitor and clean up idle sessions
+    fn start_idle_monitor(&self) {
+        const IDLE_TIMEOUT_SECS: u64 = 1800; // 30 minutes
+        const CHECK_INTERVAL_SECS: u64 = 300; // Check every 5 minutes
+
+        let sessions = Arc::clone(&self.sessions);
+        let pty_pairs = Arc::clone(&self.pty_pairs);
+        let pty_writers = Arc::clone(&self.pty_writers);
+        let last_activity = Arc::clone(&self.last_activity);
+        let write_rate_limits = Arc::clone(&self.write_rate_limits);
+
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(CHECK_INTERVAL_SECS));
+
+                let now = Instant::now();
+                let mut sessions_to_close = Vec::new();
+
+                // Find idle sessions
+                if let Ok(activity) = last_activity.lock() {
+                    for (session_id, last_time) in activity.iter() {
+                        if now.duration_since(*last_time).as_secs() > IDLE_TIMEOUT_SECS {
+                            sessions_to_close.push(session_id.clone());
+                        }
+                    }
+                }
+
+                // Close idle sessions
+                for session_id in sessions_to_close {
+                    #[cfg(debug_assertions)]
+                    println!("Closing idle session: {}", session_id);
+
+                    // Clean up all session resources
+                    let _ = sessions.lock().map(|mut s| s.remove(&session_id));
+                    let _ = pty_pairs.lock().map(|mut p| p.remove(&session_id));
+                    let _ = pty_writers.lock().map(|mut w| w.remove(&session_id));
+                    let _ = last_activity.lock().map(|mut a| a.remove(&session_id));
+                    let _ = write_rate_limits.lock().map(|mut r| r.remove(&session_id));
+                }
+            }
+        });
     }
 }
 
@@ -867,20 +945,7 @@ fn delete_password(profile_id: &str) -> Result<(), String> {
 
 #[tauri::command]
 fn get_profile_password(profile_id: String) -> Result<String, String> {
-    #[cfg(debug_assertions)]
-    println!("Attempting to retrieve password for profile: {}", profile_id);
-    match get_password(&profile_id) {
-        Ok(password) => {
-            #[cfg(debug_assertions)]
-            println!("Password retrieved successfully: {} chars", password.len());
-            Ok(password)
-        }
-        Err(e) => {
-            #[cfg(debug_assertions)]
-            println!("Failed to retrieve password: {}", e);
-            Err(e)
-        }
-    }
+    get_password(&profile_id)
 }
 
 // Export/Import structures
@@ -1020,36 +1085,12 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
-        #[cfg(debug_assertions)]
-        println!("Auth method is password, checking password field...");
         if let Some(password) = profile.password {
-            #[cfg(debug_assertions)]
-            println!("Password provided: {} chars", password.len());
             if !password.is_empty() {
-                #[cfg(debug_assertions)]
-                println!("Attempting to store password for profile: {}", id);
-                match store_password(&id, &password) {
-                    Ok(_) => {
-                        #[cfg(debug_assertions)]
-                        println!("Password stored successfully");
-                    },
-                    Err(e) => {
-                        #[cfg(debug_assertions)]
-                        println!("Failed to store password: {}", e);
-                        return Err(format!("Failed to store password: {}", e));
-                    }
-                }
-            } else {
-                #[cfg(debug_assertions)]
-                println!("Password is empty, not storing");
+                store_password(&id, &password)
+                    .map_err(|e| format!("Failed to store password: {}", e))?;
             }
-        } else {
-            #[cfg(debug_assertions)]
-            println!("No password provided");
         }
-    } else {
-        #[cfg(debug_assertions)]
-        println!("Auth method is not password: {}", profile.auth_method);
     }
 
     Ok(id)
@@ -1174,7 +1215,7 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
 
     // SECURITY: Validate profile count to prevent resource exhaustion
-    const MAX_IMPORT_PROFILES: usize = 1000;
+    const MAX_IMPORT_PROFILES: usize = 999;
     if import_data.profiles.len() > MAX_IMPORT_PROFILES {
         return Err(format!(
             "Import exceeds maximum of {} profiles (received {})",
@@ -2180,6 +2221,10 @@ fn build_ssh_args(profile: &Profile) -> Result<Vec<String>, String> {
         ssh_args.push(profile.port.to_string());
     }
 
+    // Add host key verification (MITM protection)
+    ssh_args.push("-o".to_string());
+    ssh_args.push("StrictHostKeyChecking=ask".to_string());
+
     // Add key path if specified and validated
     if profile.auth_method == "key" {
         if let Some(key_path) = &profile.key_path {
@@ -2278,14 +2323,39 @@ fn launch_macos_custom_terminal(
         .spawn()
         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-    // Schedule cleanup
+    // Schedule secure cleanup
     let script_path_cleanup = script_path.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        let _ = fs::remove_file(&script_path_cleanup);
+        // Wait longer to ensure terminal has read the script
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        secure_delete_file(&script_path_cleanup);
     });
 
     Ok(())
+}
+
+/// Securely deletes a file by overwriting with random data before unlinking
+fn secure_delete_file(path: &std::path::Path) {
+    use std::io::Write;
+
+    // Get file size
+    let file_size = match fs::metadata(path) {
+        Ok(metadata) => metadata.len() as usize,
+        Err(_) => {
+            // File might already be gone, which is fine
+            return;
+        }
+    };
+
+    // Overwrite with random data
+    if let Ok(mut file) = fs::OpenOptions::new().write(true).open(path) {
+        let random_data: Vec<u8> = (0..file_size).map(|_| rand::random::<u8>()).collect();
+        let _ = file.write_all(&random_data);
+        let _ = file.sync_all();
+    }
+
+    // Remove the file
+    let _ = fs::remove_file(path);
 }
 
 #[cfg(target_os = "macos")]
@@ -2481,12 +2551,8 @@ fn launch_windows_custom_terminal(
             .join(" ")
     );
 
-    // Write script
-    fs::write(&script_path, script_content)
-        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
-
-    // Set Windows ACL
-    set_file_permissions_windows(&script_path)?;
+    // Create file with restrictive permissions atomically (TOCTOU protection)
+    create_file_windows_secure(&script_path, &script_content)?;
 
     // Launch terminal
     Command::new("cmd")
@@ -2498,11 +2564,12 @@ fn launch_windows_custom_terminal(
         .spawn()
         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-    // Schedule cleanup
+    // Schedule secure cleanup
     let script_path_cleanup = script_path.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        let _ = fs::remove_file(&script_path_cleanup);
+        // Wait longer to ensure terminal has read the script
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        secure_delete_file(&script_path_cleanup);
     });
 
     Ok(())

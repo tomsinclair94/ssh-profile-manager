@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' ipc://localhost http://ipc.localhost https://cdn.jsdelivr.net https://api.github.com; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc://localhost http://ipc.localhost https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- xterm.js for embedded terminal -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" integrity="sha384-/nfmYPUzWMS6v2atn8hbljz7NE0EI1iGx34lJaNzyVjWGDzMv+ciUZUeJpKA3Glc" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha384-AQLWHRKAgdTxkolJcLOELg4E9rE89CPE2xMy3tIRFn08NcGKPTsELdvKomqji+DL" crossorigin="anonymous"></script>
+    <!-- xterm.js for embedded terminal (vendored locally) -->
+    <link rel="stylesheet" href="vendor/xterm/xterm.css">
+    <script src="vendor/xterm/xterm.js"></script>
+    <script src="vendor/xterm/xterm-addon-fit.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -47,11 +47,11 @@
                 <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
                 <button id="filter-btn" class="btn btn-secondary">
                     Filter Groups
-                    <span id="filter-badge" class="badge filter-badge hidden">0</span>
+                    <span id="filter-badge" class="badge filter-badge">0/0</span>
                 </button>
                 <div class="profile-counter-display">
-                    Total Profiles
-                    <span id="profile-count-badge" class="badge profile-count-badge">0</span>
+                    Profiles
+                    <span id="profile-count-badge" class="badge profile-count-badge">0/0</span>
                 </div>
             </div>
 
@@ -59,7 +59,7 @@
             <div id="filter-popup" class="filter-popup hidden">
                 <div class="filter-popup-header">
                     <h3>Filter Groups</h3>
-                    <button id="clear-filters-btn" class="btn btn-secondary btn-small">Clear All</button>
+                    <button id="clear-filters-btn" class="btn btn-secondary btn-small">Reset</button>
                 </div>
                 <div id="filter-groups-list" class="filter-groups-list">
                     <!-- Group checkboxes will be dynamically added here -->

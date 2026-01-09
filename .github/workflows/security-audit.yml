@@ -1,0 +1,75 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [main, "v*-dev"]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 9:00 AM UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+jobs:
+  cargo-audit:
+    name: Cargo Audit (Rust Dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        working-directory: src-tauri
+        run: cargo audit --deny warnings
+
+  bun-audit:
+    name: Bun Audit (JavaScript Dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run bun audit
+        run: bun audit
+
+  cargo-outdated:
+    name: Check Outdated Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated
+
+      - name: Check outdated Rust dependencies
+        working-directory: src-tauri
+        run: cargo outdated --exit-code 1 || true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Check outdated Bun dependencies
+        run: bun outdated || true

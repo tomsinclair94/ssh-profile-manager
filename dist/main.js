@@ -1498,56 +1498,97 @@ function showKeyboardShortcutsHelp() {
         ]},
     ];
 
-    let html = '<div class="shortcuts-help-modal"><div class="shortcuts-help-content">';
-
-    // Header (non-scrolling)
-    html += '<div class="modal-header">';
-    html += '<div class="modal-header-left">';
-    html += '<h2>Keyboard Shortcuts</h2>';
-    html += '</div>';
-    html += '<div class="modal-header-right">';
-    html += '<button type="button" id="shortcuts-help-close" class="btn btn-secondary">Close</button>';
-    html += '</div>';
-    html += '</div>';
-
-    // Scrollable content
-    html += '<div class="shortcuts-help-body">';
-    html += '<div class="shortcuts-grid">'; // Grid container
-
-    shortcuts.forEach(section => {
-        html += `<div class="shortcuts-section">`;
-        html += `<h3>${section.category}</h3>`;
-        html += '<table class="shortcuts-table">';
-        section.items.forEach(item => {
-            html += `<tr><td class="shortcut-keys">${escapeHtml(item.keys)}</td><td>${escapeHtml(item.action)}</td></tr>`;
-        });
-        html += '</table></div>';
-    });
-
-    html += '</div>'; // Close grid container
-    html += '</div>'; // Close body
-    html += '</div></div>';
-
     // Remove existing if present
     const existing = document.querySelector('.shortcuts-help-modal');
     if (existing) existing.remove();
 
-    // Add to body
-    document.body.insertAdjacentHTML('beforeend', html);
+    // Create modal structure using DOM methods
+    const modal = document.createElement('div');
+    modal.className = 'shortcuts-help-modal';
+
+    const content = document.createElement('div');
+    content.className = 'shortcuts-help-content';
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'modal-header-left';
+    const title = document.createElement('h2');
+    title.textContent = 'Keyboard Shortcuts';
+    headerLeft.appendChild(title);
+
+    const headerRight = document.createElement('div');
+    headerRight.className = 'modal-header-right';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.id = 'shortcuts-help-close';
+    closeBtn.className = 'btn btn-secondary';
+    closeBtn.textContent = 'Close';
+    headerRight.appendChild(closeBtn);
+
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+
+    // Create body
+    const body = document.createElement('div');
+    body.className = 'shortcuts-help-body';
+
+    const grid = document.createElement('div');
+    grid.className = 'shortcuts-grid';
+
+    // Build shortcut sections
+    shortcuts.forEach(section => {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'shortcuts-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = section.category;
+        sectionDiv.appendChild(heading);
+
+        const table = document.createElement('table');
+        table.className = 'shortcuts-table';
+
+        section.items.forEach(item => {
+            const row = document.createElement('tr');
+
+            const keysCell = document.createElement('td');
+            keysCell.className = 'shortcut-keys';
+            keysCell.textContent = item.keys;
+
+            const actionCell = document.createElement('td');
+            actionCell.textContent = item.action;
+
+            row.appendChild(keysCell);
+            row.appendChild(actionCell);
+            table.appendChild(row);
+        });
+
+        sectionDiv.appendChild(table);
+        grid.appendChild(sectionDiv);
+    });
+
+    body.appendChild(grid);
+
+    // Assemble modal
+    content.appendChild(header);
+    content.appendChild(body);
+    modal.appendChild(content);
+
+    // Add to document
+    document.body.appendChild(modal);
 
     // Add close handler
-    document.getElementById('shortcuts-help-close').addEventListener('click', () => {
-        document.querySelector('.shortcuts-help-modal').remove();
+    closeBtn.addEventListener('click', () => {
+        modal.remove();
     });
 
     // Close on Escape
     const closeOnEscape = (e) => {
         if (e.key === 'Escape') {
-            const modal = document.querySelector('.shortcuts-help-modal');
-            if (modal) {
-                modal.remove();
-                document.removeEventListener('keydown', closeOnEscape);
-            }
+            modal.remove();
+            document.removeEventListener('keydown', closeOnEscape);
         }
     };
     document.addEventListener('keydown', closeOnEscape);
@@ -1719,8 +1760,24 @@ async function loadProfiles() {
 }
 
 // Update profile count badge
-function updateProfileCount() {
-    profileCountBadge.textContent = profiles.length;
+function updateProfileCount(visibleCount = null) {
+    const totalCount = profiles.length;
+
+    if (visibleCount === null) {
+        // No filter info provided, assume all visible
+        visibleCount = totalCount;
+    }
+
+    profileCountBadge.textContent = `${visibleCount}/${totalCount}`;
+
+    // Update badge width class based on total count digits
+    profileCountBadge.classList.remove('badge-2-digit', 'badge-3-digit');
+    if (totalCount >= 100) {
+        profileCountBadge.classList.add('badge-3-digit');
+    } else if (totalCount >= 10) {
+        profileCountBadge.classList.add('badge-2-digit');
+    }
+    // 1-9 uses default min-width (no extra class needed)
 }
 
 // Recent Connections Functions
@@ -2024,6 +2081,7 @@ function renderProfiles(filter = '') {
                 <div class="empty-state-text">${text}</div>
             </div>
         `;
+        updateProfileCount(0); // 0 visible profiles
         return;
     }
 
@@ -2132,6 +2190,9 @@ function renderProfiles(filter = '') {
 
     // Update expand/collapse button text
     updateExpandCollapseButton();
+
+    // Update profile count with visible profiles
+    updateProfileCount(filteredProfiles.length);
 
     // Update scrollbar width after DOM is rendered
     requestAnimationFrame(() => {
@@ -3157,17 +3218,10 @@ function saveCollapsedState() {
 
 function updateFilterBadge() {
     const allGroups = getAllGroups();
-    const hiddenGroups = filteredGroups.size;
+    const selectedGroups = allGroups.length - filteredGroups.size;
 
-    // Only show badge when some groups are hidden
-    if (hiddenGroups === 0) {
-        // No groups hidden - hide badge
-        filterBadge.classList.add('hidden');
-    } else {
-        // Show number of hidden groups
-        filterBadge.textContent = hiddenGroups;
-        filterBadge.classList.remove('hidden');
-    }
+    // Always show badge with X/Y format
+    filterBadge.textContent = `${selectedGroups}/${allGroups.length}`;
 }
 
 function getAllGroups() {

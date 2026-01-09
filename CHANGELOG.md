@@ -55,7 +55,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prevents users from accessing developer tools in release builds
   - Can be re-enabled for debugging if needed
 
+### Security
+- **Temporary Script Cleanup**: Enhanced security for temporary SSH launch scripts
+  - Increased cleanup delay from 2s to 5s for safer terminal script execution
+  - Added secure deletion: overwrites with random data before unlinking
+  - Prevents information disclosure from lingering temporary files
+- **SSH Host Key Verification**: Added MITM attack protection
+  - All SSH connections now use `-o StrictHostKeyChecking=ask`
+  - Users prompted to verify host keys on first connection
+  - Protects against man-in-the-middle attacks
+- **Password Operation Logging**: Removed sensitive debug logging
+  - Eliminated all password-related debug logs (lengths, operation timing)
+  - No longer exposes sensitive information during development
+  - Simplified password storage logic
+- **XSS Prevention**: Refactored shortcuts modal for defense-in-depth
+  - Replaced `insertAdjacentHTML` with `createElement()` and `appendChild()`
+  - Safer pattern prevents future XSS vulnerabilities
+  - Better code maintainability
+- **Content Security Policy**: Strengthened CSP and eliminated CDN dependencies
+  - Vendored xterm.js locally (eliminates external CDN dependency)
+  - Updated CSP to `script-src 'self'` and `style-src 'self'` only
+  - Added `frame-ancestors 'none'` for clickjacking protection
+  - Improved offline functionality and security
+- **Terminal Session Management**: Added automatic cleanup for idle sessions
+  - Idle timeout: 30 minutes of inactivity
+  - Background monitor checks every 5 minutes
+  - Automatically closes inactive sessions and frees resources
+  - Prevents resource exhaustion from hung/abandoned sessions
+- **File Dialog Timeout**: Reduced timeout for better resource management
+  - Reduced from 120 seconds to 60 seconds
+  - Prevents indefinite resource holding
+- **Windows Batch File TOCTOU**: Eliminated race condition in file creation
+  - Created `create_file_windows_secure()` helper function
+  - Files created with restrictive permissions atomically
+  - Eliminates time-of-check-to-time-of-use window
+- **Password Authentication Documentation**: Clarified password storage behavior
+  - Added documentation explaining passwords stored for reference/export only
+  - Clarified manual password entry required for SSH connections
+  - Recommended SSH key authentication for automated workflows
+
 ### Infrastructure
+- **Dependency Vulnerability Scanning**: Automated security auditing
+  - Added GitHub Actions workflow for weekly security scans
+  - Configured Dependabot for automatic dependency updates
+  - Uses `cargo audit` for Rust and `bun audit` for JavaScript
+  - Runs on all push/PR events and weekly schedule
 - **Git Repository Consolidation**: Merged development documentation into main repository
   - Added CLAUDE.md, TODO.md, and plans/ to public repository
   - Removed private backup repository setup

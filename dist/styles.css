@@ -131,7 +131,17 @@ body {
 }
 
 .profile-count-badge {
-    /* Inherits from .badge class */
+    /* Fixed widths based on digit count to prevent size shifting */
+    min-width: 32px; /* Default for 1 digit (e.g., "5/9") */
+    display: inline-block;
+}
+
+.profile-count-badge.badge-2-digit {
+    min-width: 42px; /* For 2 digit totals (e.g., "14/17") */
+}
+
+.profile-count-badge.badge-3-digit {
+    min-width: 52px; /* For 3 digit totals (e.g., "145/999") */
 }
 
 .profile-counter-display {
