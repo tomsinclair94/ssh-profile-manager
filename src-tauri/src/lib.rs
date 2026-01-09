@@ -270,9 +270,9 @@ fn validate_username(username: &str) -> Result<(), String> {
     if username.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>' | ' ')) {
         return Err("Username contains invalid characters".to_string());
     }
-    // Allow alphanumeric, underscore, hyphen, dot, and @ (for formats like user@proxyuser)
-    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '@') {
-        return Err("Username can only contain letters, numbers, underscores, hyphens, dots, and @".to_string());
+    // Allow alphanumeric, underscore, hyphen, dot, @, and # (for formats like user@proxyuser or user#1234)
+    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '@' || c == '#') {
+        return Err("Username can only contain letters, numbers, underscores, hyphens, dots, @, and #".to_string());
     }
     Ok(())
 }
@@ -284,8 +284,8 @@ fn validate_profile_name(name: &str) -> Result<(), String> {
     if name.len() > 64 {
         return Err("Profile name too long (max 64 characters)".to_string());
     }
-    // Allow alphanumeric, spaces, and specific special characters: - _ ( ) . [ ]
-    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']')) {
+    // Allow alphanumeric, spaces, and specific special characters: - _ ( ) . [ ] #
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']' | '#')) {
         return Err("Profile name contains invalid characters".to_string());
     }
     Ok(())
@@ -350,7 +350,7 @@ fn validate_group(group: &str) -> Result<(), String> {
         return Err("Group name too long (max 64 characters)".to_string());
     }
     // Same pattern as profile name but shorter
-    if !group.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']')) {
+    if !group.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']' | '#')) {
         return Err("Group name contains invalid characters".to_string());
     }
     Ok(())
