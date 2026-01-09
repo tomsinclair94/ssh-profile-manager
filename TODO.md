@@ -1,10 +1,10 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.6.4-dev
+## Current Version: v0.6.4
 
-**Status:** In Development (Started 2025-01-06)
+**Status:** Ready for Release (Completed 2025-01-09)
 **Type:** Bug Fix Release
-**Branch:** Not yet created
+**Branch:** v0.6.4-dev
 
 ---
 
@@ -119,231 +119,154 @@ See v0.6.4 section below for details.
 
 ---
 
-## v0.6.4 - Bug Fix Release (In Development)
+## v0.6.4 - Bug Fix Release (Complete)
 
-**Status:** Planning
+**Status:** Complete
 **Started:** 2025-01-06
+**Completed:** 2025-01-09
 **Focus:** Fix Windows Terminal tab issues and auto-close behavior discovered during v0.6.3 testing
 
-### Issues to Fix
+### Completed Issues
 
-#### 1. Windows Terminal Tab Mode Not Working
+#### 1. Windows Terminal Tab Mode Not Working ✅
 **Priority:** HIGH
-**Status:** Not started
+**Status:** FIXED (commits f4b4c38, f92ca38)
 
-**Problem:**
-- Setting "Open profiles in new tabs" enabled still opens new windows in Windows Terminal
-- User workaround exists: Set Windows Terminal "New instance behaviour" → "Attach to the most recently used window"
-- Users shouldn't need to change Windows Terminal settings for the app to work correctly
-
-**Root Cause:**
-- App currently uses `wt new-tab` command which doesn't force tab behavior without Windows Terminal configuration change
-- Need to ensure proper command arguments to force tab behavior
-
-**Solution:**
-- Investigate Windows Terminal CLI arguments to force tab creation in existing window
-- May need to use `wt -w 0 new-tab` to target the most recently used window (window ID 0)
-- Update lib.rs Windows Terminal command construction
+**Solution Implemented:**
+- Initially used `wt -w 0 new-tab` to force tabs in most recently used window (f4b4c38)
+- Refined to `wt -w last nt` for proper tab targeting (f92ca38)
+- Tested and verified working on Windows VM
 
 ---
 
-#### 2. Windows Terminal Window Mode Error
+#### 2. Windows Terminal Window Mode Error ✅
 **Priority:** HIGH
-**Status:** Not started
+**Status:** FIXED (commit f4b4c38)
 
-**Problem:**
-- When "Open profiles in new tabs" is disabled (force new window mode), error occurs: "window not found"
-- New window mode should work without requiring existing window
-
-**Root Cause:**
-- Current implementation may be incorrectly targeting a window ID when window mode is selected
-- `wt new-window` should not reference any window ID
-
-**Solution:**
-- Review lib.rs Windows Terminal window mode command
-- Ensure `wt new-window` is used correctly without window ID targeting
-- Test both modes independently
+**Solution Implemented:**
+- Changed to `wt new-window` without window ID targeting
+- Fixes "window not found" error
+- Tested and verified working on Windows VM
 
 ---
 
-#### 3. Auto-Close Terminal Tab Not Working (macOS)
+#### 3. Auto-Close Terminal Tab (macOS) ✅
 **Priority:** MEDIUM
-**Status:** Not started
+**Status:** FIXED (commit 88b7275)
 
-**Problem:**
-- AppleScript error when trying to close tab after SSH session ends:
-  ```
-  Terminal got an error: selected tab of window 1 doesn't understand the "close" message. (-1708)
-  ```
-- v0.6.3 attempted to fix this but the error persists
-
-**Root Cause:**
-- AppleScript syntax for closing tabs may be incorrect
-- May need different approach (close window instead, or use different AppleScript object reference)
-
-**Solution:**
-- Review AppleScript in lib.rs for macOS terminal auto-close
-- Test alternative approaches:
-  - `close (selected tab of window 1)`
-  - `close window 1` (if only one tab exists)
-  - Check Terminal.app AppleScript dictionary for correct syntax
+**Solution Implemented:**
+- Replaced AppleScript `close (selected tab)` with System Events Cmd+W keystroke
+- Command: `osascript -e 'tell application "System Events" to keystroke "w" using command down'`
+- Works reliably for both tab mode and window mode
+- Tested with multiple tabs - closes individual tabs correctly
+- Verified working on macOS (2025-01-09)
 
 ---
 
-#### 4. Auto-Close Terminal Tab Not Working (Windows)
+#### 4. Auto-Close Terminal Tab (Windows) ✅
 **Priority:** MEDIUM
-**Status:** Not started
+**Status:** FIXED (commits f4b4c38, f92ca38)
 
-**Problem:**
-- After SSH session ends, terminal displays: "You can now close this terminal with Ctrl+D"
-- Window/tab doesn't close automatically
-
-**Root Cause:**
-- Windows Terminal/CMD/PowerShell don't auto-close after SSH process exits
-- May need to use different command line arguments or wrapper script approach
-
-**Solution:**
-- Investigate Windows Terminal auto-close behavior
-- Possible approaches:
-  - Add `exit` command after SSH in batch script
-  - Use PowerShell `-NoExit` parameter control
-  - Check Windows Terminal profile settings for close behavior
-- Test with CMD, PowerShell, and Windows Terminal separately
+**Solution Implemented:**
+- Initially added `& exit` / `; exit` after SSH command (f4b4c38)
+- Refined to simplified native SSH command (f92ca38)
+- Tested and verified working on Windows VM for all terminal types (CMD, PowerShell, Windows Terminal)
 
 ---
 
-#### 5. Windows App Icon Background Issue
+#### 5. Windows App Icon Background Issue ✅
 **Priority:** MEDIUM
-**Status:** Awaiting screenshot from user
+**Status:** FIXED (commit f92ca38)
 
-**Problem:**
-- Icon appears to have background issue (details pending)
-- v0.6.3 attempted transparency fix but issue may persist
-
-**Next Steps:**
-- User to provide screenshot showing the issue
-- Investigate icon.ico generation process
-- May need to regenerate with different tool or settings
+**Solution Implemented:**
+- Regenerated all icons with transparent background from SVG source
+- Updated icon.ico, icon.icns, and all Windows/Android/iOS icon sizes
+- Tested and verified working on Windows VM
 
 ---
 
-### Code Review Items (from v0.6.3)
+### Completed Code Review Items
+
+#### 13. Disable Devtools in Production ✅
+**Priority:** LOW
+**Status:** FIXED (2025-01-09)
+
+**Solution Implemented:**
+- Changed `"devtools": true` → `"devtools": false` in tauri.conf.json:19
+- Prevents users from accessing developer tools in release builds
+
+---
+
+### Deferred Code Review Items (to v0.7.0+)
 
 #### 6. Console Logging Cleanup
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
 - 76 `console.log/error/warn` statements in production JavaScript (dist/main.js)
 - Causes minor performance overhead and clutters browser console
 
-**Solution:**
-- Wrap logs with development-only checks or remove non-essential logs
-- Consider logging utility that respects environment
-
 ---
 
 #### 7. innerHTML Audit
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
 - 13 instances of `innerHTML` usage in main.js
 - Already properly escaped via `escapeHtml()` but could be more secure with DOM manipulation
 
-**Solution:**
-- Audit all HTML construction to ensure `escapeHtml()` is always used
-- Consider replacing innerHTML with DOM manipulation (textContent/createElement)
-- Low priority as current implementation is already secure
-
 ---
 
 #### 8. Database File Permissions Hardening
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
 - profiles.db doesn't have explicitly set permissions
 - macOS provides default protection but explicit hardening would be better
 
-**Solution:**
-- Set 0600 permissions on profiles.db after creation (owner read/write only)
-- Add for defense-in-depth security
-
 ---
 
 #### 9. Rate Limiting Refinement
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
 - Current rate limits may allow resource exhaustion in edge cases
 - Terminal session creation: 2-second cooldown allows 30 sessions/minute
 
-**Solution:**
-- Add per-session limits (e.g., max 5 concurrent sessions)
-- Implement exponential backoff for repeated attempts
-- Monitor thread count and memory usage
-
 ---
 
 #### 10. Function Complexity Refactoring
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
-- Some functions are very long (e.g., `connect_ssh` 300+ lines)
+- Some functions are very long (e.g., `connect_ssh` 300+ lines after refactoring)
 - High cyclomatic complexity makes maintenance harder
-
-**Solution:**
-- Refactor into smaller functions
-- Target cyclomatic complexity < 10 per function
-- Extract platform-specific code into separate functions
 
 ---
 
 #### 11. Terminal Dimension Limits
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
 - Current limits (300×100 = 30,000 cells max) may be higher than necessary
-
-**Solution:**
-- Consider reducing to 250×80 (20,000 cells max)
-- More reasonable limits for typical use cases
 
 ---
 
 #### 12. SRI Hashes for CDN Resources
 **Priority:** LOW
-**Status:** Not started
+**Status:** Deferred to v0.7.0+
 
 **Problem:**
 - xterm.js loaded from cdn.jsdelivr.net without Subresource Integrity hashes
 - Could be compromised if CDN is attacked
 
-**Solution:**
-- Add SRI hashes to xterm.js script/style tags in index.html
-- Example: `integrity="sha384-..." crossorigin="anonymous"`
-
 ---
-
-#### 13. Disable Devtools in Production
-**Priority:** LOW
-**Status:** Not started
-
-**Problem:**
-- Devtools currently enabled in production builds (tauri.conf.json:19)
-- `"devtools": true`
-
-**Solution:**
-- Change to `"devtools": false` for production builds
-- Prevents users from accessing developer tools in release builds
-
----
-
-## Post-v0.6.3 Tasks (Before Next Dev Release)
 
 ---
 
