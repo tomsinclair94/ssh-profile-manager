@@ -19,10 +19,10 @@
 // Debug logging - only enabled in development (can be toggled via localStorage)
 const DEBUG = localStorage.getItem('debug') === 'true' || false;
 const debug = {
-    log: (...args) => DEBUG && debug.log(...args),
-    warn: (...args) => DEBUG && debug.warn(...args),
+    log: (...args) => DEBUG && console.log(...args),
+    warn: (...args) => DEBUG && console.warn(...args),
     error: (...args) => console.error(...args), // Always show errors
-    info: (...args) => DEBUG && debug.info(...args)
+    info: (...args) => DEBUG && console.info(...args)
 };
 
 // Wait for DOM and Tauri to be ready

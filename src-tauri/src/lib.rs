@@ -487,19 +487,27 @@ pub struct Database {
 
 impl Database {
     fn new(path: PathBuf) -> SqlResult<Self> {
-        let conn = Connection::open(&path)?;
-
-        // Set file permissions to 0600 (owner read/write only) for security
+        // SECURITY: On Unix systems, create the database file with restrictive permissions (0600)
+        // before opening it to prevent TOCTOU race condition where the file would be created
+        // with default permissions (typically 0644) and then changed afterward.
         #[cfg(unix)]
         {
             use std::fs;
-            use std::os::unix::fs::PermissionsExt;
-            if let Ok(metadata) = fs::metadata(&path) {
-                let mut permissions = metadata.permissions();
-                permissions.set_mode(0o600);
-                let _ = fs::set_permissions(&path, permissions);
+            use std::os::unix::fs::OpenOptionsExt;
+
+            // Only set permissions if the file doesn't exist yet
+            if !path.exists() {
+                // Create file with 0600 permissions (owner read/write only)
+                fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .mode(0o600)
+                    .open(&path)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
             }
         }
+
+        let conn = Connection::open(&path)?;
 
         // Enable foreign keys
         conn.execute("PRAGMA foreign_keys = ON", [])?;
@@ -2356,29 +2364,39 @@ fn launch_windows_cmd(ssh_args: &[String]) -> Result<(), String> {
 fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
     use std::process::Command;
 
+    // SECURITY: Use Base64-encoded command to avoid complex shell escaping issues
+    // when passing through cmd /c start powershell (three different shell contexts).
+    // This is more secure than trying to escape for cmd, start, and PowerShell simultaneously.
+
     let mut ps_args = vec!["ssh".to_string()];
     ps_args.extend(ssh_args.iter().cloned());
 
-    let ssh_command = ps_args.iter()
+    // Build PowerShell command with proper array syntax to avoid injection
+    let args_quoted: Vec<String> = ps_args.iter()
         .map(|arg| {
-            if arg.contains(' ') || arg.contains('\'') {
-                format!("'{}'", arg.replace('\'', "''"))
-            } else {
-                arg.clone()
-            }
+            // Escape single quotes in PowerShell by doubling them
+            format!("'{}'", arg.replace('\'', "''"))
         })
-        .collect::<Vec<String>>()
-        .join(" ");
+        .collect();
 
-    // Add explicit exit to ensure auto-close
-    let full_command = format!("{}; exit", ssh_command);
+    // Create PowerShell command that builds argument array and invokes ssh
+    let ps_command = format!("& {} | Out-Null; exit", args_quoted.join(" "));
+
+    // Convert to UTF-16LE and Base64 encode (required by PowerShell -EncodedCommand)
+    let utf16_bytes: Vec<u16> = ps_command.encode_utf16().collect();
+    let bytes: Vec<u8> = utf16_bytes.iter()
+        .flat_map(|&w| vec![(w & 0xFF) as u8, (w >> 8) as u8])
+        .collect();
+
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let encoded = STANDARD.encode(&bytes);
 
     Command::new("cmd")
         .arg("/c")
         .arg("start")
         .arg("powershell")
-        .arg("-Command")
-        .arg(&full_command)
+        .arg("-EncodedCommand")
+        .arg(&encoded)
         .spawn()
         .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
 
