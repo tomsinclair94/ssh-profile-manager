@@ -17,22 +17,16 @@ bun run build    # Production build
 
 ## Current Status
 
-**Version:** 0.6.4-dev (planning)
-**Released:** 0.6.3 (2025-01-06)
-**See:** TODO.md for active bugs, roadmap, and feature backlog
+**Released:** v0.6.5 (2026-01-09)
+**See:** TODO.md for roadmap and feature backlog
 
-**Latest Release Notes (v0.6.3):**
-- Security hardening: Fixed 6 critical/medium security issues
-- Password authentication fix (keyring native features)
-- Terminal tab setting for macOS/Windows
-- Profile card UI redesign
-- Auto-tag workflow fix (PAT_TOKEN)
-
-**Next Release (v0.6.4) - Focus:**
-- Fix Windows Terminal tab/window mode issues (HIGH priority)
-- Fix auto-close terminal behavior on macOS/Windows (MEDIUM priority)
-- Windows icon background fix (MEDIUM priority)
-- Address code review items from v0.6.3 (LOW priority)
+**Latest Release Notes (v0.6.5):**
+- Hash (#) character support in Username, Profile Name, and Group Name fields
+- Fixed group filter badge showing "0/0" on startup
+- Fixed filters not applying correctly on startup
+- Fixed group name validation (64-char limit)
+- Improved duplicate profile workflow
+- Fixed modal close button confirmation logic
 
 ## Version Management
 
