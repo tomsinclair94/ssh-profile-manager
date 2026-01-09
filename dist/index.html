@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' ipc://localhost https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc://localhost http://ipc.localhost https://api.github.com; base-uri 'self'; form-action 'self';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- xterm.js for embedded terminal -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <!-- xterm.js for embedded terminal (vendored locally) -->
+    <link rel="stylesheet" href="vendor/xterm/xterm.css">
+    <script src="vendor/xterm/xterm.js"></script>
+    <script src="vendor/xterm/xterm-addon-fit.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -19,7 +19,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.6.3</span>
+                    <span class="version">v0.6.4</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -47,11 +47,11 @@
                 <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
                 <button id="filter-btn" class="btn btn-secondary">
                     Filter Groups
-                    <span id="filter-badge" class="badge filter-badge hidden">0</span>
+                    <span id="filter-badge" class="badge filter-badge">0/0</span>
                 </button>
                 <div class="profile-counter-display">
-                    Total Profiles
-                    <span id="profile-count-badge" class="badge profile-count-badge">0</span>
+                    Profiles
+                    <span id="profile-count-badge" class="badge profile-count-badge">0/0</span>
                 </div>
             </div>
 
@@ -59,7 +59,7 @@
             <div id="filter-popup" class="filter-popup hidden">
                 <div class="filter-popup-header">
                     <h3>Filter Groups</h3>
-                    <button id="clear-filters-btn" class="btn btn-secondary btn-small">Clear All</button>
+                    <button id="clear-filters-btn" class="btn btn-secondary btn-small">Reset</button>
                 </div>
                 <div id="filter-groups-list" class="filter-groups-list">
                     <!-- Group checkboxes will be dynamically added here -->
@@ -390,7 +390,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.3" target="_blank" class="about-value version-link">0.6.3</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.4" target="_blank" class="about-value version-link">0.6.4</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>

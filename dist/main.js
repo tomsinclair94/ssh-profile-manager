@@ -16,9 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Debug logging - only enabled in development (can be toggled via localStorage)
+const DEBUG = localStorage.getItem('debug') === 'true' || false;
+const debug = {
+    log: (...args) => DEBUG && console.log(...args),
+    warn: (...args) => DEBUG && console.warn(...args),
+    error: (...args) => console.error(...args), // Always show errors
+    info: (...args) => DEBUG && console.info(...args)
+};
+
 // Wait for DOM and Tauri to be ready
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded');
+    debug.log('DOM loaded');
 
     // Check if Tauri API is available
     if (!window.__TAURI__) {
@@ -27,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    console.log('Tauri API available');
+    debug.log('Tauri API available');
     init();
 });
 
@@ -1489,56 +1498,97 @@ function showKeyboardShortcutsHelp() {
         ]},
     ];
 
-    let html = '<div class="shortcuts-help-modal"><div class="shortcuts-help-content">';
-
-    // Header (non-scrolling)
-    html += '<div class="modal-header">';
-    html += '<div class="modal-header-left">';
-    html += '<h2>Keyboard Shortcuts</h2>';
-    html += '</div>';
-    html += '<div class="modal-header-right">';
-    html += '<button type="button" id="shortcuts-help-close" class="btn btn-secondary">Close</button>';
-    html += '</div>';
-    html += '</div>';
-
-    // Scrollable content
-    html += '<div class="shortcuts-help-body">';
-    html += '<div class="shortcuts-grid">'; // Grid container
-
-    shortcuts.forEach(section => {
-        html += `<div class="shortcuts-section">`;
-        html += `<h3>${section.category}</h3>`;
-        html += '<table class="shortcuts-table">';
-        section.items.forEach(item => {
-            html += `<tr><td class="shortcut-keys">${escapeHtml(item.keys)}</td><td>${escapeHtml(item.action)}</td></tr>`;
-        });
-        html += '</table></div>';
-    });
-
-    html += '</div>'; // Close grid container
-    html += '</div>'; // Close body
-    html += '</div></div>';
-
     // Remove existing if present
     const existing = document.querySelector('.shortcuts-help-modal');
     if (existing) existing.remove();
 
-    // Add to body
-    document.body.insertAdjacentHTML('beforeend', html);
+    // Create modal structure using DOM methods
+    const modal = document.createElement('div');
+    modal.className = 'shortcuts-help-modal';
+
+    const content = document.createElement('div');
+    content.className = 'shortcuts-help-content';
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'modal-header-left';
+    const title = document.createElement('h2');
+    title.textContent = 'Keyboard Shortcuts';
+    headerLeft.appendChild(title);
+
+    const headerRight = document.createElement('div');
+    headerRight.className = 'modal-header-right';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.id = 'shortcuts-help-close';
+    closeBtn.className = 'btn btn-secondary';
+    closeBtn.textContent = 'Close';
+    headerRight.appendChild(closeBtn);
+
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+
+    // Create body
+    const body = document.createElement('div');
+    body.className = 'shortcuts-help-body';
+
+    const grid = document.createElement('div');
+    grid.className = 'shortcuts-grid';
+
+    // Build shortcut sections
+    shortcuts.forEach(section => {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'shortcuts-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = section.category;
+        sectionDiv.appendChild(heading);
+
+        const table = document.createElement('table');
+        table.className = 'shortcuts-table';
+
+        section.items.forEach(item => {
+            const row = document.createElement('tr');
+
+            const keysCell = document.createElement('td');
+            keysCell.className = 'shortcut-keys';
+            keysCell.textContent = item.keys;
+
+            const actionCell = document.createElement('td');
+            actionCell.textContent = item.action;
+
+            row.appendChild(keysCell);
+            row.appendChild(actionCell);
+            table.appendChild(row);
+        });
+
+        sectionDiv.appendChild(table);
+        grid.appendChild(sectionDiv);
+    });
+
+    body.appendChild(grid);
+
+    // Assemble modal
+    content.appendChild(header);
+    content.appendChild(body);
+    modal.appendChild(content);
+
+    // Add to document
+    document.body.appendChild(modal);
 
     // Add close handler
-    document.getElementById('shortcuts-help-close').addEventListener('click', () => {
-        document.querySelector('.shortcuts-help-modal').remove();
+    closeBtn.addEventListener('click', () => {
+        modal.remove();
     });
 
     // Close on Escape
     const closeOnEscape = (e) => {
         if (e.key === 'Escape') {
-            const modal = document.querySelector('.shortcuts-help-modal');
-            if (modal) {
-                modal.remove();
-                document.removeEventListener('keydown', closeOnEscape);
-            }
+            modal.remove();
+            document.removeEventListener('keydown', closeOnEscape);
         }
     };
     document.addEventListener('keydown', closeOnEscape);
@@ -1546,7 +1596,7 @@ function showKeyboardShortcutsHelp() {
 
 // Initialize app
 async function init() {
-    console.log('Initializing app...');
+    debug.log('Initializing app...');
 
     // Get DOM elements
     profilesList = document.getElementById('profiles-list');
@@ -1600,7 +1650,7 @@ async function init() {
     customTerminalPath = document.getElementById('custom-terminal-path');
     browseTerminalBtn = document.getElementById('browse-terminal-btn');
 
-    console.log('DOM elements retrieved');
+    debug.log('DOM elements retrieved');
 
     // Set OS-specific browse hint
     setBrowseHint();
@@ -1635,7 +1685,7 @@ async function init() {
     // Setup ResizeObserver to update scrollbar width dynamically
     setupScrollbarObserver();
 
-    console.log('App initialized');
+    debug.log('App initialized');
 }
 
 // Set OS-specific hint for browse button
@@ -1672,7 +1722,7 @@ function updateScrollbarWidth() {
 
         document.documentElement.style.setProperty('--scrollbar-width', `${BASE_PADDING + safeScrollbarWidth}px`);
     } catch (error) {
-        console.warn('Failed to update scrollbar width:', error);
+        debug.warn('Failed to update scrollbar width:', error);
         // Fallback to base padding
         document.documentElement.style.setProperty('--scrollbar-width', `${BASE_PADDING}px`);
     }
@@ -1710,8 +1760,24 @@ async function loadProfiles() {
 }
 
 // Update profile count badge
-function updateProfileCount() {
-    profileCountBadge.textContent = profiles.length;
+function updateProfileCount(visibleCount = null) {
+    const totalCount = profiles.length;
+
+    if (visibleCount === null) {
+        // No filter info provided, assume all visible
+        visibleCount = totalCount;
+    }
+
+    profileCountBadge.textContent = `${visibleCount}/${totalCount}`;
+
+    // Update badge width class based on total count digits
+    profileCountBadge.classList.remove('badge-2-digit', 'badge-3-digit');
+    if (totalCount >= 100) {
+        profileCountBadge.classList.add('badge-3-digit');
+    } else if (totalCount >= 10) {
+        profileCountBadge.classList.add('badge-2-digit');
+    }
+    // 1-9 uses default min-width (no extra class needed)
 }
 
 // Recent Connections Functions
@@ -1766,7 +1832,7 @@ async function loadRecentConnections() {
         // Show section and fetch recent connections
         if (section) section.classList.remove('hidden');
         recentConnections = await invoke('get_recent_connections', { limit });
-        console.log('Recent connections loaded:', recentConnections);
+        debug.log('Recent connections loaded:', recentConnections);
         renderRecentConnections();
     } catch (error) {
         console.error('Failed to load recent connections:', error);
@@ -2015,6 +2081,7 @@ function renderProfiles(filter = '') {
                 <div class="empty-state-text">${text}</div>
             </div>
         `;
+        updateProfileCount(0); // 0 visible profiles
         return;
     }
 
@@ -2124,6 +2191,9 @@ function renderProfiles(filter = '') {
     // Update expand/collapse button text
     updateExpandCollapseButton();
 
+    // Update profile count with visible profiles
+    updateProfileCount(filteredProfiles.length);
+
     // Update scrollbar width after DOM is rendered
     requestAnimationFrame(() => {
         updateScrollbarWidth();
@@ -2196,7 +2266,7 @@ function toggleExpandCollapseAll() {
 
 // Setup event listeners
 function setupEventListeners() {
-    console.log('Setting up event listeners...');
+    debug.log('Setting up event listeners...');
 
     searchInput.addEventListener('input', (e) => {
         renderProfiles(e.target.value);
@@ -2217,13 +2287,13 @@ function setupEventListeners() {
             duplicateProfile(target.dataset.id);
         } else if (target.classList.contains('delete-btn')) {
             e.stopPropagation();
-            console.log('Delete button clicked on card, id:', target.dataset.id);
+            debug.log('Delete button clicked on card, id:', target.dataset.id);
             await deleteProfile(target.dataset.id);
         }
     });
 
     newProfileBtn.addEventListener('click', () => {
-        console.log('New profile button clicked!');
+        debug.log('New profile button clicked!');
         openModal();
     });
 
@@ -2232,7 +2302,7 @@ function setupEventListeners() {
     });
 
     deleteProfileBtn.addEventListener('click', async () => {
-        console.log('Delete button clicked in modal');
+        debug.log('Delete button clicked in modal');
         if (editingProfileId) {
             // Check for unsaved changes before proceeding with deletion
             if (hasUnsavedProfileChanges()) {
@@ -2272,7 +2342,7 @@ function setupEventListeners() {
 
         // Prevent double submission
         if (isSubmitting) {
-            console.log('Already submitting, ignoring...');
+            debug.log('Already submitting, ignoring...');
             return;
         }
 
@@ -3148,17 +3218,10 @@ function saveCollapsedState() {
 
 function updateFilterBadge() {
     const allGroups = getAllGroups();
-    const hiddenGroups = filteredGroups.size;
+    const selectedGroups = allGroups.length - filteredGroups.size;
 
-    // Only show badge when some groups are hidden
-    if (hiddenGroups === 0) {
-        // No groups hidden - hide badge
-        filterBadge.classList.add('hidden');
-    } else {
-        // Show number of hidden groups
-        filterBadge.textContent = hiddenGroups;
-        filterBadge.classList.remove('hidden');
-    }
+    // Always show badge with X/Y format
+    filterBadge.textContent = `${selectedGroups}/${allGroups.length}`;
 }
 
 function getAllGroups() {
@@ -3384,7 +3447,7 @@ async function loadWindowState() {
             if (isNaN(width) || isNaN(height) ||
                 width < MIN_WIDTH || width > MAX_WIDTH ||
                 height < MIN_HEIGHT || height > MAX_HEIGHT) {
-                console.warn('Invalid window dimensions in storage, using defaults');
+                debug.warn('Invalid window dimensions in storage, using defaults');
                 await resetWindowState();
                 return;
             }
@@ -3494,12 +3557,20 @@ function populateTerminalOptions() {
     const os = getOS();
     terminalSelect.innerHTML = ''; // Clear existing options
 
+    // Get the help text element for terminal settings
+    // Find the help text that follows the use-tabs checkbox
+    const terminalSection = document.getElementById('use-tabs-in-terminal-check')?.closest('.settings-section');
+    const helpText = terminalSection?.querySelector('p.settings-help');
+
     if (os === 'macos') {
         terminalSelect.innerHTML = `
             <option value="default">Default (Terminal.app)</option>
             <option value="custom">Custom Terminal</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
+        if (helpText) {
+            helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).';
+        }
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
             <option value="default">Default (System Default)</option>
@@ -3509,11 +3580,17 @@ function populateTerminalOptions() {
             <option value="custom">Custom Terminal</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
+        if (helpText) {
+            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows.<br><strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.';
+        }
     } else {
         // Unknown OS - show minimal options
         terminalSelect.innerHTML = `
             <option value="default">Default Terminal</option>
         `;
+        if (helpText) {
+            helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles.';
+        }
     }
 }
 
@@ -3531,7 +3608,7 @@ async function loadTerminalPreference() {
             customTerminalPath.value = savedCustomPath;
         } catch (error) {
             // Path is no longer valid, fall back to default
-            console.warn('Saved custom terminal path is no longer valid:', error);
+            debug.warn('Saved custom terminal path is no longer valid:', error);
             terminalSelect.value = 'default';
             customTerminalPath.value = '';
             localStorage.setItem('terminalPreference', 'default');
@@ -3592,11 +3669,11 @@ async function exportProfiles() {
 
         if (success) {
             showToast('Profiles exported successfully!');
-            console.log('Profiles exported successfully');
+            debug.log('Profiles exported successfully');
         } else {
             // Hide the loading toast
             toastElement.classList.add('hidden');
-            console.log('User cancelled save dialog');
+            debug.log('User cancelled save dialog');
         }
     } catch (error) {
         console.error('Failed to export profiles:', error);
@@ -3711,7 +3788,7 @@ async function importProfiles(file) {
             });
 
             if (!confirmImport) {
-                console.log('User cancelled import');
+                debug.log('User cancelled import');
                 return;
             }
         }
@@ -3730,7 +3807,7 @@ async function importProfiles(file) {
             ? 'Successfully imported 1 profile!'
             : `Successfully imported ${count} profiles!`;
         showToast(message);
-        console.log('Profiles imported successfully');
+        debug.log('Profiles imported successfully');
     } catch (error) {
         console.error('Failed to import profiles:', error);
         showToast('Failed to import profiles: ' + error, TOAST_DURATION_LONG, 'error');
@@ -3766,7 +3843,7 @@ async function deleteAllProfiles() {
     });
 
     if (!confirmed) {
-        console.log('User cancelled delete all');
+        debug.log('User cancelled delete all');
         return;
     }
 
@@ -3781,7 +3858,7 @@ async function deleteAllProfiles() {
 
         await loadProfiles();
         showToast('All profiles deleted successfully!');
-        console.log('All profiles deleted');
+        debug.log('All profiles deleted');
     } catch (error) {
         console.error('Failed to delete all profiles:', error);
         showToast('Failed to delete all profiles: ' + error, TOAST_DURATION_LONG, 'error');
@@ -3841,10 +3918,10 @@ async function backupSettings() {
 
         if (success) {
             showToast('Settings backed up successfully!');
-            console.log('Settings backed up successfully');
+            debug.log('Settings backed up successfully');
         } else {
             toastElement.classList.add('hidden');
-            console.log('User cancelled backup dialog');
+            debug.log('User cancelled backup dialog');
         }
     } catch (error) {
         console.error('Failed to backup settings:', error);
@@ -4003,7 +4080,7 @@ async function restoreSettings(file) {
             });
 
             if (!confirmRestore) {
-                console.log('User cancelled restore');
+                debug.log('User cancelled restore');
                 return;
             }
         }
@@ -4096,7 +4173,7 @@ async function restoreSettings(file) {
                 && result.settings.filtered_groups.every(g => typeof g === 'string' && g.length <= 32)) {
                 localStorage.setItem('filteredGroups', JSON.stringify(result.settings.filtered_groups));
             } else {
-                console.warn('Invalid filtered_groups in backup, skipping');
+                debug.warn('Invalid filtered_groups in backup, skipping');
             }
         }
         if (result.settings.collapsed_groups) {
@@ -4105,7 +4182,7 @@ async function restoreSettings(file) {
                 && result.settings.collapsed_groups.every(g => typeof g === 'string' && g.length <= 32)) {
                 localStorage.setItem('collapsedGroups', JSON.stringify(result.settings.collapsed_groups));
             } else {
-                console.warn('Invalid collapsed_groups in backup, skipping');
+                debug.warn('Invalid collapsed_groups in backup, skipping');
             }
         }
 
@@ -4169,7 +4246,7 @@ async function restoreSettings(file) {
             ? `Settings and ${result.profiles.length} ${result.profiles.length === 1 ? 'profile' : 'profiles'} restored successfully!`
             : 'Settings restored successfully!';
         showToast(successMessage);
-        console.log('Settings restored successfully');
+        debug.log('Settings restored successfully');
     } catch (error) {
         console.error('Failed to restore settings:', error);
         showToast('Failed to restore settings: ' + error, TOAST_DURATION_LONG, 'error');
@@ -4202,7 +4279,7 @@ async function resetSettings() {
         });
 
         if (!confirmReset) {
-            console.log('User cancelled reset');
+            debug.log('User cancelled reset');
             return;
         }
 
@@ -4241,7 +4318,7 @@ async function resetSettings() {
         await loadRecentConnections(); // Reload recent connections with new limit
 
         showToast('Settings reset to defaults!');
-        console.log('Settings reset successfully');
+        debug.log('Settings reset successfully');
     } catch (error) {
         console.error('Failed to reset settings:', error);
         showToast('Failed to reset settings: ' + error, TOAST_DURATION_LONG, 'error');
@@ -4267,7 +4344,7 @@ async function browseSshKey() {
 
 // Open modal for new or edit profile
 async function openModal(profile = null) {
-    console.log('openModal called with profile:', profile);
+    debug.log('openModal called with profile:', profile);
     editingProfileId = profile ? profile.id : null;
 
     // Clear any validation errors from previous modal sessions
@@ -4286,17 +4363,17 @@ async function openModal(profile = null) {
 
         // Retrieve password from keychain if auth method is password
         if (profile.auth_method === 'password') {
-            console.log('Profile has password auth, attempting to retrieve password for:', profile.id);
+            debug.log('Profile has password auth, attempting to retrieve password for:', profile.id);
             try {
                 const password = await invoke('get_profile_password', { profileId: profile.id });
-                console.log('Password retrieved successfully, length:', password ? password.length : 0);
+                debug.log('Password retrieved successfully, length:', password ? password.length : 0);
                 document.getElementById('profile-password').value = password || '';
             } catch (error) {
                 console.error('Failed to retrieve password:', error);
                 document.getElementById('profile-password').value = '';
             }
         } else {
-            console.log('Profile auth method is not password:', profile.auth_method);
+            debug.log('Profile auth method is not password:', profile.auth_method);
             document.getElementById('profile-password').value = '';
         }
 
@@ -4440,7 +4517,7 @@ async function closeModal() {
 
 // Save profile (create or update)
 async function saveProfile() {
-    console.log('saveProfile called, editingProfileId:', editingProfileId);
+    debug.log('saveProfile called, editingProfileId:', editingProfileId);
 
     // Validate all fields before proceeding
     if (!validateAllFields()) {
@@ -4484,10 +4561,10 @@ async function saveProfile() {
         const isEditing = !!editingProfileId;
 
         if (editingProfileId) {
-            console.log('Updating profile:', profileData);
+            debug.log('Updating profile:', profileData);
             await invoke('update_profile', { profile: profileData });
         } else {
-            console.log('Creating profile:', profileData);
+            debug.log('Creating profile:', profileData);
             await invoke('create_profile', { profile: profileData });
         }
 
@@ -4550,7 +4627,7 @@ function duplicateProfile(id) {
 // Delete profile
 // Returns true if deleted, false if cancelled or failed
 async function deleteProfile(id) {
-    console.log('deleteProfile called with id:', id);
+    debug.log('deleteProfile called with id:', id);
     const profile = profiles.find(p => p.id === id);
 
     if (!profile) {
@@ -4558,7 +4635,7 @@ async function deleteProfile(id) {
         return false;
     }
 
-    console.log('Found profile to delete:', profile);
+    debug.log('Found profile to delete:', profile);
 
     const confirmMessage = buildConfirmMessage({
         lines: [
@@ -4577,15 +4654,15 @@ async function deleteProfile(id) {
     });
 
     if (!confirmDelete) {
-        console.log('User cancelled deletion');
+        debug.log('User cancelled deletion');
         return false;
     }
 
-    console.log('User confirmed deletion');
+    debug.log('User confirmed deletion');
     try {
-        console.log('Calling delete_profile with id:', id);
+        debug.log('Calling delete_profile with id:', id);
         await invoke('delete_profile', { id });
-        console.log('Profile deleted successfully');
+        debug.log('Profile deleted successfully');
         await loadProfiles();
         showToast('Profile deleted successfully!');
         return true;

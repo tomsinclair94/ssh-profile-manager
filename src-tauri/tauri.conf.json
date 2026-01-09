@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SSH Profile Manager",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "identifier": "com.tomsinclair.sshprofilemanager",
   "build": {
     "frontendDist": "../dist"
@@ -16,11 +16,11 @@
         "minHeight": 420,
         "resizable": true,
         "fullscreen": false,
-        "devtools": true
+        "devtools": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self' ipc://localhost https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc://localhost http://ipc.localhost https://api.github.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';",
       "capabilities": [
         {
           "identifier": "main-capability",

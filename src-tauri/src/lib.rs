@@ -22,7 +22,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -34,7 +33,7 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use windows_acl::acl::ACL;
 
 // Constants
-const FILE_DIALOG_TIMEOUT_SECS: u64 = 120; // 2 minutes timeout for file dialogs
+const FILE_DIALOG_TIMEOUT_SECS: u64 = 60; // 1 minute timeout for file dialogs
 const SETTINGS_IMPORT_RATE_LIMIT_SECS: u64 = 5; // 5 second rate limit for settings import
 const SESSION_CREATE_RATE_LIMIT_SECS: u64 = 2; // 2 second rate limit for terminal session creation
 
@@ -44,6 +43,36 @@ static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
 static LAST_SESSION_CREATE_TIME: Mutex<u64> = Mutex::new(0);
 
 // Windows-specific file security function
+/// Creates a file on Windows with restrictive permissions atomically (TOCTOU protection)
+#[cfg(target_os = "windows")]
+fn create_file_windows_secure(path: &std::path::Path, content: &str) -> Result<(), String> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    // Create file with minimal access (owner-only initially)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| format!("Failed to create secure file: {}", e))?;
+
+    // Write content
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write file content: {}", e))?;
+
+    // Sync to disk
+    file.sync_all()
+        .map_err(|e| format!("Failed to sync file: {}", e))?;
+
+    // Drop file handle before setting ACL
+    drop(file);
+
+    // Set restrictive ACL
+    set_file_permissions_windows(path)?;
+
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
     use windows_acl::helper;
@@ -95,7 +124,7 @@ fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
     // NOTE: We're not adding an explicit allow for the current user because:
     // 1. The file is created by the current user, so they have ownership rights by default
     // 2. We deny Everyone and Users, which prevents other accounts from accessing
-    // 3. The file is deleted after 30 seconds anyway (see cleanup_old_scripts)
+    // 3. The file is deleted after 5 seconds anyway (see secure cleanup)
 
     // windows-acl automatically persists changes to the file system
     Ok(())
@@ -153,13 +182,61 @@ pub struct SessionRegistry {
 
 impl SessionRegistry {
     pub fn new() -> Self {
-        SessionRegistry {
+        let registry = SessionRegistry {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             pty_writers: Arc::new(Mutex::new(HashMap::new())),
             pty_pairs: Arc::new(Mutex::new(HashMap::new())),
             last_activity: Arc::new(Mutex::new(HashMap::new())),
             write_rate_limits: Arc::new(Mutex::new(HashMap::new())),
-        }
+        };
+
+        // Start idle session monitor
+        registry.start_idle_monitor();
+
+        registry
+    }
+
+    /// Start background thread to monitor and clean up idle sessions
+    fn start_idle_monitor(&self) {
+        const IDLE_TIMEOUT_SECS: u64 = 1800; // 30 minutes
+        const CHECK_INTERVAL_SECS: u64 = 300; // Check every 5 minutes
+
+        let sessions = Arc::clone(&self.sessions);
+        let pty_pairs = Arc::clone(&self.pty_pairs);
+        let pty_writers = Arc::clone(&self.pty_writers);
+        let last_activity = Arc::clone(&self.last_activity);
+        let write_rate_limits = Arc::clone(&self.write_rate_limits);
+
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(CHECK_INTERVAL_SECS));
+
+                let now = Instant::now();
+                let mut sessions_to_close = Vec::new();
+
+                // Find idle sessions
+                if let Ok(activity) = last_activity.lock() {
+                    for (session_id, last_time) in activity.iter() {
+                        if now.duration_since(*last_time).as_secs() > IDLE_TIMEOUT_SECS {
+                            sessions_to_close.push(session_id.clone());
+                        }
+                    }
+                }
+
+                // Close idle sessions
+                for session_id in sessions_to_close {
+                    #[cfg(debug_assertions)]
+                    println!("Closing idle session: {}", session_id);
+
+                    // Clean up all session resources
+                    let _ = sessions.lock().map(|mut s| s.remove(&session_id));
+                    let _ = pty_pairs.lock().map(|mut p| p.remove(&session_id));
+                    let _ = pty_writers.lock().map(|mut w| w.remove(&session_id));
+                    let _ = last_activity.lock().map(|mut a| a.remove(&session_id));
+                    let _ = write_rate_limits.lock().map(|mut r| r.remove(&session_id));
+                }
+            }
+        });
     }
 }
 
@@ -488,7 +565,27 @@ pub struct Database {
 
 impl Database {
     fn new(path: PathBuf) -> SqlResult<Self> {
-        let conn = Connection::open(path)?;
+        // SECURITY: On Unix systems, create the database file with restrictive permissions (0600)
+        // before opening it to prevent TOCTOU race condition where the file would be created
+        // with default permissions (typically 0644) and then changed afterward.
+        #[cfg(unix)]
+        {
+            use std::fs;
+            use std::os::unix::fs::OpenOptionsExt;
+
+            // Only set permissions if the file doesn't exist yet
+            if !path.exists() {
+                // Create file with 0600 permissions (owner read/write only)
+                fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .mode(0o600)
+                    .open(&path)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            }
+        }
+
+        let conn = Connection::open(&path)?;
 
         // Enable foreign keys
         conn.execute("PRAGMA foreign_keys = ON", [])?;
@@ -848,20 +945,7 @@ fn delete_password(profile_id: &str) -> Result<(), String> {
 
 #[tauri::command]
 fn get_profile_password(profile_id: String) -> Result<String, String> {
-    #[cfg(debug_assertions)]
-    println!("Attempting to retrieve password for profile: {}", profile_id);
-    match get_password(&profile_id) {
-        Ok(password) => {
-            #[cfg(debug_assertions)]
-            println!("Password retrieved successfully: {} chars", password.len());
-            Ok(password)
-        }
-        Err(e) => {
-            #[cfg(debug_assertions)]
-            println!("Failed to retrieve password: {}", e);
-            Err(e)
-        }
-    }
+    get_password(&profile_id)
 }
 
 // Export/Import structures
@@ -1001,36 +1085,12 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
-        #[cfg(debug_assertions)]
-        println!("Auth method is password, checking password field...");
         if let Some(password) = profile.password {
-            #[cfg(debug_assertions)]
-            println!("Password provided: {} chars", password.len());
             if !password.is_empty() {
-                #[cfg(debug_assertions)]
-                println!("Attempting to store password for profile: {}", id);
-                match store_password(&id, &password) {
-                    Ok(_) => {
-                        #[cfg(debug_assertions)]
-                        println!("Password stored successfully");
-                    },
-                    Err(e) => {
-                        #[cfg(debug_assertions)]
-                        println!("Failed to store password: {}", e);
-                        return Err(format!("Failed to store password: {}", e));
-                    }
-                }
-            } else {
-                #[cfg(debug_assertions)]
-                println!("Password is empty, not storing");
+                store_password(&id, &password)
+                    .map_err(|e| format!("Failed to store password: {}", e))?;
             }
-        } else {
-            #[cfg(debug_assertions)]
-            println!("No password provided");
         }
-    } else {
-        #[cfg(debug_assertions)]
-        println!("Auth method is not password: {}", profile.auth_method);
     }
 
     Ok(id)
@@ -1155,7 +1215,7 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
 
     // SECURITY: Validate profile count to prevent resource exhaustion
-    const MAX_IMPORT_PROFILES: usize = 1000;
+    const MAX_IMPORT_PROFILES: usize = 999;
     if import_data.profiles.len() > MAX_IMPORT_PROFILES {
         return Err(format!(
             "Import exceeds maximum of {} profiles (received {})",
@@ -1656,6 +1716,19 @@ async fn create_terminal_session(
         *last_time = now;
     }
 
+    // SECURITY: Limit concurrent sessions to prevent resource exhaustion
+    const MAX_CONCURRENT_SESSIONS: usize = 5;
+    {
+        let sessions = registry.sessions.lock()
+            .map_err(|e| format!("Session registry lock poisoned: {}", e))?;
+        if sessions.len() >= MAX_CONCURRENT_SESSIONS {
+            return Err(format!(
+                "Maximum concurrent sessions reached ({}). Please close an existing session before creating a new one.",
+                MAX_CONCURRENT_SESSIONS
+            ));
+        }
+    }
+
     // Get profile from database
     let profile = db
         .get_profile_by_id(&profile_id)
@@ -1668,9 +1741,9 @@ async fn create_terminal_session(
     validate_port(profile.port)?;
 
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
-    const MAX_COLS: u16 = 300;
-    const MAX_ROWS: u16 = 100;
-    const MAX_TOTAL_CELLS: u32 = 30000; // 300 cols × 100 rows
+    const MAX_COLS: u16 = 250;
+    const MAX_ROWS: u16 = 80;
+    const MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
 
     if cols < 10 || cols > MAX_COLS {
         return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
@@ -2015,9 +2088,9 @@ fn resize_terminal(
     rows: u16,
 ) -> Result<(), String> {
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
-    const MAX_COLS: u16 = 300;
-    const MAX_ROWS: u16 = 100;
-    const MAX_TOTAL_CELLS: u32 = 30000; // 300 cols × 100 rows
+    const MAX_COLS: u16 = 250;
+    const MAX_ROWS: u16 = 80;
+    const MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
 
     if cols < 10 || cols > MAX_COLS {
         return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
@@ -2138,26 +2211,8 @@ fn close_terminal_session(
     Ok(())
 }
 
-#[tauri::command]
-fn connect_ssh(
-    db: State<Database>,
-    profile_id: String,
-    terminal_preference: Option<String>,
-    custom_terminal_path: Option<String>,
-    use_tabs_in_terminal: Option<bool>,
-    app_handle: tauri::AppHandle
-) -> Result<(), String> {
-    let profile = db
-        .get_profile_by_id(&profile_id)
-        .map_err(|e| format!("Failed to get profile: {}", e))?
-        .ok_or_else(|| "Profile not found".to_string())?;
-
-    // Validate inputs before connecting (defense in depth)
-    validate_hostname(&profile.host)?;
-    validate_username(&profile.username)?;
-    validate_port(profile.port)?;
-
-    // Build SSH command arguments safely
+// Helper function: Build SSH command arguments from profile
+fn build_ssh_args(profile: &Profile) -> Result<Vec<String>, String> {
     let mut ssh_args: Vec<String> = vec![];
 
     // Add port if not default
@@ -2165,6 +2220,10 @@ fn connect_ssh(
         ssh_args.push("-p".to_string());
         ssh_args.push(profile.port.to_string());
     }
+
+    // Add host key verification (MITM protection)
+    ssh_args.push("-o".to_string());
+    ssh_args.push("StrictHostKeyChecking=ask".to_string());
 
     // Add key path if specified and validated
     if profile.auth_method == "key" {
@@ -2177,163 +2236,429 @@ fn connect_ssh(
         }
     }
 
-    // Build connection string (already validated above)
+    // Build connection string (already validated)
     let connection = format!("{}@{}", profile.username, profile.host);
     ssh_args.push(connection);
 
-    // Default to "default" if no preference specified
-    let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
+    Ok(ssh_args)
+}
 
-    // Open in system terminal
+// Helper function: Shell escape for bash/sh contexts
+#[cfg(target_os = "macos")]
+fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+// Helper function: AppleScript escape
+#[cfg(target_os = "macos")]
+fn applescript_escape(s: &str) -> String {
+    s.replace('\\', "\\\\")
+     .replace('"', "\\\"")
+     .replace('\n', "\\n")
+     .replace('\r', "\\r")
+     .replace('$', "\\$")
+     .replace('`', "\\`")
+}
+
+// Helper function: Escape strings for bash double-quote context
+#[cfg(target_os = "macos")]
+fn escape_bash_double_quote(s: &str) -> String {
+    s.replace('\\', "\\\\")
+     .replace('"', "\\\"")
+     .replace('$', "\\$")
+     .replace('`', "\\`")
+}
+
+#[cfg(target_os = "macos")]
+fn launch_macos_custom_terminal(
+    custom_path: &str,
+    ssh_args: &[String],
+    profile_name: &str,
+) -> Result<(), String> {
+    use std::process::Command;
+    use std::fs;
+
+    // Re-validate path immediately before use (TOCTOU protection)
+    let validated_path = validate_terminal_path(custom_path)?;
+
+    // Create temporary script
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
+
+    let script_content = format!(
+        "#!/bin/bash\n\
+         echo \"Connecting to {}...\"\n\
+         ssh {}\n\
+         echo \"\"\n\
+         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+         exec bash\n",
+        escape_bash_double_quote(profile_name),
+        ssh_args.iter()
+            .map(|arg| shell_escape(arg))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+
+    // Write and make executable
+    fs::write(&script_path, script_content)
+        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script_path)
+            .map_err(|e| format!("Failed to get script permissions: {}", e))?
+            .permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&script_path, perms)
+            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+    }
+
+    // Launch terminal
+    Command::new("open")
+        .arg("-n")
+        .arg("-a")
+        .arg(&validated_path)
+        .arg(&script_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+
+    // Schedule secure cleanup
+    let script_path_cleanup = script_path.clone();
+    std::thread::spawn(move || {
+        // Wait longer to ensure terminal has read the script
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        secure_delete_file(&script_path_cleanup);
+    });
+
+    Ok(())
+}
+
+/// Securely deletes a file by overwriting with random data before unlinking
+fn secure_delete_file(path: &std::path::Path) {
+    use std::io::Write;
+
+    // Get file size
+    let file_size = match fs::metadata(path) {
+        Ok(metadata) => metadata.len() as usize,
+        Err(_) => {
+            // File might already be gone, which is fine
+            return;
+        }
+    };
+
+    // Overwrite with random data
+    if let Ok(mut file) = fs::OpenOptions::new().write(true).open(path) {
+        let random_data: Vec<u8> = (0..file_size).map(|_| rand::random::<u8>()).collect();
+        let _ = file.write_all(&random_data);
+        let _ = file.sync_all();
+    }
+
+    // Remove the file
+    let _ = fs::remove_file(path);
+}
+
+#[cfg(target_os = "macos")]
+fn launch_macos_default_terminal(
+    ssh_args: &[String],
+    use_tabs: bool,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    let escaped_args: Vec<String> = ssh_args.iter()
+        .map(|arg| shell_escape(arg))
+        .collect();
+
+    // Build command with auto-close
+    let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
+    let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
+    let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
+    let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
+
+    let applescript = if use_tabs {
+        format!(
+            "tell application \"Terminal\"\n\
+             activate\n\
+             if (count of windows) > 0 then\n\
+                 tell application \"System Events\" to keystroke \"t\" using command down\n\
+                 delay 0.1\n\
+                 do script \"{}\" in front window\n\
+             else\n\
+                 do script \"{}\"\n\
+             end if\n\
+             end tell",
+            ssh_with_close_escaped, ssh_with_close_escaped
+        )
+    } else {
+        format!(
+            "tell application \"Terminal\"\n\
+             do script \"{}\"\n\
+             activate\n\
+             end tell",
+            ssh_with_close_escaped
+        )
+    };
+
+    Command::new("osascript")
+        .arg("-e")
+        .arg(applescript)
+        .spawn()
+        .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_cmd(ssh_args: &[String]) -> Result<(), String> {
+    use std::process::Command;
+
+    // Build SSH command with explicit exit to ensure auto-close
+    let mut full_command = vec!["ssh".to_string()];
+    full_command.extend(ssh_args.iter().cloned());
+    full_command.push("&".to_string());
+    full_command.push("exit".to_string());
+
+    Command::new("cmd")
+        .arg("/c")
+        .arg("start")
+        .arg("cmd")
+        .arg("/c")
+        .args(&full_command)
+        .spawn()
+        .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
+    use std::process::Command;
+
+    // SECURITY: Use Base64-encoded command to avoid complex shell escaping issues
+    // when passing through cmd /c start powershell (three different shell contexts).
+    // This is more secure than trying to escape for cmd, start, and PowerShell simultaneously.
+
+    let mut ps_args = vec!["ssh".to_string()];
+    ps_args.extend(ssh_args.iter().cloned());
+
+    // Build PowerShell command with proper array syntax to avoid injection
+    let args_quoted: Vec<String> = ps_args.iter()
+        .map(|arg| {
+            // Escape single quotes in PowerShell by doubling them
+            format!("'{}'", arg.replace('\'', "''"))
+        })
+        .collect();
+
+    // Create PowerShell command that builds argument array and invokes ssh
+    let ps_command = format!("& {} | Out-Null; exit", args_quoted.join(" "));
+
+    // Convert to UTF-16LE and Base64 encode (required by PowerShell -EncodedCommand)
+    let utf16_bytes: Vec<u16> = ps_command.encode_utf16().collect();
+    let bytes: Vec<u8> = utf16_bytes.iter()
+        .flat_map(|&w| vec![(w & 0xFF) as u8, (w >> 8) as u8])
+        .collect();
+
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let encoded = STANDARD.encode(&bytes);
+
+    Command::new("cmd")
+        .arg("/c")
+        .arg("start")
+        .arg("powershell")
+        .arg("-EncodedCommand")
+        .arg(&encoded)
+        .spawn()
+        .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_terminal(
+    ssh_args: &[String],
+    profile_name: &str,
+    use_tabs: bool,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    let mut cmd = Command::new("wt");
+
+    if use_tabs {
+        // Use -w last to target the most recently used window, nt for new-tab
+        cmd.arg("-w").arg("last").arg("nt");
+    } else {
+        // Use -w new to create a new window
+        cmd.arg("-w").arg("new");
+    }
+
+    cmd.arg("--title")
+        .arg(profile_name)
+        .arg("ssh")
+        .args(ssh_args)
+        .spawn()
+        .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_custom_terminal(
+    custom_path: &str,
+    ssh_args: &[String],
+    profile_name: &str,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    // Re-validate path (TOCTOU protection)
+    let validated_path = validate_terminal_path(custom_path)?;
+
+    // Helper functions for batch escaping
+    fn escape_batch_echo(s: &str) -> String {
+        s.replace('^', "^^")
+         .replace('&', "^&")
+         .replace('|', "^|")
+         .replace('<', "^<")
+         .replace('>', "^>")
+         .replace('%', "%%")
+         .replace('!', "^!")
+    }
+
+    fn escape_batch_arg(s: &str) -> String {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    }
+
+    // Create temporary script
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+
+    let script_content = format!(
+        "@echo off\r\n\
+         echo Connecting to {}...\r\n\
+         ssh {}\r\n\
+         if errorlevel 1 (\r\n\
+             echo.\r\n\
+             echo Connection failed. Press any key to close...\r\n\
+             pause >nul\r\n\
+         ) else (\r\n\
+             echo.\r\n\
+             echo Connection closed.\r\n\
+         )\r\n",
+        escape_batch_echo(profile_name),
+        ssh_args.iter()
+            .map(|arg| escape_batch_arg(arg))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+
+    // Create file with restrictive permissions atomically (TOCTOU protection)
+    create_file_windows_secure(&script_path, &script_content)?;
+
+    // Launch terminal
+    Command::new("cmd")
+        .arg("/c")
+        .arg("start")
+        .arg("")
+        .arg(&validated_path)
+        .arg(&script_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
+
+    // Schedule secure cleanup
+    let script_path_cleanup = script_path.clone();
+    std::thread::spawn(move || {
+        // Wait longer to ensure terminal has read the script
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        secure_delete_file(&script_path_cleanup);
+    });
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_default_terminal(
+    ssh_args: &[String],
+    profile_name: &str,
+    use_tabs: bool,
+) -> Result<(), String> {
+    use std::process::Command;
+
+    // Try Windows Terminal first
+    let mut wt_cmd = Command::new("wt");
+
+    if use_tabs {
+        // Use -w last to target the most recently used window, nt for new-tab
+        wt_cmd.arg("-w").arg("last").arg("nt");
+    } else {
+        // Use -w new to create a new window
+        wt_cmd.arg("-w").arg("new");
+    }
+
+    wt_cmd.arg("--title")
+        .arg(profile_name)
+        .arg("ssh")
+        .args(ssh_args);
+
+    match wt_cmd.spawn() {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            // Fall back to cmd.exe
+            Command::new("cmd")
+                .arg("/c")
+                .arg("start")
+                .arg("cmd")
+                .arg("/c")
+                .arg("ssh")
+                .args(ssh_args)
+                .spawn()
+                .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            Ok(())
+        }
+    }
+}
+
+#[tauri::command]
+fn connect_ssh(
+    db: State<Database>,
+    profile_id: String,
+    terminal_preference: Option<String>,
+    custom_terminal_path: Option<String>,
+    use_tabs_in_terminal: Option<bool>,
+    app_handle: tauri::AppHandle
+) -> Result<(), String> {
+    // Load and validate profile
+    let profile = db
+        .get_profile_by_id(&profile_id)
+        .map_err(|e| format!("Failed to get profile: {}", e))?
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    validate_hostname(&profile.host)?;
+    validate_username(&profile.username)?;
+    validate_port(profile.port)?;
+
+    // Build SSH arguments
+    let ssh_args = build_ssh_args(&profile)?;
+
+    // Get terminal preference (default to "default")
+    let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
+    let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+
+    // Launch terminal based on OS and preference
     #[cfg(target_os = "macos")]
     {
-        // Properly escape the SSH command for shell
-        // Each argument must be shell-escaped to prevent injection
-        fn shell_escape(s: &str) -> String {
-            // Replace single quotes with '\'' and wrap in single quotes
-            format!("'{}'", s.replace('\'', "'\\''"))
-        }
-
-        // Properly escape strings for AppleScript
-        fn applescript_escape(s: &str) -> String {
-            s.replace('\\', "\\\\")
-             .replace('"', "\\\"")
-             .replace('\n', "\\n")
-             .replace('\r', "\\r")
-             // Note: Single quotes don't need escaping inside AppleScript double-quoted strings
-             .replace('$', "\\$")
-             .replace('`', "\\`")
-        }
-
-        // Build the escaped SSH command for use in shell contexts
-        let escaped_args: Vec<String> = ssh_args.iter()
-            .map(|arg| shell_escape(arg))
-            .collect();
-
         match terminal_pref.as_str() {
             "custom" => {
-                // Use custom terminal app
                 if let Some(custom_path) = custom_terminal_path {
-                    // SECURITY: Re-validate path immediately before use to prevent TOCTOU attacks
-                    // An attacker could swap the validated file between load-time validation and connection-time use
-                    let validated_path = validate_terminal_path(&custom_path)?;
-
-                    // For custom terminals, we use a temporary shell script approach
-                    // This works with any terminal that can execute a shell script
-                    // and is more reliable than trying to pass commands via AppleScript
-
-                    // Helper function to escape strings for bash double-quote context
-                    fn escape_bash_double_quote(s: &str) -> String {
-                        s.replace('\\', "\\\\")
-                         .replace('"', "\\\"")
-                         .replace('$', "\\$")
-                         .replace('`', "\\`")
-                    }
-
-                    // Create a temporary directory for our script
-                    let temp_dir = std::env::temp_dir();
-                    let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
-
-                    // Build the shell script content
-                    // The script will execute SSH and then keep the shell open
-                    let script_content = format!(
-                        "#!/bin/bash\n\
-                         echo \"Connecting to {}...\"\n\
-                         ssh {}\n\
-                         echo \"\"\n\
-                         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
-                         exec bash\n",
-                        escape_bash_double_quote(&profile.name),
-                        ssh_args.iter()
-                            .map(|arg| shell_escape(arg))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-
-                    // Write the script file
-                    fs::write(&script_path, script_content)
-                        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
-
-                    // Make the script executable
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        let mut perms = fs::metadata(&script_path)
-                            .map_err(|e| format!("Failed to get script permissions: {}", e))?
-                            .permissions();
-                        perms.set_mode(0o700); // rwx------
-                        fs::set_permissions(&script_path, perms)
-                            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
-                    }
-
-                    // Launch the terminal with the script
-                    Command::new("open")
-                        .arg("-n")  // Open new instance
-                        .arg("-a")
-                        .arg(&validated_path)
-                        .arg(&script_path)
-                        .spawn()
-                        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
-
-                    // Schedule script cleanup after 2 seconds
-                    // This gives the terminal time to read and execute the script while minimizing exposure window
-                    let script_path_cleanup = script_path.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(2));
-                        let _ = fs::remove_file(&script_path_cleanup); // Best effort cleanup
-                    });
+                    launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
                 } else {
                     return Err("Custom terminal selected but no path provided".to_string());
                 }
-            },
+            }
             "default" | _ => {
-                // Use default Terminal.app
-                // Default to tabs enabled (true) if not specified
-                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
-
-                // Create command that closes tab after SSH exits
-                // Use AppleScript to close the current tab (not entire window)
-                // Don't use 'exit' before osascript - let osascript close the tab
-                let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
-                let close_command = "osascript -e 'tell application \"Terminal\" to close (selected tab of front window)'";
-                let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
-                let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
-
-                let applescript = if use_tabs {
-                    // Open in new tab - use System Events to trigger Cmd+T (new tab)
-                    format!(
-                        "tell application \"Terminal\"\n\
-                         activate\n\
-                         if (count of windows) > 0 then\n\
-                             tell application \"System Events\" to keystroke \"t\" using command down\n\
-                             delay 0.1\n\
-                             do script \"{}\" in front window\n\
-                         else\n\
-                             do script \"{}\"\n\
-                         end if\n\
-                         end tell",
-                        ssh_with_close_escaped, ssh_with_close_escaped
-                    )
-                } else {
-                    // Always open in new window - just use basic "do script"
-                    format!(
-                        "tell application \"Terminal\"\n\
-                         do script \"{}\"\n\
-                         activate\n\
-                         end tell",
-                        ssh_with_close_escaped
-                    )
-                };
-
-                Command::new("osascript")
-                    .arg("-e")
-                    .arg(applescript)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+                launch_macos_default_terminal(&ssh_args, use_tabs)?;
             }
         }
 
-        // Minimize the app window after launching terminal
+        // Minimize app window
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.minimize();
         }
@@ -2342,186 +2667,26 @@ fn connect_ssh(
     #[cfg(target_os = "windows")]
     {
         match terminal_pref.as_str() {
-            "cmd" => {
-                // Use Command Prompt - pass args directly to avoid shell escaping issues
-                // Use /c to close window after SSH session ends
-                Command::new("cmd")
-                    .arg("/c")
-                    .arg("start")
-                    .arg("cmd")
-                    .arg("/c")
-                    .arg("ssh")
-                    .args(&ssh_args)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
-            },
-            "powershell" => {
-                // Use PowerShell - pass args directly
-                let mut ps_args = vec!["ssh".to_string()];
-                ps_args.extend(ssh_args.clone());
-
-                let ssh_command = ps_args.iter()
-                    .map(|arg| {
-                        // PowerShell escaping: wrap in single quotes and escape single quotes
-                        if arg.contains(' ') || arg.contains('\'') {
-                            format!("'{}'", arg.replace('\'', "''"))
-                        } else {
-                            arg.clone()
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .join(" ");
-
-                // Remove -NoExit so PowerShell closes after SSH session ends
-                Command::new("cmd")
-                    .arg("/c")
-                    .arg("start")
-                    .arg("powershell")
-                    .arg("-Command")
-                    .arg(&ssh_command)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch PowerShell: {}", e))?;
-            },
-            "windows_terminal" => {
-                // Use Windows Terminal (wt.exe) - pass args directly (safest method)
-                // Default to tabs enabled (true) if not specified
-                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
-
-                // Use 'new-tab' for tabs, 'new-window' for separate windows
-                let command_type = if use_tabs { "new-tab" } else { "new-window" };
-
-                match Command::new("wt")
-                    .arg(command_type)
-                    .arg("--title")
-                    .arg(&profile.name)
-                    .arg("ssh")
-                    .args(&ssh_args)
-                    .spawn()
-                {
-                    Ok(_) => {},
-                    Err(_) => {
-                        // Windows Terminal not found
-                        return Err("Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string());
-                    }
-                }
-            },
+            "cmd" => launch_windows_cmd(&ssh_args)?,
+            "powershell" => launch_windows_powershell(&ssh_args)?,
+            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs)?,
             "custom" => {
-                // Use custom terminal
                 if let Some(custom_path) = custom_terminal_path {
-                    // SECURITY: Re-validate path immediately before use to prevent TOCTOU attacks
-                    // An attacker could swap the validated file between load-time validation and connection-time use
-                    let validated_path = validate_terminal_path(&custom_path)?;
-
-                    // For custom terminals, we use a temporary batch script approach
-                    // This works with any terminal that can execute batch scripts
-                    // and is more reliable than assuming cmd.exe-style argument support
-
-                    // Helper function to escape strings for Windows batch echo context
-                    // SECURITY: Prevents command injection in batch file echo statements
-                    fn escape_batch_echo(s: &str) -> String {
-                        s.replace('^', "^^")  // Escape the escape character first
-                         .replace('&', "^&")
-                         .replace('|', "^|")
-                         .replace('<', "^<")
-                         .replace('>', "^>")
-                         .replace('%', "%%")
-                         .replace('!', "^!")
-                    }
-
-                    // Helper function to escape arguments for batch script execution
-                    // SECURITY: Wraps arguments in quotes and escapes internal quotes
-                    fn escape_batch_arg(s: &str) -> String {
-                        format!("\"{}\"", s.replace('"', "\"\""))
-                    }
-
-                    // Create a temporary directory for our script
-                    let temp_dir = std::env::temp_dir();
-                    let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
-
-                    // Build the batch script content
-                    // The script will execute SSH and then pause to keep the window open
-                    let script_content = format!(
-                        "@echo off\r\n\
-                         echo Connecting to {}...\r\n\
-                         ssh {}\r\n\
-                         echo.\r\n\
-                         echo Connection closed.\r\n\
-                         pause\r\n",
-                        escape_batch_echo(&profile.name),
-                        ssh_args.iter()
-                            .map(|arg| escape_batch_arg(arg))
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-
-                    // Write the script file
-                    fs::write(&script_path, script_content)
-                        .map_err(|e| format!("Failed to create temporary script: {}", e))?;
-
-                    // SECURITY: Set Windows ACL to restrict file access to current user only
-                    // This prevents other users on the system from reading the temporary script
-                    set_file_permissions_windows(&script_path)?;
-
-                    // Launch the terminal with the script
-                    Command::new("cmd")
-                        .arg("/c")
-                        .arg("start")
-                        .arg("")  // Empty title
-                        .arg(&validated_path)
-                        .arg(&script_path)
-                        .spawn()
-                        .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
-
-                    // SECURITY: Schedule script cleanup after 2 seconds
-                    // This prevents accumulation of temporary scripts while giving the terminal time to read it
-                    // 2 second delay minimizes exposure window while allowing terminal to execute script
-                    let script_path_cleanup = script_path.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_secs(2));
-                        let _ = fs::remove_file(&script_path_cleanup);
-                    });
+                    launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
                 } else {
                     return Err("Custom terminal selected but no path provided".to_string());
                 }
-            },
-            "default" | _ => {
-                // Default: Try Windows Terminal first, fall back to cmd
-                // Respect tab setting for Windows Terminal
-                let use_tabs = use_tabs_in_terminal.unwrap_or(true);
-                let command_type = if use_tabs { "new-tab" } else { "new-window" };
-
-                match Command::new("wt")
-                    .arg(command_type)
-                    .arg("--title")
-                    .arg(&profile.name)
-                    .arg("ssh")
-                    .args(&ssh_args)
-                    .spawn()
-                {
-                    Ok(_) => {},
-                    Err(_) => {
-                        // Windows Terminal not found, fall back to cmd.exe
-                        Command::new("cmd")
-                            .arg("/c")
-                            .arg("start")
-                            .arg("cmd")
-                            .arg("/c")
-                            .arg("ssh")
-                            .args(&ssh_args)
-                            .spawn()
-                            .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-                    }
-                }
             }
+            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs)?,
         }
 
-        // Minimize the app window after launching terminal
+        // Minimize app window
         if let Some(window) = app_handle.get_webview_window("main") {
             let _ = window.minimize();
         }
     }
 
-    // Record connection in recent_connections table (for all external terminals)
+    // Record connection
     db.record_connection(&profile_id)
         .map_err(|e| format!("Failed to record recent connection: {}", e))?;
 

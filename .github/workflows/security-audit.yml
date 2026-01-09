@@ -1,0 +1,148 @@
+name: Security Audit
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 9:00 AM UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: Cargo Audit (Rust Dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src-tauri/**'
+              - 'dist/**'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/security-audit.yml'
+
+      - name: Skip message
+        if: github.event_name == 'pull_request' && steps.filter.outputs.code != 'true'
+        run: |
+          echo "No code changes detected - skipping security audit"
+          echo "Changed files are documentation/config only"
+          exit 0
+
+      - name: Setup Rust
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        working-directory: src-tauri
+        run: cargo audit
+
+  bun-audit:
+    name: Bun Audit (JavaScript Dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src-tauri/**'
+              - 'dist/**'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/security-audit.yml'
+
+      - name: Skip message
+        if: github.event_name == 'pull_request' && steps.filter.outputs.code != 'true'
+        run: |
+          echo "No code changes detected - skipping security audit"
+          echo "Changed files are documentation/config only"
+          exit 0
+
+      - name: Setup Bun
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        run: bun install
+
+      - name: Run bun audit
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        run: bun audit
+
+  cargo-outdated:
+    name: Check Outdated Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src-tauri/**'
+              - 'dist/**'
+              - 'package.json'
+              - 'bun.lock'
+              - '.github/workflows/security-audit.yml'
+
+      - name: Skip message
+        if: github.event_name == 'pull_request' && steps.filter.outputs.code != 'true'
+        run: |
+          echo "No code changes detected - skipping outdated check"
+          echo "Changed files are documentation/config only"
+          exit 0
+
+      - name: Setup Rust
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-outdated
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        run: cargo install cargo-outdated
+
+      - name: Check outdated Rust dependencies
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        working-directory: src-tauri
+        run: cargo outdated --exit-code 1 || true
+
+      - name: Setup Bun
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        run: bun install
+
+      - name: Check outdated Bun dependencies
+        if: github.event_name != 'pull_request' || steps.filter.outputs.code == 'true'
+        run: bun outdated || true

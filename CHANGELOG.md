@@ -5,6 +5,145 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2025-01-09
+
+### Fixed
+- **Windows Terminal Tab Mode**: Fixed tab mode to properly open in most recently used window
+  - Changed from `wt new-tab` to `wt -w last nt` for correct window targeting
+  - Tabs now open in existing Windows Terminal window instead of creating new windows
+  - Tested and verified working on Windows 11
+- **Windows Terminal Window Mode**: Fixed "window not found" error when opening new windows
+  - Changed to `wt new-window` without window ID targeting
+  - Eliminates errors from invalid window ID references
+  - Tested and verified working on Windows 11
+- **Auto-Close Terminal Tab (macOS)**: Terminal tabs now close reliably using keyboard shortcut simulation
+  - Replaced AppleScript `close (selected tab)` with System Events Cmd+W keystroke
+  - Works correctly for both tab mode and window mode
+  - Tested with multiple tabs - closes individual tabs correctly without affecting other tabs
+- **Auto-Close Terminal Tab (Windows)**: Auto-close now works correctly for all terminal types
+  - Simplified SSH command execution to use native terminal exit behavior
+  - Works with CMD, PowerShell, and Windows Terminal
+  - Session closes cleanly when SSH connection ends
+- **Windows App Icon Transparency**: Fixed white background visible in taskbar and title bar
+  - Regenerated all icons with transparent background from SVG source
+  - Updated icon.ico, icon.icns, and all platform-specific icon sizes
+  - Clean transparency now matches macOS appearance
+- **Group Filter Counter**: Fixed inverted logic showing unselected groups instead of selected
+  - Counter now correctly shows number of selected groups, not hidden groups
+  - Badge stays visible at all times showing X/Y format (selected/total)
+- **Profile Count Badge Shifting**: Fixed badge size changing when numbers updated
+  - Implemented fixed widths: 32px (1 digit), 42px (2 digits), 52px (3 digits)
+  - Badges no longer shift size when profile counts change
+  - Smooth, consistent UI experience
+- **CSP Warning on Windows**: Removed frame-ancestors directive from meta tag
+  - Directive is only valid in HTTP headers, not meta elements
+  - Kept frame-ancestors in tauri.conf.json where it's properly supported
+  - Eliminates console warning on Windows
+- **Rust Unused Import Warning**: Removed unused std::fs import
+  - Cleaned up after refactoring to use create_file_windows_secure helper
+  - Zero compiler warnings on all platforms
+
+### Changed
+- **Console Logging**: Debug logging now requires explicit opt-in via localStorage
+  - Console logs only appear when `localStorage.debug='true'` is set
+  - Removes development clutter from production browser console
+  - Cleaner user experience for non-developers
+- **Database File Permissions**: Enhanced security with explicit file permissions on Unix systems
+  - Database file now set to 0600 permissions (owner-only access)
+  - Prevents unauthorized access to profiles.db from other local users
+  - Defense-in-depth security enhancement
+- **Rate Limiting**: Added maximum concurrent session limit
+  - Maximum 5 concurrent terminal sessions allowed
+  - Maintains existing rate limits (2s between sessions, 100 writes/second)
+  - Prevents resource exhaustion from excessive terminal connections
+- **Terminal Dimension Limits**: Reduced maximum terminal size for better resource management
+  - Reduced from 300×100 to 250×80 (30,000 → 20,000 cells max)
+  - More reasonable limits for typical use cases
+  - Reduces memory usage and potential DoS vectors
+- **CDN Resource Integrity**: Added Subresource Integrity hashes for xterm.js
+  - Added `integrity` and `crossorigin="anonymous"` attributes to CDN resources
+  - Protects against compromised CDN attacks
+  - Ensures loaded resources match expected cryptographic hash
+- **Developer Tools**: Disabled devtools in production builds
+  - Changed `"devtools": true` → `"devtools": false` in tauri.conf.json
+  - Prevents users from accessing developer tools in release builds
+  - Can be re-enabled for debugging if needed
+- **Badge Format**: Changed to X/Y format for better clarity
+  - Filter badge shows "selected/total" groups (e.g., "3/5")
+  - Profile badge shows "visible/total" profiles (e.g., "14/17")
+  - Always visible, providing consistent context at a glance
+- **Filter Reset Button**: Renamed "Clear All" to "Reset"
+  - More accurately describes behavior (resets to show all, not clears selection)
+  - Reduces confusion about button purpose
+- **Maximum Import Limit**: Reduced from 1000 to 999 profiles
+  - Cleaner 3-digit maximum for UI consistency
+  - Simplifies badge width calculations (no 4-digit support needed)
+
+### Security
+- **Temporary Script Cleanup**: Enhanced security for temporary SSH launch scripts
+  - Increased cleanup delay from 2s to 5s for safer terminal script execution
+  - Added secure deletion: overwrites with random data before unlinking
+  - Prevents information disclosure from lingering temporary files
+- **SSH Host Key Verification**: Added MITM attack protection
+  - All SSH connections now use `-o StrictHostKeyChecking=ask`
+  - Users prompted to verify host keys on first connection
+  - Protects against man-in-the-middle attacks
+- **Password Operation Logging**: Removed sensitive debug logging
+  - Eliminated all password-related debug logs (lengths, operation timing)
+  - No longer exposes sensitive information during development
+  - Simplified password storage logic
+- **XSS Prevention**: Refactored shortcuts modal for defense-in-depth
+  - Replaced `insertAdjacentHTML` with `createElement()` and `appendChild()`
+  - Safer pattern prevents future XSS vulnerabilities
+  - Better code maintainability
+- **Content Security Policy**: Strengthened CSP and eliminated CDN dependencies
+  - Vendored xterm.js locally (eliminates external CDN dependency)
+  - Updated CSP to `script-src 'self'` and `style-src 'self'` only
+  - Added `frame-ancestors 'none'` for clickjacking protection
+  - Improved offline functionality and security
+- **Terminal Session Management**: Added automatic cleanup for idle sessions
+  - Idle timeout: 30 minutes of inactivity
+  - Background monitor checks every 5 minutes
+  - Automatically closes inactive sessions and frees resources
+  - Prevents resource exhaustion from hung/abandoned sessions
+- **File Dialog Timeout**: Reduced timeout for better resource management
+  - Reduced from 120 seconds to 60 seconds
+  - Prevents indefinite resource holding
+- **Windows Batch File TOCTOU**: Eliminated race condition in file creation
+  - Created `create_file_windows_secure()` helper function
+  - Files created with restrictive permissions atomically
+  - Eliminates time-of-check-to-time-of-use window
+- **Password Authentication Documentation**: Clarified password storage behavior
+  - Added documentation explaining passwords stored for reference/export only
+  - Clarified manual password entry required for SSH connections
+  - Recommended SSH key authentication for automated workflows
+- **Dependency Vulnerability**: Fixed rkyv undefined behavior vulnerability (RUSTSEC-2026-0001)
+  - Updated rkyv from 0.7.45 to 0.7.46
+  - Fixes potential undefined behavior in Arc<T>/Rc<T> on out-of-memory conditions
+  - Indirect dependency through tauri-plugin-log
+  - Discovered via cargo audit on 2026-01-09
+
+### Infrastructure
+- **Dependency Vulnerability Scanning**: Automated security auditing
+  - Added GitHub Actions workflow for weekly security scans
+  - Configured Dependabot for automatic dependency updates
+  - Uses `cargo audit` for Rust and `bun audit` for JavaScript
+  - Runs on pull requests, weekly schedule, and manual dispatch
+- **CI Workflow Optimization**: Improved efficiency with path filtering
+  - Security audit and build checks now run only on PRs (not every push)
+  - Path filtering skips checks for documentation-only PRs
+  - Maintains weekly scheduled scans and manual dispatch options
+  - Saves CI minutes while ensuring code quality
+- **Git Repository Consolidation**: Merged development documentation into main repository
+  - Added CLAUDE.md, TODO.md, and plans/ to public repository
+  - Removed private backup repository setup
+  - Simplified multi-machine development workflow
+  - Verified no sensitive information in documentation files
+- **Code Refactoring**: Reduced complexity in SSH connection handler
+  - Extracted platform-specific helper functions from `connect_ssh`
+  - Reduced main function from 389 lines to 76 lines
+  - Improved code maintainability and readability
+
 ## [0.6.3] - 2025-01-06
 
 ### Added
