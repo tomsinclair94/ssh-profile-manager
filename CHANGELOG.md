@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Regenerated all icons with transparent background from SVG source
   - Updated icon.ico, icon.icns, and all platform-specific icon sizes
   - Clean transparency now matches macOS appearance
+- **Group Filter Counter**: Fixed inverted logic showing unselected groups instead of selected
+  - Counter now correctly shows number of selected groups, not hidden groups
+  - Badge stays visible at all times showing X/Y format (selected/total)
+- **Profile Count Badge Shifting**: Fixed badge size changing when numbers updated
+  - Implemented fixed widths: 32px (1 digit), 42px (2 digits), 52px (3 digits)
+  - Badges no longer shift size when profile counts change
+  - Smooth, consistent UI experience
+- **CSP Warning on Windows**: Removed frame-ancestors directive from meta tag
+  - Directive is only valid in HTTP headers, not meta elements
+  - Kept frame-ancestors in tauri.conf.json where it's properly supported
+  - Eliminates console warning on Windows
+- **Rust Unused Import Warning**: Removed unused std::fs import
+  - Cleaned up after refactoring to use create_file_windows_secure helper
+  - Zero compiler warnings on all platforms
 
 ### Changed
 - **Console Logging**: Debug logging now requires explicit opt-in via localStorage
@@ -54,6 +68,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Changed `"devtools": true` → `"devtools": false` in tauri.conf.json
   - Prevents users from accessing developer tools in release builds
   - Can be re-enabled for debugging if needed
+- **Badge Format**: Changed to X/Y format for better clarity
+  - Filter badge shows "selected/total" groups (e.g., "3/5")
+  - Profile badge shows "visible/total" profiles (e.g., "14/17")
+  - Always visible, providing consistent context at a glance
+- **Filter Reset Button**: Renamed "Clear All" to "Reset"
+  - More accurately describes behavior (resets to show all, not clears selection)
+  - Reduces confusion about button purpose
+- **Maximum Import Limit**: Reduced from 1000 to 999 profiles
+  - Cleaner 3-digit maximum for UI consistency
+  - Simplifies badge width calculations (no 4-digit support needed)
 
 ### Security
 - **Temporary Script Cleanup**: Enhanced security for temporary SSH launch scripts
@@ -93,13 +117,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added documentation explaining passwords stored for reference/export only
   - Clarified manual password entry required for SSH connections
   - Recommended SSH key authentication for automated workflows
+- **Dependency Vulnerability**: Fixed rkyv undefined behavior vulnerability (RUSTSEC-2026-0001)
+  - Updated rkyv from 0.7.45 to 0.7.46
+  - Fixes potential undefined behavior in Arc<T>/Rc<T> on out-of-memory conditions
+  - Indirect dependency through tauri-plugin-log
+  - Discovered via cargo audit on 2026-01-09
 
 ### Infrastructure
 - **Dependency Vulnerability Scanning**: Automated security auditing
   - Added GitHub Actions workflow for weekly security scans
   - Configured Dependabot for automatic dependency updates
   - Uses `cargo audit` for Rust and `bun audit` for JavaScript
-  - Runs on all push/PR events and weekly schedule
+  - Runs on pull requests, weekly schedule, and manual dispatch
+- **CI Workflow Optimization**: Improved efficiency with path filtering
+  - Security audit and build checks now run only on PRs (not every push)
+  - Path filtering skips checks for documentation-only PRs
+  - Maintains weekly scheduled scans and manual dispatch options
+  - Saves CI minutes while ensuring code quality
 - **Git Repository Consolidation**: Merged development documentation into main repository
   - Added CLAUDE.md, TODO.md, and plans/ to public repository
   - Removed private backup repository setup
