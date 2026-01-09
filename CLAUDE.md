@@ -90,6 +90,24 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Note:** Auto-tag workflow uses PAT_TOKEN (fixed in v0.6.3) to properly trigger release builds.
 **Workflow:** See DEVELOPMENT.md for branch protection rules and PAT_TOKEN setup.
 
+## Dependabot Dependency Updates
+
+**Automatic Handling:**
+- Dependabot PRs automatically have auto-merge enabled via GitHub Actions workflow
+- PRs auto-merge with squash once all checks pass (security audit, build verification)
+- No manual intervention needed for dependency updates
+
+**How it works:**
+- Updates dependencies on `main` branch between releases
+- Does NOT trigger new releases (no version bump or git tag)
+- Next dev branch inherits updates when branched from `main`
+- Example: v0.6.5 released → Dependabot updates `main` → v0.6.6-dev branches from updated `main`
+
+**Configuration:**
+- Weekly limit: 10 Rust PRs, 10 JavaScript PRs, 5 GitHub Actions PRs
+- Workflow: `.github/workflows/dependabot-auto-merge.yml`
+- Config: `.github/dependabot.yml`
+
 ## Key Implementation Patterns
 
 ### Tauri Commands
