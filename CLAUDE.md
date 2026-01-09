@@ -78,7 +78,9 @@ git commit -m "Bump version to X.X.X for dev branch"
 8. Commit & push
 
 **Merge to Main:**
-1. PR `vX.X.X-dev` → `main`
+1. PR `vX.X.X-dev` → `main` with auto-merge enabled
+   - Use `gh pr create --auto-merge` flag when creating PR
+   - PR will auto-merge with squash once all checks pass
 2. Squash merge with title: `Release vX.X.X - Description`
 3. Auto-tag workflow creates git tag with CHANGELOG content
 4. Auto-release workflow builds binaries (macOS aarch64, Windows x86_64)
