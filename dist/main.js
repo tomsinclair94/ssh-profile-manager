@@ -1884,7 +1884,7 @@ function renderRecentConnections() {
         // Delete button (X)
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'recent-connection-delete';
-        deleteBtn.innerHTML = '×';
+        deleteBtn.textContent = '×';
         deleteBtn.title = 'Remove from recent connections';
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent triggering reconnect

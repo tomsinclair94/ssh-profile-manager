@@ -71,10 +71,10 @@ git commit -m "Bump version to X.X.X for dev branch"
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes
 3. Code review (`code-reviewer` agent)
-4. Refactor (`refactoring-specialist` agent)
+4. Refactor (`refactoring-specialist` agent) - optional, skip if not needed
 5. Security review (`security-engineer` agent)
 6. Fix CRITICAL/HIGH/MEDIUM issues
-7. Update CHANGELOG.md with all changes
+7. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
 8. Commit & push
 
 **Merge to Main:**
@@ -167,6 +167,13 @@ CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 **Rust:** tauri, rusqlite, serde/serde_json, uuid (fast-rng), keyring, dirs, shellexpand, chrono, rfd, portable-pty, windows-acl (Windows)
 **Node:** @tauri-apps/cli, @tauri-apps/api
 **Frontend:** xterm.js 5.3.0, xterm-addon-fit 0.8.0 (CDN)
+
+**Known Warnings (Linux-only, does not affect macOS/Windows):**
+- `glib` 0.18.5: RUSTSEC-2024-0429 (unsoundness in Iterator impl) - via Tauri GTK3 bindings
+- `serial` 0.4.0: RUSTSEC-2017-0008 (unmaintained) - via `portable-pty`
+- Multiple GTK3 crates announced unmaintained March 2024 (Tauri migration to GTK4 in progress)
+
+These warnings only affect Linux builds, which are not supported. Application targets macOS (Apple Silicon) and Windows (x86_64) only.
 
 ## Quick Reference
 

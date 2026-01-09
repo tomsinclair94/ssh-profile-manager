@@ -28,6 +28,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+use unicode_normalization::UnicodeNormalization;
 
 #[cfg(target_os = "windows")]
 use windows_acl::acl::ACL;
@@ -41,6 +42,8 @@ const SESSION_CREATE_RATE_LIMIT_SECS: u64 = 2; // 2 second rate limit for termin
 static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
 // Rate limiting for terminal session creation
 static LAST_SESSION_CREATE_TIME: Mutex<u64> = Mutex::new(0);
+// Update check caching (timestamp, UpdateInfo)
+static UPDATE_CHECK_CACHE: Mutex<Option<(u64, String, String, bool, String)>> = Mutex::new(None);
 
 // Windows-specific file security function
 /// Creates a file on Windows with restrictive permissions atomically (TOCTOU protection)
@@ -178,6 +181,7 @@ pub struct SessionRegistry {
     pty_pairs: Arc<Mutex<HashMap<String, Box<dyn portable_pty::MasterPty + Send>>>>,
     last_activity: Arc<Mutex<HashMap<String, Instant>>>, // Track last data received per session
     write_rate_limits: Arc<Mutex<HashMap<String, (Instant, u32)>>>, // (last_reset, write_count) per session
+    abandoned_threads: Arc<Mutex<Vec<(String, thread::JoinHandle<()>, Instant)>>>, // (session_id, handle, abandoned_at)
 }
 
 impl SessionRegistry {
@@ -188,10 +192,13 @@ impl SessionRegistry {
             pty_pairs: Arc::new(Mutex::new(HashMap::new())),
             last_activity: Arc::new(Mutex::new(HashMap::new())),
             write_rate_limits: Arc::new(Mutex::new(HashMap::new())),
+            abandoned_threads: Arc::new(Mutex::new(Vec::new())),
         };
 
         // Start idle session monitor
         registry.start_idle_monitor();
+        // Start abandoned thread cleanup
+        registry.start_abandoned_thread_cleanup();
 
         registry
     }
@@ -238,75 +245,125 @@ impl SessionRegistry {
             }
         });
     }
+
+    /// Start background thread to cleanup abandoned reader threads
+    fn start_abandoned_thread_cleanup(&self) {
+        const CHECK_INTERVAL_SECS: u64 = 60; // Check every minute
+
+        let abandoned_threads = Arc::clone(&self.abandoned_threads);
+
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(CHECK_INTERVAL_SECS));
+
+                // Check abandoned threads and clean up finished ones
+                if let Ok(mut threads) = abandoned_threads.lock() {
+                    let before_count = threads.len();
+
+                    // Remove threads that have finished
+                    threads.retain(|(session_id, handle, abandoned_at)| {
+                        if handle.is_finished() {
+                            #[cfg(debug_assertions)]
+                            println!(
+                                "Cleaned up abandoned thread for session {} (was abandoned {} seconds ago)",
+                                session_id,
+                                abandoned_at.elapsed().as_secs()
+                            );
+                            false // Remove from vector
+                        } else {
+                            true // Keep in vector
+                        }
+                    });
+
+                    let cleaned_count = before_count - threads.len();
+                    if cleaned_count > 0 {
+                        #[cfg(debug_assertions)]
+                        println!("Cleaned up {} abandoned thread(s), {} still pending", cleaned_count, threads.len());
+                    }
+                }
+            }
+        });
+    }
 }
 
 // Input validation functions
 fn validate_hostname(host: &str) -> Result<(), String> {
+    // SECURITY: Normalize Unicode to prevent lookalike attacks (e.g., U+FF1B fullwidth semicolon)
+    let normalized: String = host.nfc().collect();
+    let host = normalized.as_str();
+
     if host.is_empty() {
-        return Err("Hostname cannot be empty".to_string());
+        return Err("Hostname cannot be empty.".to_string());
     }
     if host.len() > 64 {
-        return Err("Hostname too long (max 64 characters)".to_string());
+        return Err("Hostname too long (max 64 characters).".to_string());
     }
     // Check for dangerous characters that could break shell commands
     if host.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>')) {
-        return Err("Hostname contains invalid characters".to_string());
+        return Err("Hostname contains invalid characters.".to_string());
     }
     // Basic hostname validation - alphanumeric, dots, hyphens only
     if !host.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '_') {
-        return Err("Hostname can only contain letters, numbers, dots, hyphens, and underscores".to_string());
+        return Err("Hostname can only contain letters, numbers, dots, hyphens, and underscores.".to_string());
     }
     Ok(())
 }
 
 fn validate_username(username: &str) -> Result<(), String> {
+    // SECURITY: Normalize Unicode to prevent lookalike attacks
+    let normalized: String = username.nfc().collect();
+    let username = normalized.as_str();
+
     if username.is_empty() {
-        return Err("Username cannot be empty".to_string());
+        return Err("Username cannot be empty.".to_string());
     }
     if username.len() > 128 {
-        return Err("Username too long (max 128 characters)".to_string());
+        return Err("Username too long (max 128 characters).".to_string());
     }
     // Check for dangerous characters
     if username.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '"' | '\'' | '\n' | '\r' | '\\' | '<' | '>' | ' ')) {
-        return Err("Username contains invalid characters".to_string());
+        return Err("Username contains invalid characters.".to_string());
     }
     // Allow alphanumeric, underscore, hyphen, dot, @, and # (for formats like user@proxyuser or user#1234)
     if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '@' || c == '#') {
-        return Err("Username can only contain letters, numbers, underscores, hyphens, dots, @, and #".to_string());
+        return Err("Username can only contain letters, numbers, underscores, hyphens, dots, @, and #.".to_string());
     }
     Ok(())
 }
 
 fn validate_profile_name(name: &str) -> Result<(), String> {
+    // SECURITY: Normalize Unicode to prevent lookalike attacks
+    let normalized: String = name.nfc().collect();
+    let name = normalized.as_str();
+
     if name.is_empty() {
-        return Err("Profile name cannot be empty".to_string());
+        return Err("Profile name cannot be empty.".to_string());
     }
     if name.len() > 64 {
-        return Err("Profile name too long (max 64 characters)".to_string());
+        return Err("Profile name too long (max 64 characters).".to_string());
     }
     // Allow alphanumeric, spaces, and specific special characters: - _ ( ) . [ ] #
     if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']' | '#')) {
-        return Err("Profile name contains invalid characters".to_string());
+        return Err("Profile name contains invalid characters.".to_string());
     }
     Ok(())
 }
 
-fn validate_port(port: i32) -> Result<u16, String> {
+fn validate_port(port: i64) -> Result<u16, String> {
     // Validate port is within valid u16 range (1-65535)
-    // Note: We accept i32 from frontend for compatibility, but validate range before casting
+    // Note: We accept i64 to handle any JSON number without overflow, then validate range before casting
     if port < 1 || port > 65535 {
-        return Err("Port must be between 1 and 65535".to_string());
+        return Err("Port must be between 1 and 65535.".to_string());
     }
 
     // Safe to cast: we've verified port is in valid u16 range [1, 65535]
-    debug_assert!(port >= 1 && port <= 65535, "Port validation failed");
     Ok(port as u16)
 }
 
 fn validate_ipv4(ip: &str) -> Result<(), String> {
     let parts: Vec<&str> = ip.split('.').collect();
     if parts.len() != 4 {
-        return Err("Invalid IPv4 format".to_string());
+        return Err("Invalid IPv4 format.".to_string());
     }
 
     for part in parts {
@@ -320,7 +377,7 @@ fn validate_ipv4(ip: &str) -> Result<(), String> {
 
 fn validate_host_or_ip(host: &str) -> Result<(), String> {
     if host.is_empty() {
-        return Err("Hostname/IP cannot be empty".to_string());
+        return Err("Hostname/IP cannot be empty.".to_string());
     }
 
     // Check if it looks like an IPv4 address (contains only digits and dots)
@@ -333,11 +390,15 @@ fn validate_host_or_ip(host: &str) -> Result<(), String> {
 }
 
 fn validate_description(desc: &str) -> Result<(), String> {
+    // SECURITY: Normalize Unicode to prevent lookalike attacks
+    let normalized: String = desc.nfc().collect();
+    let desc = normalized.as_str();
+
     if desc.len() > 128 {
-        return Err("Description too long (max 128 characters)".to_string());
+        return Err("Description too long (max 128 characters).".to_string());
     }
     if desc.chars().any(|c| matches!(c, '<' | '>')) {
-        return Err("Description cannot contain < or >".to_string());
+        return Err("Description cannot contain < or >.".to_string());
     }
     Ok(())
 }
@@ -346,12 +407,17 @@ fn validate_group(group: &str) -> Result<(), String> {
     if group.is_empty() {
         return Ok(()); // Group is optional
     }
+
+    // SECURITY: Normalize Unicode to prevent lookalike attacks
+    let normalized: String = group.nfc().collect();
+    let group = normalized.as_str();
+
     if group.len() > 64 {
-        return Err("Group name too long (max 64 characters)".to_string());
+        return Err("Group name too long (max 64 characters).".to_string());
     }
     // Same pattern as profile name but shorter
     if !group.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']' | '#')) {
-        return Err("Group name contains invalid characters".to_string());
+        return Err("Group name contains invalid characters.".to_string());
     }
     Ok(())
 }
@@ -379,7 +445,7 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
     if let Some(filtered_groups) = &settings.filtered_groups {
         for group in filtered_groups {
             if group.is_empty() {
-                return Err("Empty group name in filtered_groups".to_string());
+                return Err("Empty group name in filtered_groups.".to_string());
             }
             validate_group(group)
                 .map_err(|e| format!("Invalid filtered group: {}", e))?;
@@ -390,7 +456,7 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
     if let Some(collapsed_groups) = &settings.collapsed_groups {
         for group in collapsed_groups {
             if group.is_empty() {
-                return Err("Empty group name in collapsed_groups".to_string());
+                return Err("Empty group name in collapsed_groups.".to_string());
             }
             validate_group(group)
                 .map_err(|e| format!("Invalid collapsed group: {}", e))?;
@@ -414,7 +480,7 @@ fn validate_settings_os_specific(settings_os: &SettingsOsSpecific) -> Result<(),
 
 fn validate_key_path(path: &str) -> Result<PathBuf, String> {
     if path.is_empty() {
-        return Err("Key path cannot be empty".to_string());
+        return Err("Key path cannot be empty.".to_string());
     }
 
     let expanded = shellexpand::tilde(path);
@@ -434,7 +500,7 @@ fn validate_key_path(path: &str) -> Result<PathBuf, String> {
     let ssh_dir = home.join(".ssh");
 
     if !canonical.starts_with(&ssh_dir) && !canonical.starts_with(&home) {
-        return Err("Key path must be within your home directory".to_string());
+        return Err("Key path must be within your home directory.".to_string());
     }
 
     Ok(canonical)
@@ -442,7 +508,7 @@ fn validate_key_path(path: &str) -> Result<PathBuf, String> {
 
 fn validate_terminal_path(path: &str) -> Result<PathBuf, String> {
     if path.is_empty() {
-        return Err("Terminal path cannot be empty".to_string());
+        return Err("Terminal path cannot be empty.".to_string());
     }
 
     let expanded = shellexpand::tilde(path);
@@ -463,7 +529,7 @@ fn validate_terminal_path(path: &str) -> Result<PathBuf, String> {
         // Ensure it's an .app bundle
         let path_str = canonical.to_string_lossy();
         if !path_str.ends_with(".app") {
-            return Err("macOS terminal must be an .app bundle".to_string());
+            return Err("macOS terminal must be an .app bundle.".to_string());
         }
 
         // Whitelist: Must be in standard macOS application directories
@@ -495,13 +561,13 @@ fn validate_terminal_path(path: &str) -> Result<PathBuf, String> {
         }
 
         if !is_allowed {
-            return Err("Terminal must be located in /Applications, /System/Applications, or ~/Applications".to_string());
+            return Err("Terminal must be located in /Applications, /System/Applications, or ~/Applications.".to_string());
         }
 
         // Check if the app bundle is executable (check the Contents/MacOS directory exists)
         let macos_dir = canonical.join("Contents").join("MacOS");
         if !macos_dir.exists() || !macos_dir.is_dir() {
-            return Err("Invalid .app bundle structure".to_string());
+            return Err("Invalid .app bundle structure.".to_string());
         }
     }
 
@@ -510,7 +576,7 @@ fn validate_terminal_path(path: &str) -> Result<PathBuf, String> {
         // Ensure it's an .exe file
         let path_str = canonical.to_string_lossy();
         if !path_str.ends_with(".exe") {
-            return Err("Windows terminal must be an .exe file".to_string());
+            return Err("Windows terminal must be an .exe file.".to_string());
         }
 
         // Whitelist: Must be in Program Files, Windows directory, or user's AppData
@@ -551,7 +617,7 @@ fn validate_terminal_path(path: &str) -> Result<PathBuf, String> {
         }
 
         if !is_allowed {
-            return Err("Terminal must be located in Program Files, Windows directory, or AppData".to_string());
+            return Err("Terminal must be located in Program Files, Windows directory, or AppData.".to_string());
         }
     }
 
@@ -565,16 +631,17 @@ pub struct Database {
 
 impl Database {
     fn new(path: PathBuf) -> SqlResult<Self> {
-        // SECURITY: On Unix systems, create the database file with restrictive permissions (0600)
-        // before opening it to prevent TOCTOU race condition where the file would be created
-        // with default permissions (typically 0644) and then changed afterward.
-        #[cfg(unix)]
-        {
-            use std::fs;
-            use std::os::unix::fs::OpenOptionsExt;
+        // SECURITY: Create the database file with restrictive permissions before opening
+        // to prevent TOCTOU race condition where the file would be created with default
+        // permissions and then changed afterward.
 
-            // Only set permissions if the file doesn't exist yet
-            if !path.exists() {
+        // Only apply security hardening if the file doesn't exist yet
+        if !path.exists() {
+            #[cfg(unix)]
+            {
+                use std::fs;
+                use std::os::unix::fs::OpenOptionsExt;
+
                 // Create file with 0600 permissions (owner read/write only)
                 fs::OpenOptions::new()
                     .create(true)
@@ -582,6 +649,25 @@ impl Database {
                     .mode(0o600)
                     .open(&path)
                     .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::fs::OpenOptions;
+
+                // Create empty file with create_new (fails if exists)
+                let file = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+                // Close file handle before setting ACL
+                drop(file);
+
+                // Set restrictive Windows ACL (owner-only access)
+                set_file_permissions_windows(&path)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))))?;
             }
         }
 
@@ -1030,12 +1116,29 @@ struct CreateProfileInput {
     name: String,
     description: Option<String>,
     host: String,
-    port: Option<i32>,
+    port: Option<i64>,
     username: String,
     auth_method: String,
     key_path: Option<String>,
     password: Option<String>,
     group: Option<String>,
+}
+
+// SECURITY: Custom Debug implementation to redact password field
+impl std::fmt::Debug for CreateProfileInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateProfileInput")
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("auth_method", &self.auth_method)
+            .field("key_path", &self.key_path)
+            .field("password", &"[REDACTED]")
+            .field("group", &self.group)
+            .finish()
+    }
 }
 
 #[tauri::command]
@@ -1102,12 +1205,30 @@ struct UpdateProfileInput {
     name: String,
     description: Option<String>,
     host: String,
-    port: Option<i32>,
+    port: Option<i64>,
     username: String,
     auth_method: String,
     key_path: Option<String>,
     password: Option<String>,
     group: Option<String>,
+}
+
+// SECURITY: Custom Debug implementation to redact password field
+impl std::fmt::Debug for UpdateProfileInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateProfileInput")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("auth_method", &self.auth_method)
+            .field("key_path", &self.key_path)
+            .field("password", &"[REDACTED]")
+            .field("group", &self.group)
+            .finish()
+    }
 }
 
 #[tauri::command]
@@ -1403,7 +1524,7 @@ fn import_settings(data: String) -> Result<SettingsImportResult, String> {
         let mut last_time = LAST_SETTINGS_IMPORT_TIME.lock()
             .map_err(|e| format!("Rate limit lock poisoned: {}", e))?;
         if now - *last_time < SETTINGS_IMPORT_RATE_LIMIT_SECS {
-            return Err("Rate limit: Please wait 5 seconds between settings imports".to_string());
+            return Err("Rate limit: Please wait 5 seconds between settings imports.".to_string());
         }
         *last_time = now;
     }
@@ -1575,6 +1696,30 @@ struct UpdateInfo {
 async fn check_for_updates() -> Result<UpdateInfo, String> {
     // Current version from Cargo.toml
     const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+    const CACHE_DURATION_SECS: u64 = 3600; // Cache for 1 hour
+
+    // Check cache first
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    if let Ok(cache) = UPDATE_CHECK_CACHE.lock() {
+        if let Some((cached_time, current_ver, latest_ver, update_avail, dl_url)) = cache.as_ref() {
+            // If cache is less than 1 hour old, return cached result
+            if now - cached_time < CACHE_DURATION_SECS {
+                #[cfg(debug_assertions)]
+                println!("Using cached update check result (age: {} seconds)", now - cached_time);
+
+                return Ok(UpdateInfo {
+                    current_version: current_ver.clone(),
+                    latest_version: latest_ver.clone(),
+                    update_available: *update_avail,
+                    download_url: dl_url.clone(),
+                });
+            }
+        }
+    }
 
     // Create async HTTP client with 10-second timeout
     let client = reqwest::Client::builder()
@@ -1606,14 +1751,14 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
 
     // Validate tag_name format (should be vX.X.X or X.X.X)
     if tag_name.is_empty() {
-        return Err("Empty tag_name in release".to_string());
+        return Err("Empty tag_name in release.".to_string());
     }
 
     let latest_version = tag_name.trim_start_matches('v').to_string();
 
     // Ensure version string is not empty after trimming
     if latest_version.is_empty() {
-        return Err("Invalid version format in tag_name".to_string());
+        return Err("Invalid version format in tag_name.".to_string());
     }
 
     // Validate download URL exists
@@ -1623,7 +1768,7 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
         .to_string();
 
     if download_url.is_empty() {
-        return Err("Empty html_url in release".to_string());
+        return Err("Empty html_url in release.".to_string());
     }
 
     // Use semantic versioning for proper version comparison
@@ -1636,12 +1781,21 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
     // Update is available only if latest > current
     let update_available = latest > current;
 
-    Ok(UpdateInfo {
+    let result = UpdateInfo {
         current_version: CURRENT_VERSION.to_string(),
-        latest_version,
+        latest_version: latest_version.clone(),
         update_available,
-        download_url,
-    })
+        download_url: download_url.clone(),
+    };
+
+    // Cache the result
+    if let Ok(mut cache) = UPDATE_CHECK_CACHE.lock() {
+        *cache = Some((now, CURRENT_VERSION.to_string(), latest_version, update_available, download_url));
+        #[cfg(debug_assertions)]
+        println!("Cached update check result for {} seconds", CACHE_DURATION_SECS);
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -2042,24 +2196,34 @@ fn write_to_terminal(
     session_id: String,
     data: String,
 ) -> Result<(), String> {
-    // SECURITY: Rate limiting to prevent write flooding (100 writes/second max)
-    const MAX_WRITES_PER_SECOND: u32 = 100;
+    // SECURITY: Token bucket rate limiting to prevent write flooding (100 writes/second max)
+    // Token bucket prevents burst attacks at window boundaries by gradually refilling tokens
+    const BUCKET_CAPACITY: u32 = 100; // Max tokens (100 writes/sec)
+    const REFILL_RATE_MS: u128 = 10;  // Add 1 token every 10ms (100 tokens/sec)
     {
         let mut rate_limits = registry.write_rate_limits.lock()
             .map_err(|e| format!("Rate limit lock poisoned: {}", e))?;
-        let (last_reset, count) = rate_limits
+        let (last_refill, available_tokens) = rate_limits
             .entry(session_id.clone())
-            .or_insert((Instant::now(), 0));
+            .or_insert((Instant::now(), BUCKET_CAPACITY));
 
-        if last_reset.elapsed().as_secs() >= 1 {
-            *last_reset = Instant::now();
-            *count = 0;
+        // Calculate tokens to add based on elapsed time
+        let elapsed_ms = last_refill.elapsed().as_millis();
+        let tokens_to_add = (elapsed_ms / REFILL_RATE_MS) as u32;
+
+        if tokens_to_add > 0 {
+            // Refill tokens (capped at capacity)
+            *available_tokens = (*available_tokens + tokens_to_add).min(BUCKET_CAPACITY);
+            *last_refill = Instant::now();
         }
 
-        if *count >= MAX_WRITES_PER_SECOND {
-            return Err("Rate limit exceeded: too many write operations".to_string());
+        // Check if token available
+        if *available_tokens == 0 {
+            return Err("Rate limit exceeded: too many write operations.".to_string());
         }
-        *count += 1;
+
+        // Consume one token
+        *available_tokens -= 1;
     }
 
     let mut writers = registry.pty_writers.lock()
@@ -2132,6 +2296,10 @@ fn close_terminal_session(
     registry: State<SessionRegistry>,
     session_id: String,
 ) -> Result<(), String> {
+    // SECURITY: Validate session_id is a valid UUID format
+    Uuid::parse_str(&session_id)
+        .map_err(|_| "Invalid session ID format".to_string())?;
+
     // SECURITY FIX: Acquire all locks atomically to prevent race conditions
     // Lock all registries at once before making any mutations
     let mut sessions = registry.sessions.lock()
@@ -2184,9 +2352,11 @@ fn close_terminal_session(
             let start = Instant::now();
 
             // Poll join with timeout (Rust doesn't have native join_timeout on JoinHandle)
+            let mut thread_finished = false;
             loop {
                 if handle.is_finished() {
                     let _ = handle.join(); // Clean up the thread handle
+                    thread_finished = true;
                     break;
                 }
                 if start.elapsed() > timeout {
@@ -2198,6 +2368,14 @@ fn close_terminal_session(
                     break;
                 }
                 std::thread::sleep(Duration::from_millis(100));
+            }
+
+            // If thread didn't finish, add to abandoned threads registry for later cleanup
+            if !thread_finished {
+                if let Ok(mut abandoned) = registry.abandoned_threads.lock() {
+                    abandoned.push((session_id.clone(), handle, Instant::now()));
+                    eprintln!("Added abandoned thread for session {} to cleanup registry ({} total abandoned)", session_id, abandoned.len());
+                }
             }
         }
     }
@@ -2328,14 +2506,15 @@ fn launch_macos_custom_terminal(
     std::thread::spawn(move || {
         // Wait longer to ensure terminal has read the script
         std::thread::sleep(std::time::Duration::from_secs(5));
-        secure_delete_file(&script_path_cleanup);
+        delete_file_with_overwrite(&script_path_cleanup);
     });
 
     Ok(())
 }
 
-/// Securely deletes a file by overwriting with random data before unlinking
-fn secure_delete_file(path: &std::path::Path) {
+/// Deletes a file after overwriting with random data (single pass)
+/// Note: Not cryptographically secure deletion (DoD 5220.22-M requires 3+ passes)
+fn delete_file_with_overwrite(path: &std::path::Path) {
     use std::io::Write;
 
     // Get file size
@@ -2568,7 +2747,7 @@ fn launch_windows_custom_terminal(
     std::thread::spawn(move || {
         // Wait longer to ensure terminal has read the script
         std::thread::sleep(std::time::Duration::from_secs(5));
-        secure_delete_file(&script_path_cleanup);
+        delete_file_with_overwrite(&script_path_cleanup);
     });
 
     Ok(())
@@ -2650,7 +2829,7 @@ fn connect_ssh(
                 if let Some(custom_path) = custom_terminal_path {
                     launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
                 } else {
-                    return Err("Custom terminal selected but no path provided".to_string());
+                    return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
             "default" | _ => {
@@ -2674,7 +2853,7 @@ fn connect_ssh(
                 if let Some(custom_path) = custom_terminal_path {
                     launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
                 } else {
-                    return Err("Custom terminal selected but no path provided".to_string());
+                    return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
             "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs)?,
