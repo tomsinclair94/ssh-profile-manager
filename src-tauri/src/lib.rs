@@ -2508,7 +2508,6 @@ fn launch_windows_custom_terminal(
     profile_name: &str,
 ) -> Result<(), String> {
     use std::process::Command;
-    use std::fs;
 
     // Re-validate path (TOCTOU protection)
     let validated_path = validate_terminal_path(custom_path)?;
