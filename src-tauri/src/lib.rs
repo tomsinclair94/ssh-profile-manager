@@ -1892,7 +1892,7 @@ async fn create_terminal_session(
     // Validate inputs
     validate_hostname(&profile.host)?;
     validate_username(&profile.username)?;
-    validate_port(profile.port)?;
+    validate_port(profile.port as i64)?;
 
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
     const MAX_COLS: u16 = 250;
@@ -2352,30 +2352,28 @@ fn close_terminal_session(
             let start = Instant::now();
 
             // Poll join with timeout (Rust doesn't have native join_timeout on JoinHandle)
-            let mut thread_finished = false;
             loop {
                 if handle.is_finished() {
-                    let _ = handle.join(); // Clean up the thread handle
-                    thread_finished = true;
+                    // Thread finished - consume handle and clean up
+                    let _ = handle.join();
                     break;
                 }
                 if start.elapsed() > timeout {
+                    // Thread didn't finish in time - add to abandoned registry for later cleanup
                     if is_potentially_hung {
                         eprintln!("Info: Hung session {} cleanup timed out as expected - inner reader thread may still be blocked", session_id);
                     } else {
                         eprintln!("Warning: Reader thread for session {} did not exit within timeout", session_id);
                     }
+
+                    // Move handle to abandoned threads registry
+                    if let Ok(mut abandoned) = registry.abandoned_threads.lock() {
+                        abandoned.push((session_id.clone(), handle, Instant::now()));
+                        eprintln!("Added abandoned thread for session {} to cleanup registry ({} total abandoned)", session_id, abandoned.len());
+                    }
                     break;
                 }
                 std::thread::sleep(Duration::from_millis(100));
-            }
-
-            // If thread didn't finish, add to abandoned threads registry for later cleanup
-            if !thread_finished {
-                if let Ok(mut abandoned) = registry.abandoned_threads.lock() {
-                    abandoned.push((session_id.clone(), handle, Instant::now()));
-                    eprintln!("Added abandoned thread for session {} to cleanup registry ({} total abandoned)", session_id, abandoned.len());
-                }
             }
         }
     }
@@ -2812,7 +2810,7 @@ fn connect_ssh(
 
     validate_hostname(&profile.host)?;
     validate_username(&profile.username)?;
-    validate_port(profile.port)?;
+    validate_port(profile.port as i64)?;
 
     // Build SSH arguments
     let ssh_args = build_ssh_args(&profile)?;
