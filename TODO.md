@@ -596,6 +596,9 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 ## Feature Backlog
 
 ### Medium Priority
+- Encrypted profile/settings export (password-protected export files)
+- HMAC/digital signatures for export integrity verification (prevent tampering with exported data)
+- Audit logging for security events (connections, exports, settings changes, failed auth attempts)
 - SFTP support
 - Port forwarding
 - Jump hosts

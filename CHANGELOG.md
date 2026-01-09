@@ -5,6 +5,29 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-01-09
+
+### Fixed
+- **Hash Character Support**: Hash (#) character now supported in Username, Profile Name, and Group Name fields
+  - Updated frontend and backend validation patterns
+  - Updated field tooltips to show hash as allowed character
+- **Group Filter Badge on Startup**: Groups filter no longer shows "0/0" on app load
+  - Fixed initialization order: filter state now loads before profiles
+  - Badge updates correctly after profiles load
+- **Filter State on Startup**: Filters now apply correctly when app launches
+  - Fixed initialization order issue that prevented filters from applying
+  - Group selections now properly filter profiles on startup
+- **Group Name Validation**: Fixed corrupted group state errors from character limit mismatch
+  - Updated validation regex to match 64-character limit (was incorrectly checking for 32)
+  - Eliminates localStorage corruption errors for valid group names
+- **Duplicate Profile Workflow**: Improved user experience when duplicating profiles
+  - Removed automatic "(duplicate)" suffix from duplicated profile names
+  - Users can now choose their own name (validation prevents actual duplicates)
+  - Save button properly disabled until changes made
+- **Modal Close Button**: Close button now skips confirmation when no changes have been made
+  - Eliminates unnecessary confirmation dialog when editing without changes
+  - Works correctly for edit, duplicate, and new profile scenarios
+
 ## [0.6.4] - 2025-01-09
 
 ### Fixed

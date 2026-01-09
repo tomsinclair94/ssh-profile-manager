@@ -54,9 +54,9 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 // Validation patterns and rules
 const VALIDATION = {
     name: {
-        pattern: /^[a-zA-Z0-9\s\-_().\[\]]+$/,
+        pattern: /^[a-zA-Z0-9\s\-_().\[\]#]+$/,
         maxLength: 64,
-        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] allowed'
+        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] # allowed'
     },
     description: {
         pattern: /^[^<>]*$/,
@@ -79,14 +79,14 @@ const VALIDATION = {
         message: 'Must be between 1 and 65535'
     },
     username: {
-        pattern: /^[a-zA-Z0-9_\-.@]+$/,
+        pattern: /^[a-zA-Z0-9_\-.@#]+$/,
         maxLength: 128,
-        message: 'Only letters, numbers, underscores, hyphens, dots, @ allowed'
+        message: 'Only letters, numbers, underscores, hyphens, dots, @, # allowed'
     },
     group: {
-        pattern: /^[a-zA-Z0-9\s\-_().\[\]]+$/,
+        pattern: /^[a-zA-Z0-9\s\-_().\[\]#]+$/,
         maxLength: 64,
-        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] allowed'
+        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] # allowed'
     }
 };
 
@@ -1655,6 +1655,11 @@ async function init() {
     // Set OS-specific browse hint
     setBrowseHint();
 
+    // Load filter and collapsed states BEFORE loading profiles
+    // so that renderProfiles() can apply filters immediately
+    loadFilterState();
+    loadCollapsedState();
+
     await loadProfiles();
     await loadRecentConnections(); // Load recent connections after profiles
     loadRecentConnectionsLimit(); // Load recent connections limit into settings
@@ -1664,8 +1669,6 @@ async function init() {
     loadIncludeProfilesPreference();
     populateTerminalOptions();
     loadTerminalPreference();
-    loadFilterState();
-    loadCollapsedState();
     loadKeyboardShortcuts();
     await loadWindowState();
     await setupWindowListeners();
@@ -1751,11 +1754,13 @@ async function loadProfiles() {
         profiles = await invoke('get_profiles');
         updateProfileCount();
         renderProfiles();
+        updateFilterBadge(); // Update badge after profiles are loaded
     } catch (error) {
         console.error('Failed to load profiles:', error);
         profiles = [];
         updateProfileCount();
         renderProfiles();
+        updateFilterBadge(); // Update badge even on error
     }
 }
 
@@ -1879,7 +1884,7 @@ function renderRecentConnections() {
         // Delete button (X)
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'recent-connection-delete';
-        deleteBtn.innerHTML = '×';
+        deleteBtn.textContent = '×';
         deleteBtn.title = 'Remove from recent connections';
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent triggering reconnect
@@ -3135,13 +3140,13 @@ function loadFilterState() {
             }
 
             // Validate each item is a string with proper format
-            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ]
-            // Max length: 32 characters
-            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]]+$/;
+            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ] #
+            // Max length: 64 characters (matches VALIDATION.group.maxLength)
+            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]#]+$/;
             if (!filtersArray.every(item =>
                 typeof item === 'string' &&
                 item.length > 0 &&
-                item.length <= 32 &&
+                item.length <= 64 &&
                 groupNameRegex.test(item)
             )) {
                 throw new Error('Invalid filter group names');
@@ -3185,13 +3190,13 @@ function loadCollapsedState() {
             }
 
             // Validate each item is a string with proper format
-            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ]
-            // Max length: 32 characters
-            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]]+$/;
+            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ] #
+            // Max length: 64 characters (matches VALIDATION.group.maxLength)
+            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]#]+$/;
             if (!collapsedArray.every(item =>
                 typeof item === 'string' &&
                 item.length > 0 &&
-                item.length <= 32 &&
+                item.length <= 64 &&
                 groupNameRegex.test(item)
             )) {
                 throw new Error('Invalid collapsed group names');
@@ -4471,17 +4476,21 @@ function checkFormChanged() {
 
 // Check if there are unsaved profile changes
 function hasUnsavedProfileChanges() {
-    // If creating a new profile, check if any fields have content
+    const currentValues = getCurrentFormValues();
+
+    // If we have captured original form values (from edit or duplicate), compare against them
+    if (Object.keys(originalFormValues).length > 0) {
+        return Object.keys(originalFormValues).some(key =>
+            currentValues[key] !== originalFormValues[key]
+        );
+    }
+
+    // If creating a brand new profile (no baseline captured), check if any fields have content
     if (!editingProfileId) {
-        const currentValues = getCurrentFormValues();
         return currentValues.name || currentValues.host || currentValues.username;
     }
 
-    // For editing, compare current values with original values
-    const currentValues = getCurrentFormValues();
-    return Object.keys(originalFormValues).some(key =>
-        currentValues[key] !== originalFormValues[key]
-    );
+    return false;
 }
 
 // Close modal (force close without confirmation)
@@ -4590,18 +4599,11 @@ function duplicateProfile(id) {
     const profile = profiles.find(p => p.id === id);
     if (!profile) return;
 
-    // Strip existing " (duplicate)" suffix if present to avoid nested duplicates
-    let baseName = profile.name;
-    const duplicateSuffix = ' (duplicate)';
-    if (baseName.endsWith(duplicateSuffix)) {
-        baseName = baseName.slice(0, -duplicateSuffix.length);
-    }
-
-    // Create a copy of the profile with (duplicate) appended to base name
+    // Create a copy of the profile with the same name
+    // User will be forced to change it due to duplicate name validation
     const duplicatedProfile = {
         ...profile,
-        id: null, // Clear ID so it creates a new profile
-        name: baseName + duplicateSuffix
+        id: null // Clear ID so it creates a new profile
     };
 
     // Open modal in "new profile" mode with duplicated data
@@ -4621,6 +4623,16 @@ function duplicateProfile(id) {
     document.getElementById('profile-group').value = duplicatedProfile.group || '';
 
     updateAuthMethodVisibility();
+
+    // Initialize character counters
+    initializeCharCounters();
+
+    // Capture form values as baseline so no changes are detected yet
+    captureFormValues();
+
+    // Disable save button until user makes a change
+    profileSaveBtn.disabled = true;
+
     profileModal.classList.remove('hidden');
 }
 

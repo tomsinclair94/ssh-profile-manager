@@ -36,14 +36,34 @@ bun run build    # Production build
 
 ## Version Management
 
-**CRITICAL: When creating a new dev branch (`vX.X.X-dev`), FIRST update version in ALL 7 locations:**
+**CRITICAL: When creating a new dev branch (`vX.X.X-dev`), follow these steps:**
+
+**Step 1: Bump version in ALL 7 locations:**
 1. `src-tauri/tauri.conf.json` (line ~4: `"version": "X.X.X"`)
 2. `src-tauri/Cargo.toml` (line ~3: `version = "X.X.X"`)
 3. `package.json` (line ~3: `"version": "X.X.X"`)
 4. `dist/index.html` (line ~22 + ~393: `vX.X.X` and `X.X.X`)
 5. `README.md` (line ~14 + ~16: badge versions)
 
-**Then commit:** `git commit -m "Bump version to X.X.X for dev branch"`
+**Step 2: Update all dependencies to latest versions:**
+```bash
+# Update JavaScript dependencies
+bun update
+
+# Update Rust dependencies
+cd src-tauri && cargo update && cd ..
+
+# Verify builds still work
+bun run build
+```
+
+**Step 3: Commit changes:**
+```bash
+git add -A
+git commit -m "Bump version to X.X.X for dev branch"
+```
+
+**Why update dependencies?** Keeping dependencies current at the start of each release prevents Dependabot from creating many PRs during development. This gives you control over when updates happen and ensures all updates are tested together with your new features.
 
 ## Release Process
 
@@ -51,14 +71,16 @@ bun run build    # Production build
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes
 3. Code review (`code-reviewer` agent)
-4. Refactor (`refactoring-specialist` agent)
+4. Refactor (`refactoring-specialist` agent) - optional, skip if not needed
 5. Security review (`security-engineer` agent)
 6. Fix CRITICAL/HIGH/MEDIUM issues
-7. Update CHANGELOG.md with all changes
+7. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
 8. Commit & push
 
 **Merge to Main:**
-1. PR `vX.X.X-dev` → `main`
+1. PR `vX.X.X-dev` → `main` with auto-merge enabled
+   - Use `gh pr create --auto-merge` flag when creating PR
+   - PR will auto-merge with squash once all checks pass
 2. Squash merge with title: `Release vX.X.X - Description`
 3. Auto-tag workflow creates git tag with CHANGELOG content
 4. Auto-release workflow builds binaries (macOS aarch64, Windows x86_64)
@@ -147,6 +169,13 @@ CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 **Rust:** tauri, rusqlite, serde/serde_json, uuid (fast-rng), keyring, dirs, shellexpand, chrono, rfd, portable-pty, windows-acl (Windows)
 **Node:** @tauri-apps/cli, @tauri-apps/api
 **Frontend:** xterm.js 5.3.0, xterm-addon-fit 0.8.0 (CDN)
+
+**Known Warnings (Linux-only, does not affect macOS/Windows):**
+- `glib` 0.18.5: RUSTSEC-2024-0429 (unsoundness in Iterator impl) - via Tauri GTK3 bindings
+- `serial` 0.4.0: RUSTSEC-2017-0008 (unmaintained) - via `portable-pty`
+- Multiple GTK3 crates announced unmaintained March 2024 (Tauri migration to GTK4 in progress)
+
+These warnings only affect Linux builds, which are not supported. Application targets macOS (Apple Silicon) and Windows (x86_64) only.
 
 ## Quick Reference
 

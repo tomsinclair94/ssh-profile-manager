@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc://localhost http://ipc.localhost https://api.github.com; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc://localhost http://ipc.localhost https://api.github.com; base-uri 'self'; form-action 'self'; object-src 'none';">
     <title>SSH Profile Manager</title>
     <link rel="stylesheet" href="styles.css">
     <!-- xterm.js for embedded terminal (vendored locally) -->
@@ -19,7 +19,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.6.4</span>
+                    <span class="version">v0.6.5</span>
                 </div>
             </div>
             <div class="header-buttons">
@@ -108,7 +108,7 @@
                                 <div class="tooltip-title">Profile Name Requirements</div>
                                 <ul class="tooltip-rules">
                                     <li>Letters, numbers, and spaces allowed</li>
-                                    <li>Special characters: - _ ( ) . [ ]</li>
+                                    <li>Special characters: - _ ( ) . [ ] #</li>
                                     <li>Maximum 64 characters</li>
                                 </ul>
                             </div>
@@ -174,7 +174,7 @@
                                 <div class="tooltip-title">Username Requirements</div>
                                 <ul class="tooltip-rules">
                                     <li>Letters and numbers allowed</li>
-                                    <li>Special characters: _ - . @</li>
+                                    <li>Special characters: _ - . @ #</li>
                                     <li>Maximum 128 characters</li>
                                 </ul>
                             </div>
@@ -219,7 +219,7 @@
                                 <div class="tooltip-title">Group Name Requirements</div>
                                 <ul class="tooltip-rules">
                                     <li>Letters, numbers, and spaces allowed</li>
-                                    <li>Special characters: - _ ( ) . [ ]</li>
+                                    <li>Special characters: - _ ( ) . [ ] #</li>
                                     <li>Maximum 64 characters</li>
                                 </ul>
                             </div>
@@ -390,7 +390,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.4" target="_blank" class="about-value version-link">0.6.4</a>
+                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.5" target="_blank" class="about-value version-link">0.6.5</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
