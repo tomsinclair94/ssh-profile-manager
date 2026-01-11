@@ -58,6 +58,20 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 - 💾 Backup & restore settings and profiles
 - 🔄 Reset to defaults • Auto-update checker
 
+## Coming Soon in v0.7.0
+
+🚧 **Major Features in Development:**
+
+- 📂 **Hierarchical Groups** - Organize profiles with sub-groups (3 levels deep)
+- ⭐ **Favorites** - Star your most-used profiles and groups for quick access
+- 🏷️ **Tags** - Color-coded tags for better organization and filtering
+- 🎨 **Profile Icons** - Visual icons for instant profile recognition
+- 📦 **Individual Export/Import** - Export/import single profiles or groups (append mode)
+- 🔐 **Encrypted Exports** - AES-256-GCM encryption with HMAC integrity verification
+- 🎯 **Enhanced Organization** - Profile names unique per group, flexible workflows
+
+See [v0.7.0 plan](plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md) for full details.
+
 ## Screenshots
 
 <div align="center">
