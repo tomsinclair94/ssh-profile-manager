@@ -14,12 +14,22 @@
 v0.6.3 ✅ → v0.6.4 ✅ → v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1.0.0
 ```
 
-### v0.7.0 - User Testing Enhancements
+### v0.7.0 - Hierarchical Groups & Enhanced Organization
 **Status:** Planned
-**Focus:** Enhancements and features identified from user testing
+**Focus:** Enhanced group management, hierarchical organization, export/import improvements, favorites & tags
 
-**Potential Features:**
-- TBD based on feedback after v0.6.5
+See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed plan.
+
+**Major Features:**
+- Hierarchical group system with sub-groups (up to 3 levels)
+- Separate group management (Add, Rename, Delete with cascade/move options)
+- Individual profile/group export/import with append mode
+- Encrypted exports with AES-256-GCM and HMAC integrity verification
+- Favorites system for profiles and groups
+- Icon picker for profiles (predefined library)
+- Tag system with color-coding and filtering
+- Profile name uniqueness scoped to parent group
+- Settings Export/Import renamed to Backup/Restore
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned
@@ -42,20 +52,16 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 ## Feature Backlog
 
 ### Medium Priority
-- Encrypted profile/settings export (password-protected export files)
-- HMAC/digital signatures for export integrity verification (prevent tampering with exported data)
 - Audit logging for security events (connections, exports, settings changes, failed auth attempts)
 - SFTP support
 - Port forwarding
 - Jump hosts
-- Color tags for profiles
-- Group management UI
-- Profile favorites
 
 ### Low Priority
 - Cloud sync
 - SSH config import
-- Custom icons for profiles
+- Custom icon upload (v0.7.0 includes predefined icons)
+- Tag hierarchy (v0.7.0 includes flat tags)
 
 ---
 
