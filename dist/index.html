@@ -45,6 +45,7 @@
                     </div>
                 </div>
                 <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
+                <button id="add-group-btn" class="btn btn-secondary">+ Add Group</button>
                 <button id="filter-btn" class="btn btn-secondary">
                     Filter Groups
                     <span id="filter-badge" class="badge filter-badge">0/0</span>
@@ -213,18 +214,10 @@
 
                     <div class="form-group">
                         <label for="profile-group">Group</label>
-                        <input type="text" id="profile-group" placeholder="e.g., Production, Development" spellcheck="false" autocorrect="off" autocapitalize="off">
-                        <div class="input-tooltip">
-                            <div class="tooltip-content">
-                                <div class="tooltip-title">Group Name Requirements</div>
-                                <ul class="tooltip-rules">
-                                    <li>Letters, numbers, and spaces allowed</li>
-                                    <li>Special characters: - _ ( ) . [ ] #</li>
-                                    <li>Maximum 64 characters</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <span class="char-counter" id="profile-group-counter">0 / 64</span>
+                        <select id="profile-group">
+                            <option value="">-- Ungrouped --</option>
+                            <!-- Options will be populated dynamically -->
+                        </select>
                     </div>
                 </form>
             </div>
@@ -246,6 +239,46 @@
                         <button type="button" class="btn btn-danger" id="confirm-ok">Yes</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Group Management Modal -->
+        <div id="group-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2 id="group-modal-title">New Group</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="submit" form="group-form" class="btn btn-primary" id="group-save-btn">Save</button>
+                        <button type="button" class="btn btn-secondary" id="group-close-btn">Close</button>
+                    </div>
+                </div>
+                <form id="group-form">
+                    <div class="form-group">
+                        <label for="group-name">Group Name <span class="required">*</span></label>
+                        <input type="text" id="group-name" required placeholder="e.g., Production Servers">
+                        <div class="input-tooltip">
+                            <div class="tooltip-content">
+                                <div class="tooltip-title">Group Name Requirements</div>
+                                <ul class="tooltip-rules">
+                                    <li>Letters, numbers, and spaces allowed</li>
+                                    <li>Special characters: - _ ( ) . [ ] #</li>
+                                    <li>Maximum 64 characters</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <span class="char-counter" id="group-name-counter">0 / 64</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="group-parent">Parent Group</label>
+                        <select id="group-parent">
+                            <option value="">-- Top Level --</option>
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                    </div>
+                </form>
             </div>
         </div>
 

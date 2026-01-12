@@ -92,7 +92,10 @@ const VALIDATION = {
 
 // State
 let profiles = [];
+let groups = []; // All groups (flat list)
+let groupTree = []; // Hierarchical group structure
 let editingProfileId = null;
+let editingGroupId = null; // Currently editing group ID
 let isSubmitting = false;
 let collapsedGroups = new Set();
 let originalFormValues = {}; // Track original profile form values for change detection
@@ -276,7 +279,7 @@ function updateCharCounter(fieldId, value) {
     if (!counter) return;
 
     // Map field IDs to validation config keys
-    const fieldName = fieldId.replace('profile-', '');
+    const fieldName = fieldId.replace('profile-', '').replace('group-', '');
     const configKey = fieldName === 'host' ? 'hostname' : fieldName;
     const config = VALIDATION[configKey];
     if (!config || !config.maxLength) return;
@@ -417,6 +420,15 @@ let terminalSelect;
 let customTerminalGroup;
 let customTerminalPath;
 let browseTerminalBtn;
+// Group Management Modal Elements
+let addGroupBtn;
+let groupModal;
+let groupForm;
+let groupModalTitle;
+let groupNameInput;
+let groupParentSelect;
+let groupSaveBtn;
+let groupCloseBtn;
 
 // Confirmation promise resolver
 let confirmResolver = null;
@@ -1649,6 +1661,15 @@ async function init() {
     customTerminalGroup = document.getElementById('custom-terminal-group');
     customTerminalPath = document.getElementById('custom-terminal-path');
     browseTerminalBtn = document.getElementById('browse-terminal-btn');
+    // Group Management Modal Elements
+    addGroupBtn = document.getElementById('add-group-btn');
+    groupModal = document.getElementById('group-modal');
+    groupForm = document.getElementById('group-form');
+    groupModalTitle = document.getElementById('group-modal-title');
+    groupNameInput = document.getElementById('group-name');
+    groupParentSelect = document.getElementById('group-parent');
+    groupSaveBtn = document.getElementById('group-save-btn');
+    groupCloseBtn = document.getElementById('group-close-btn');
 
     debug.log('DOM elements retrieved');
 
@@ -1661,6 +1682,7 @@ async function init() {
     loadCollapsedState();
 
     await loadProfiles();
+    await loadGroups(); // Load groups for hierarchical UI
     await loadRecentConnections(); // Load recent connections after profiles
     loadRecentConnectionsLimit(); // Load recent connections limit into settings
     loadRecentConnectionsCollapsedState(); // Load recent connections collapsed state
@@ -1762,6 +1784,57 @@ async function loadProfiles() {
         renderProfiles();
         updateFilterBadge(); // Update badge even on error
     }
+}
+
+// Load groups from backend
+async function loadGroups() {
+    try {
+        groups = await invoke('get_groups');
+        groupTree = await invoke('get_group_tree');
+        debug.log('Groups loaded:', groups.length);
+
+        // Perform one-time migration from v0.6.5 to v0.7.0
+        performV070Migration();
+    } catch (error) {
+        console.error('Failed to load groups:', error);
+        groups = [];
+        groupTree = [];
+    }
+}
+
+// Perform one-time migration from v0.6.5 to v0.7.0
+function performV070Migration() {
+    const MIGRATION_VERSION_KEY = 'migrationVersion';
+    const CURRENT_VERSION = '0.7.0';
+
+    // Check if migration has already been performed
+    const lastMigrationVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
+
+    if (lastMigrationVersion === CURRENT_VERSION) {
+        // Migration already done, skip
+        return;
+    }
+
+    debug.log('Performing v0.7.0 migration...');
+
+    // Reset filters - show all groups
+    filteredGroups = new Set();
+    saveFilterState();
+
+    // Expand all groups
+    collapsedGroups = new Set();
+    saveCollapsedState();
+
+    // Mark migration as complete
+    localStorage.setItem(MIGRATION_VERSION_KEY, CURRENT_VERSION);
+
+    debug.log('v0.7.0 migration complete - filters reset, all groups expanded');
+
+    // Re-render profiles with new expanded state
+    renderProfiles(searchInput?.value || '');
+
+    // Show user notification
+    showToast('Upgraded to v0.7.0 with hierarchical groups! All groups are now visible and expanded.', TOAST_DURATION_LONG, 'success');
 }
 
 // Update profile count badge
@@ -2030,23 +2103,26 @@ function loadRecentConnectionsCollapsedState() {
     }
 }
 
-// Render profiles in the UI with collapsible groups
+// Render profiles in the UI with hierarchical collapsible groups
 function renderProfiles(filter = '') {
+    const searchText = filter.toLowerCase();
+
+    // Filter profiles
     const filteredProfiles = profiles.filter(profile => {
         // First check if profile's group is filtered out
-        const group = profile.group || 'Ungrouped';
-        if (filteredGroups.has(group)) {
+        const groupId = profile.group_id;
+        if (groupId && filteredGroups.has(groupId)) {
             return false; // Hide this profile because its group is filtered
         }
 
         // Then apply search filter
-        const searchText = filter.toLowerCase();
+        if (!searchText) return true;
+
         return (
             profile.name.toLowerCase().includes(searchText) ||
             profile.host.toLowerCase().includes(searchText) ||
             profile.username.toLowerCase().includes(searchText) ||
-            (profile.description && profile.description.toLowerCase().includes(searchText)) ||
-            (profile.group && profile.group.toLowerCase().includes(searchText))
+            (profile.description && profile.description.toLowerCase().includes(searchText))
         );
     });
 
@@ -2058,22 +2134,18 @@ function renderProfiles(filter = '') {
         let icon, title, text;
 
         if (!hasProfiles) {
-            // Truly no profiles exist
             icon = '💻';
             title = 'No SSH Profiles Yet';
             text = 'Create your first SSH profile to get started.';
         } else if (filter && hasActiveFilters) {
-            // Both search and filters active
             icon = '🔍';
             title = 'No Profiles Found';
             text = 'No profiles match your search and active group filters.';
         } else if (filter) {
-            // Search active, no filters
             icon = '🔍';
             title = 'No Profiles Found';
             text = 'No profiles match your search.';
         } else if (hasActiveFilters) {
-            // Only filters active
             icon = '🔍';
             title = 'No Profiles Found';
             text = 'No profiles match the active group filters.';
@@ -2086,78 +2158,153 @@ function renderProfiles(filter = '') {
                 <div class="empty-state-text">${text}</div>
             </div>
         `;
-        updateProfileCount(0); // 0 visible profiles
+        updateProfileCount(0);
         return;
     }
 
-    // Group profiles
-    const grouped = {};
+    // Group profiles by group_id (null = ungrouped)
+    const profilesByGroupId = {};
     filteredProfiles.forEach(profile => {
-        const group = profile.group || 'Ungrouped';
-        if (!grouped[group]) grouped[group] = [];
-        grouped[group].push(profile);
+        const groupId = profile.group_id || null;
+        if (!profilesByGroupId[groupId]) profilesByGroupId[groupId] = [];
+        profilesByGroupId[groupId].push(profile);
     });
 
-    // Render grouped profiles with collapsible sections
+    // Build HTML using hierarchical structure
     let html = '';
-    Object.keys(grouped).sort().forEach(groupName => {
-        const isCollapsed = collapsedGroups.has(groupName);
-        const chevron = isCollapsed ? '▶' : '▼';
 
-        html += `
-            <div class="profile-group">
-                <div class="profile-group-header" data-group="${escapeHtml(groupName)}">
-                    <span class="group-chevron">${chevron}</span>
-                    <span class="group-name">${escapeHtml(groupName)}</span>
-                    <span class="badge group-count-badge">${grouped[groupName].length}</span>
-                </div>
-                <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
-        `;
+    // Render top-level groups (parent_id = null)
+    const topLevelGroups = groups.filter(g => !g.parent_id).sort((a, b) => a.name.localeCompare(b.name));
 
-        grouped[groupName].forEach(profile => {
-            html += `
-                <div class="profile-card" data-id="${profile.id}">
-                    <div class="profile-card-header"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
-                        <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
-                    </div>
-                    <div class="profile-card-info"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
-                        <div class="profile-info-item">
-                            <span class="profile-info-label">User:</span>
-                            <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
-                        </div>
-                        <div class="profile-info-item">
-                            <span class="profile-info-label">Host:</span>
-                            <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
-                        </div>
-                    </div>
-                    <div class="profile-card-actions">
-                        <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
-                        <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
-                        <button class="btn btn-secondary btn-small duplicate-btn" data-id="${profile.id}">Duplicate</button>
-                        <button class="btn btn-danger btn-small delete-btn" data-id="${profile.id}">Delete</button>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += `
-                </div>
-            </div>
-        `;
+    topLevelGroups.forEach(group => {
+        html += renderGroupNode(group, profilesByGroupId, 0);
     });
+
+    // Render ungrouped profiles
+    if (profilesByGroupId[null] && profilesByGroupId[null].length > 0) {
+        html += renderUngroupedProfiles(profilesByGroupId[null]);
+    }
 
     profilesList.innerHTML = html;
+    attachProfileEventListeners();
 
-    // Attach event listeners to group headers
+    updateExpandCollapseButton();
+    updateProfileCount(filteredProfiles.length);
+
+    requestAnimationFrame(() => {
+        updateScrollbarWidth();
+    });
+}
+
+// Recursively render a group node and its children
+function renderGroupNode(group, profilesByGroupId, depth) {
+    const isCollapsed = collapsedGroups.has(group.id);
+    const chevron = isCollapsed ? '▶' : '▼';
+    const indentStyle = depth > 0 ? `style="padding-left: ${depth * 20}px;"` : '';
+
+    // Count profiles in this group
+    const groupProfiles = profilesByGroupId[group.id] || [];
+
+    let html = `
+        <div class="profile-group" data-group-id="${group.id}">
+            <div class="profile-group-header" data-group-id="${group.id}" ${indentStyle}>
+                <span class="group-chevron">${chevron}</span>
+                <span class="group-name">${escapeHtml(group.name)}</span>
+                <span class="badge group-count-badge">${groupProfiles.length}</span>
+                <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Group actions">⋮</button>
+            </div>
+            <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
+    `;
+
+    // Render profiles in this group
+    groupProfiles.forEach(profile => {
+        html += renderProfileCard(profile, depth);
+    });
+
+    // Render child groups
+    const childGroups = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.name.localeCompare(b.name));
+    childGroups.forEach(childGroup => {
+        html += renderGroupNode(childGroup, profilesByGroupId, depth + 1);
+    });
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+// Render ungrouped profiles
+function renderUngroupedProfiles(ungroupedProfiles) {
+    const isCollapsed = collapsedGroups.has('ungrouped');
+    const chevron = isCollapsed ? '▶' : '▼';
+
+    let html = `
+        <div class="profile-group">
+            <div class="profile-group-header" data-group-id="ungrouped">
+                <span class="group-chevron">${chevron}</span>
+                <span class="group-name">Ungrouped</span>
+                <span class="badge group-count-badge">${ungroupedProfiles.length}</span>
+            </div>
+            <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
+    `;
+
+    ungroupedProfiles.forEach(profile => {
+        html += renderProfileCard(profile, 0);
+    });
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+// Render a single profile card
+function renderProfileCard(profile, depth) {
+    const indentStyle = depth > 0 ? `style="margin-left: ${depth * 20}px;"` : '';
+
+    return `
+        <div class="profile-card" data-id="${profile.id}" ${indentStyle}>
+            <div class="profile-card-header"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
+                <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
+            </div>
+            <div class="profile-card-info"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
+                <div class="profile-info-item">
+                    <span class="profile-info-label">User:</span>
+                    <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
+                </div>
+                <div class="profile-info-item">
+                    <span class="profile-info-label">Host:</span>
+                    <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
+                </div>
+            </div>
+            <div class="profile-card-actions">
+                <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
+                <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
+                <button class="btn btn-secondary btn-small duplicate-btn" data-id="${profile.id}">Duplicate</button>
+                <button class="btn btn-danger btn-small delete-btn" data-id="${profile.id}">Delete</button>
+            </div>
+        </div>
+    `;
+}
+
+// Attach event listeners after rendering
+function attachProfileEventListeners() {
+    // Group headers
     document.querySelectorAll('.profile-group-header').forEach(header => {
+        // Toggle on click (but not on menu button)
         header.addEventListener('click', (e) => {
-            const groupName = header.dataset.group;
-            toggleGroup(groupName);
+            if (e.target.classList.contains('group-menu-btn')) return; // Skip if clicking menu button
+
+            const groupId = header.dataset.groupId;
+            toggleGroup(groupId);
         });
 
         // Clear keyboard selection when hovering with mouse
         header.addEventListener('mouseenter', (e) => {
-            // Only clear keyboard selection if mouse has actually moved
             if (!mouseHasMoved) return;
 
             if (selectedGroupName) {
@@ -2170,17 +2317,22 @@ function renderProfiles(filter = '') {
         });
     });
 
-    // Attach event listeners to profile cards to clear keyboard selection on hover
+    // Group menu buttons
+    document.querySelectorAll('.group-menu-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent group toggle
+            const groupId = btn.dataset.groupId;
+            showGroupMenu(groupId, e);
+        });
+    });
+
+    // Profile cards
     document.querySelectorAll('.profile-card').forEach(card => {
         card.addEventListener('mouseenter', (e) => {
-            // Only clear keyboard selection if mouse has actually moved
-            // (ignore events from elements scrolling under stationary cursor)
             if (!mouseHasMoved) return;
 
-            // Track last hovered profile for keyboard navigation starting point
             lastHoveredProfileId = card.dataset.id;
 
-            // Clear keyboard selection when hovering with mouse
             if (selectedProfileId) {
                 const previouslySelected = document.querySelector('.profile-card.selected');
                 if (previouslySelected) {
@@ -2188,43 +2340,209 @@ function renderProfiles(filter = '') {
                 }
                 selectedProfileId = null;
             }
-            // Re-enable hover effects when mouse is used
             profilesList.classList.remove('keyboard-nav-active');
         });
-    });
-
-    // Update expand/collapse button text
-    updateExpandCollapseButton();
-
-    // Update profile count with visible profiles
-    updateProfileCount(filteredProfiles.length);
-
-    // Update scrollbar width after DOM is rendered
-    requestAnimationFrame(() => {
-        updateScrollbarWidth();
     });
 }
 
 // Toggle group collapse state
-function toggleGroup(groupName) {
-    if (collapsedGroups.has(groupName)) {
-        collapsedGroups.delete(groupName);
+function toggleGroup(groupId) {
+    if (collapsedGroups.has(groupId)) {
+        collapsedGroups.delete(groupId);
     } else {
-        collapsedGroups.add(groupName);
+        collapsedGroups.add(groupId);
     }
     saveCollapsedState();
 
     // Save current selection to restore after render
-    const wasGroupSelected = selectedGroupName === groupName;
+    const wasGroupSelected = selectedGroupName === groupId;
 
     renderProfiles(searchInput.value);
 
     // Restore group selection if it was selected before toggle
     if (wasGroupSelected) {
-        const groupHeader = document.querySelector(`.profile-group-header[data-group="${groupName}"]`);
+        const groupHeader = document.querySelector(`.profile-group-header[data-group-id="${groupId}"]`);
         if (groupHeader) {
             groupHeader.classList.add('selected');
         }
+    }
+}
+
+// Show context menu for group actions
+function showGroupMenu(groupId, event) {
+    // For now, use simple confirm dialogs
+    // TODO: In future, create a proper context menu UI
+
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Create a simple inline menu (temporary solution)
+    const menu = document.createElement('div');
+    menu.className = 'group-context-menu';
+    menu.style.position = 'absolute';
+    menu.style.left = `${event.clientX}px`;
+    menu.style.top = `${event.clientY}px`;
+
+    menu.innerHTML = `
+        <button class="group-menu-item" data-action="rename">Rename Group</button>
+        <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
+        <button class="group-menu-item" data-action="delete">Delete Group</button>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Handle menu item clicks
+    menu.querySelectorAll('.group-menu-item').forEach(item => {
+        item.addEventListener('click', async (e) => {
+            const action = item.dataset.action;
+            document.body.removeChild(menu);
+
+            if (action === 'rename') {
+                await renameGroup(groupId);
+            } else if (action === 'add-subgroup') {
+                openGroupModal(null, groupId); // Create new group with this as parent
+            } else if (action === 'delete') {
+                await deleteGroup(groupId);
+            }
+        });
+    });
+
+    // Close menu when clicking outside
+    setTimeout(() => {
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                }
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        document.addEventListener('click', closeMenu);
+    }, 0);
+}
+
+// Rename a group
+async function renameGroup(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    openGroupModal(group);
+}
+
+// Delete a group
+async function deleteGroup(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Count profiles and subgroups
+    const profileCount = profiles.filter(p => p.group_id === groupId).length;
+    const subgroupCount = groups.filter(g => g.parent_id === groupId).length;
+
+    // If group is empty (no profiles or subgroups), just delete it
+    if (profileCount === 0 && subgroupCount === 0) {
+        const confirmed = await customConfirm(
+            `Are you sure you want to delete the group "${group.name}"?`,
+            {
+                title: 'Delete Group',
+                okText: 'Delete',
+                cancelText: 'Cancel',
+                okClass: 'btn-danger'
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            await invoke('delete_group', {
+                id: groupId,
+                deleteProfiles: true
+            });
+
+            await loadGroups();
+            await loadProfiles();
+            showToast('Group deleted successfully!');
+        } catch (error) {
+            console.error('Failed to delete group:', error);
+            showToast('Failed to delete group: ' + error, TOAST_DURATION_LONG, 'error');
+        }
+        return;
+    }
+
+    // Group has content - offer two deletion modes
+    const parentText = group.parent_id ? 'parent group' : 'top level';
+    const confirmMessage = buildConfirmMessage({
+        lines: [
+            { prefix: 'Group: ', highlight: `"${group.name}"`, highlightClass: 'group-name' },
+            `Contains: ${profileCount} profile(s) and ${subgroupCount} subgroup(s)`,
+            '',
+            'Choose how to handle the contents:'
+        ],
+        warnings: [
+            `Delete All: Permanently deletes all profiles and subgroups`,
+            `Move to Parent: Moves profiles/subgroups to ${parentText}, then deletes group`
+        ],
+        question: ''
+    });
+
+    // Create a custom confirmation dialog with three buttons
+    const result = await new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+
+        modal.innerHTML = `
+            <div class="modal-content modal-content-small">
+                <div class="modal-header">
+                    <h2>Delete Group</h2>
+                </div>
+                <div class="modal-body" id="delete-group-confirm-body"></div>
+                <div class="modal-footer">
+                    <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
+                    <button id="move-to-parent-btn" class="btn btn-primary">Move to Parent</button>
+                    <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        const bodyEl = document.getElementById('delete-group-confirm-body');
+        bodyEl.appendChild(confirmMessage);
+
+        document.getElementById('delete-all-btn').onclick = () => {
+            document.body.removeChild(modal);
+            resolve('delete-all');
+        };
+        document.getElementById('move-to-parent-btn').onclick = () => {
+            document.body.removeChild(modal);
+            resolve('move-to-parent');
+        };
+        document.getElementById('cancel-delete-btn').onclick = () => {
+            document.body.removeChild(modal);
+            resolve('cancel');
+        };
+    });
+
+    if (result === 'cancel') return;
+
+    try {
+        const deleteProfiles = result === 'delete-all';
+
+        await invoke('delete_group', {
+            id: groupId,
+            deleteProfiles: deleteProfiles
+        });
+
+        await loadGroups();
+        await loadProfiles();
+
+        if (deleteProfiles) {
+            showToast('Group and all contents deleted successfully!');
+        } else {
+            showToast(`Group deleted. Contents moved to ${parentText}.`);
+        }
+    } catch (error) {
+        console.error('Failed to delete group:', error);
+        showToast('Failed to delete group: ' + error, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -2587,6 +2905,36 @@ function setupEventListeners() {
             expandCollapseBtn.click();
         }
     });
+
+    // Add Group button
+    addGroupBtn.addEventListener('click', () => {
+        openGroupModal();
+    });
+
+    // Group modal close button
+    groupCloseBtn.addEventListener('click', async () => {
+        await closeGroupModal();
+    });
+
+    // Group form submit
+    groupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Prevent double submission
+        if (isSubmitting) {
+            debug.log('Already submitting, ignoring...');
+            return;
+        }
+
+        await saveGroup();
+    });
+
+    // Group name input character counter
+    if (groupNameInput) {
+        groupNameInput.addEventListener('input', (e) => {
+            updateCharCounter('group-name', e.target.value);
+        });
+    }
 
     // Filter button and popup
     filterBtn.addEventListener('click', (e) => {
@@ -3139,17 +3487,17 @@ function loadFilterState() {
                 throw new Error('Too many filtered groups');
             }
 
-            // Validate each item is a string with proper format
-            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ] #
-            // Max length: 64 characters (matches VALIDATION.group.maxLength)
-            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]#]+$/;
-            if (!filtersArray.every(item =>
+            // Validate UUIDs or "ungrouped"
+            // UUID pattern: 8-4-4-4-12 hex digits
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const validItems = filtersArray.every(item =>
                 typeof item === 'string' &&
                 item.length > 0 &&
-                item.length <= 64 &&
-                groupNameRegex.test(item)
-            )) {
-                throw new Error('Invalid filter group names');
+                (item === 'ungrouped' || uuidRegex.test(item))
+            );
+
+            if (!validItems) {
+                throw new Error('Invalid filter group identifiers');
             }
 
             filteredGroups = new Set(filtersArray);
@@ -3189,17 +3537,17 @@ function loadCollapsedState() {
                 throw new Error('Too many collapsed groups');
             }
 
-            // Validate each item is a string with proper format
-            // Group names: letters, numbers, spaces, and special chars: - _ ( ) . [ ] #
-            // Max length: 64 characters (matches VALIDATION.group.maxLength)
-            const groupNameRegex = /^[a-zA-Z0-9 \-_().\[\]#]+$/;
-            if (!collapsedArray.every(item =>
+            // Validate UUIDs or "ungrouped"
+            // UUID pattern: 8-4-4-4-12 hex digits
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const validItems = collapsedArray.every(item =>
                 typeof item === 'string' &&
                 item.length > 0 &&
-                item.length <= 64 &&
-                groupNameRegex.test(item)
-            )) {
-                throw new Error('Invalid collapsed group names');
+                (item === 'ungrouped' || uuidRegex.test(item))
+            );
+
+            if (!validItems) {
+                throw new Error('Invalid collapsed group identifiers');
             }
 
             collapsedGroups = new Set(collapsedArray);
@@ -3230,35 +3578,51 @@ function updateFilterBadge() {
 }
 
 function getAllGroups() {
-    const groups = new Set();
+    // Return all group IDs that have profiles
+    const groupsWithProfiles = new Set();
     profiles.forEach(profile => {
-        groups.add(profile.group || 'Ungrouped');
+        groupsWithProfiles.add(profile.group_id || 'ungrouped');
     });
-    return Array.from(groups).sort();
+    return Array.from(groupsWithProfiles);
 }
 
 function buildFilterGroupsList() {
-    const allGroups = getAllGroups();
+    // Get all groups (from backend groups array)
+    const allGroups = [...groups];
+
+    // Add ungrouped if there are ungrouped profiles
+    const hasUngrouped = profiles.some(p => !p.group_id);
+    if (hasUngrouped) {
+        allGroups.push({ id: 'ungrouped', name: 'Ungrouped', path: 'Ungrouped' });
+    }
 
     if (allGroups.length === 0) {
         filterGroupsList.innerHTML = '<div class="filter-empty-state">No groups available</div>';
         return;
     }
 
+    // Sort by path (hierarchical)
+    allGroups.sort((a, b) => (a.path || a.name).localeCompare(b.path || b.name));
+
     let html = '';
-    allGroups.forEach(groupName => {
-        const isChecked = !filteredGroups.has(groupName);
-        const groupProfiles = profiles.filter(p => (p.group || 'Ungrouped') === groupName);
+    allGroups.forEach(group => {
+        const isChecked = !filteredGroups.has(group.id);
+        const groupProfiles = profiles.filter(p => {
+            if (group.id === 'ungrouped') {
+                return !p.group_id;
+            }
+            return p.group_id === group.id;
+        });
 
         html += `
             <div class="filter-group-item">
                 <label>
                     <input type="checkbox"
                            class="filter-group-checkbox"
-                           data-group="${escapeHtml(groupName)}"
+                           data-group-id="${group.id}"
                            tabindex="0"
                            ${isChecked ? 'checked' : ''}>
-                    <span class="filter-group-name">${escapeHtml(groupName)}</span>
+                    <span class="filter-group-name">${escapeHtml(group.path || group.name)}</span>
                 </label>
                 <span class="filter-group-count">${groupProfiles.length}</span>
             </div>
@@ -3276,13 +3640,13 @@ function buildFilterGroupsList() {
     // Add event listeners to checkboxes
     document.querySelectorAll('.filter-group-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
-            const groupName = e.target.dataset.group;
+            const groupId = e.target.dataset.groupId;
             if (e.target.checked) {
                 // Show this group
-                filteredGroups.delete(groupName);
+                filteredGroups.delete(groupId);
             } else {
                 // Hide this group
-                filteredGroups.add(groupName);
+                filteredGroups.add(groupId);
             }
             updateFilters();
         });
@@ -4355,6 +4719,9 @@ async function openModal(profile = null) {
     // Clear any validation errors from previous modal sessions
     clearAllValidationErrors();
 
+    // Populate group dropdown
+    populateProfileGroupSelect();
+
     if (profile) {
         modalTitle.textContent = 'Edit Profile';
         document.getElementById('profile-name').value = profile.name;
@@ -4364,7 +4731,7 @@ async function openModal(profile = null) {
         document.getElementById('profile-username').value = profile.username;
         document.getElementById('profile-auth-method').value = profile.auth_method || 'none';
         document.getElementById('profile-key-path').value = profile.key_path || '';
-        document.getElementById('profile-group').value = profile.group || '';
+        document.getElementById('profile-group').value = profile.group_id || '';
 
         // Retrieve password from keychain if auth method is password
         if (profile.auth_method === 'password') {
@@ -4562,7 +4929,7 @@ async function saveProfile() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value || null,
         password: document.getElementById('profile-password').value || null,
-        group: document.getElementById('profile-group').value || null
+        group_id: document.getElementById('profile-group').value || null
     };
 
     try {
@@ -4611,6 +4978,9 @@ function duplicateProfile(id) {
     editingProfileId = null; // Important: this makes it create a new profile
     deleteProfileBtn.classList.add('hidden');
 
+    // Populate group dropdown
+    populateProfileGroupSelect();
+
     // Fill form with duplicated profile data
     document.getElementById('profile-name').value = duplicatedProfile.name;
     document.getElementById('profile-description').value = duplicatedProfile.description || '';
@@ -4620,7 +4990,7 @@ function duplicateProfile(id) {
     document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'none';
     document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
     document.getElementById('profile-password').value = ''; // Don't copy password for security
-    document.getElementById('profile-group').value = duplicatedProfile.group || '';
+    document.getElementById('profile-group').value = duplicatedProfile.group_id || '';
 
     updateAuthMethodVisibility();
 
@@ -4682,6 +5052,137 @@ async function deleteProfile(id) {
         console.error('Failed to delete profile:', error);
         showToast('Failed to delete profile: ' + error, TOAST_DURATION_LONG, 'error');
         return false;
+    }
+}
+
+// ========== Group Management Functions ==========
+
+// Open group modal for creating or editing a group
+async function openGroupModal(group = null, preselectedParentId = null) {
+    debug.log('openGroupModal called with group:', group, 'preselectedParentId:', preselectedParentId);
+    editingGroupId = group ? group.id : null;
+
+    if (group) {
+        groupModalTitle.textContent = 'Edit Group';
+        groupNameInput.value = group.name;
+        groupParentSelect.value = group.parent_id || '';
+    } else {
+        groupModalTitle.textContent = preselectedParentId ? 'New Subgroup' : 'New Group';
+        groupForm.reset();
+        groupParentSelect.value = preselectedParentId || '';
+    }
+
+    // Populate parent group dropdown
+    populateParentGroupSelect(editingGroupId);
+
+    groupModal.classList.remove('hidden');
+
+    // Initialize character counter
+    updateCharCounter('group-name', groupNameInput.value);
+
+    // Focus first field
+    setTimeout(() => {
+        groupNameInput.focus();
+    }, 0);
+}
+
+// Populate parent group dropdown with hierarchical options
+function populateParentGroupSelect(excludeGroupId = null) {
+    // Clear existing options except the first one
+    groupParentSelect.innerHTML = '<option value="">-- Top Level --</option>';
+
+    // Add groups as options (exclude current group if editing to prevent circular reference)
+    groups.forEach(group => {
+        if (group.id === excludeGroupId) return; // Skip current group
+
+        const option = document.createElement('option');
+        option.value = group.id;
+        option.textContent = group.path; // Show full path
+        groupParentSelect.appendChild(option);
+    });
+}
+
+// Populate profile group dropdown with hierarchical options
+function populateProfileGroupSelect() {
+    const profileGroupSelect = document.getElementById('profile-group');
+    if (!profileGroupSelect) return;
+
+    // Clear existing options except the first one
+    profileGroupSelect.innerHTML = '<option value="">-- Ungrouped --</option>';
+
+    // Sort groups by path (hierarchical)
+    const sortedGroups = [...groups].sort((a, b) => a.path.localeCompare(b.path));
+
+    // Add groups as options
+    sortedGroups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.id;
+        option.textContent = group.path; // Show full path
+        profileGroupSelect.appendChild(option);
+    });
+}
+
+// Close group modal
+async function closeGroupModal() {
+    groupModal.classList.add('hidden');
+    editingGroupId = null;
+    groupForm.reset();
+}
+
+// Save group (create or update)
+async function saveGroup() {
+    const groupName = groupNameInput.value.trim();
+
+    // Validate group name
+    if (!groupName) {
+        showToast('Group name is required', TOAST_DURATION_SHORT, 'error');
+        return;
+    }
+
+    // Validate against pattern
+    if (!VALIDATION.group.pattern.test(groupName)) {
+        showToast(VALIDATION.group.message, TOAST_DURATION_LONG, 'error');
+        return;
+    }
+
+    // Validate length
+    if (groupName.length > VALIDATION.group.maxLength) {
+        showToast(`Group name must be ${VALIDATION.group.maxLength} characters or less`, TOAST_DURATION_LONG, 'error');
+        return;
+    }
+
+    const parentId = groupParentSelect.value || null;
+
+    isSubmitting = true;
+    groupSaveBtn.disabled = true;
+
+    try {
+        if (editingGroupId) {
+            // Update existing group
+            await invoke('update_group', {
+                id: editingGroupId,
+                name: groupName,
+                icon: null // Icons will be added in Phase 4
+            });
+            showToast('Group updated successfully!');
+        } else {
+            // Create new group
+            await invoke('create_group', {
+                name: groupName,
+                parentId: parentId
+            });
+            showToast('Group created successfully!');
+        }
+
+        await loadGroups();
+        await loadProfiles(); // Reload profiles to update group references
+        closeGroupModal();
+    } catch (error) {
+        console.error('Failed to save group:', error);
+        showToast('Failed to save group: ' + error, TOAST_DURATION_LONG, 'error');
+    } finally {
+        isSubmitting = false;
+        groupSaveBtn.disabled = false;
     }
 }
 

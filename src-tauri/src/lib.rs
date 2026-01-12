@@ -144,7 +144,8 @@ pub struct Profile {
     pub username: String,
     pub auth_method: String, // "key", "password", or "none"
     pub key_path: Option<String>,
-    pub group: Option<String>,
+    pub group: Option<String>, // DEPRECATED: Keep for backward compatibility, use group_id
+    pub group_id: Option<String>, // v0.7.0+: References groups table
 }
 
 // Group structure for hierarchical organization
@@ -301,7 +302,7 @@ impl SessionRegistry {
                     let before_count = threads.len();
 
                     // Remove threads that have finished
-                    threads.retain(|(_session_id, handle, _abandoned_at)| {
+                    threads.retain(|(session_id, handle, abandoned_at)| {
                         if handle.is_finished() {
                             #[cfg(debug_assertions)]
                             println!(
@@ -980,8 +981,8 @@ impl Database {
     fn get_all_profiles(&self) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name
-             FROM profiles ORDER BY group_name, name"
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name, group_id
+             FROM profiles ORDER BY name"
         )?;
 
         let profiles = stmt
@@ -996,6 +997,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group: row.get(8)?,
+                    group_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1006,8 +1008,8 @@ impl Database {
     fn create_profile(&self, profile: &Profile) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
-            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_name)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_name, group_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             (
                 &profile.id,
                 &profile.name,
@@ -1018,6 +1020,7 @@ impl Database {
                 &profile.auth_method,
                 &profile.key_path,
                 &profile.group,
+                &profile.group_id,
             ),
         )?;
         Ok(())
@@ -1028,7 +1031,7 @@ impl Database {
         conn.execute(
             "UPDATE profiles
              SET name = ?2, description = ?3, host = ?4, port = ?5,
-                 username = ?6, auth_method = ?7, key_path = ?8, group_name = ?9
+                 username = ?6, auth_method = ?7, key_path = ?8, group_name = ?9, group_id = ?10
              WHERE id = ?1",
             (
                 &profile.id,
@@ -1040,6 +1043,7 @@ impl Database {
                 &profile.auth_method,
                 &profile.key_path,
                 &profile.group,
+                &profile.group_id,
             ),
         )?;
         Ok(())
@@ -1151,7 +1155,7 @@ impl Database {
     fn get_profile_by_id(&self, id: &str) -> SqlResult<Option<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name, group_id
              FROM profiles WHERE id = ?1"
         )?;
 
@@ -1166,6 +1170,7 @@ impl Database {
                 auth_method: row.get(6)?,
                 key_path: row.get(7)?,
                 group: row.get(8)?,
+                group_id: row.get(9)?,
             })
         })?;
 
@@ -1399,7 +1404,8 @@ struct CreateProfileInput {
     auth_method: String,
     key_path: Option<String>,
     password: Option<String>,
-    group: Option<String>,
+    group: Option<String>, // DEPRECATED: Keep for backward compatibility
+    group_id: Option<String>, // v0.7.0+: Group ID reference
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -1459,6 +1465,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
         group: profile.group,
+        group_id: profile.group_id,
     };
 
     db.create_profile(&new_profile)
@@ -1488,7 +1495,8 @@ struct UpdateProfileInput {
     auth_method: String,
     key_path: Option<String>,
     password: Option<String>,
-    group: Option<String>,
+    group: Option<String>, // DEPRECATED: Keep for backward compatibility
+    group_id: Option<String>, // v0.7.0+: Group ID reference
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -1547,6 +1555,7 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
         group: profile.group,
+        group_id: profile.group_id,
     };
 
     db.update_profile(&updated_profile)
