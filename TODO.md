@@ -15,7 +15,7 @@ v0.6.3 ✅ → v0.6.4 ✅ → v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1
 ```
 
 ### v0.7.0 - Hierarchical Groups & Enhanced Organization
-**Status:** Planned
+**Status:** In Development
 **Focus:** Enhanced group management, hierarchical organization, export/import improvements, favorites & tags
 
 See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed plan.
@@ -30,6 +30,16 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - Tag system with color-coding and filtering
 - Profile name uniqueness scoped to parent group
 - Settings Export/Import renamed to Backup/Restore
+
+**Phase 1 Progress (Database Migration & Group CRUD):** ✅ Completed
+- ✅ Created migration script (version 4) with new tables
+- ✅ Implemented groups, profile_metadata, tags, profile_tags, and group_tags tables
+- ✅ Wrote migration logic to extract groups from profiles
+- ✅ Added group_id column to profiles table and populated from group_name
+- ✅ Created Group, Tag, and ProfileMetadata structs
+- ✅ Implemented get_groups, create_group, update_group, delete_group commands
+- ✅ Registered commands in invoke_handler
+- ✅ Build successful - ready for Phase 2
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned

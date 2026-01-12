@@ -147,6 +147,38 @@ pub struct Profile {
     pub group: Option<String>,
 }
 
+// Group structure for hierarchical organization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Group {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub path: String,
+    pub icon: Option<String>,
+    pub is_favorite: bool,
+    pub display_order: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// Profile metadata structure for extended properties
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileMetadata {
+    pub profile_id: String,
+    pub icon: Option<String>,
+    pub is_favorite: bool,
+    pub display_order: i32,
+}
+
+// Tag structure for categorization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub created_at: String,
+}
+
 // Recent connection structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentConnection {
@@ -793,6 +825,147 @@ impl Database {
             )?;
         }
 
+        // Migration 4: Hierarchical groups and enhanced organization (v0.7.0)
+        if current_version < 4 {
+            // Create groups table with hierarchical support
+            conn.execute(
+                "CREATE TABLE groups (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    parent_id TEXT,
+                    path TEXT NOT NULL UNIQUE,
+                    icon TEXT,
+                    is_favorite INTEGER DEFAULT 0,
+                    display_order INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (parent_id) REFERENCES groups(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+
+            // Create indexes for groups
+            conn.execute(
+                "CREATE UNIQUE INDEX idx_groups_unique_name_parent
+                 ON groups(name, COALESCE(parent_id, ''))",
+                [],
+            )?;
+
+            conn.execute(
+                "CREATE INDEX idx_groups_parent ON groups(parent_id)",
+                [],
+            )?;
+
+            conn.execute(
+                "CREATE INDEX idx_groups_path ON groups(path)",
+                [],
+            )?;
+
+            // Create profile_metadata table
+            conn.execute(
+                "CREATE TABLE profile_metadata (
+                    profile_id TEXT PRIMARY KEY,
+                    icon TEXT,
+                    is_favorite INTEGER DEFAULT 0,
+                    display_order INTEGER DEFAULT 0,
+                    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+
+            // Create tags table
+            conn.execute(
+                "CREATE TABLE tags (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    color TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+
+            // Create profile_tags junction table
+            conn.execute(
+                "CREATE TABLE profile_tags (
+                    profile_id TEXT NOT NULL,
+                    tag_id TEXT NOT NULL,
+                    PRIMARY KEY (profile_id, tag_id),
+                    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+
+            // Create group_tags junction table
+            conn.execute(
+                "CREATE TABLE group_tags (
+                    group_id TEXT NOT NULL,
+                    tag_id TEXT NOT NULL,
+                    PRIMARY KEY (group_id, tag_id),
+                    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+
+            // Extract unique group names from profiles (handle NULL as "Ungrouped")
+            let mut stmt = conn.prepare(
+                "SELECT DISTINCT COALESCE(group_name, 'Ungrouped') FROM profiles"
+            )?;
+            let group_names: Vec<String> = stmt.query_map([], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
+            drop(stmt);
+
+            // Create group records for each unique group name
+            let now = chrono::Utc::now().to_rfc3339();
+            for group_name in group_names {
+                let group_id = Uuid::new_v4().to_string();
+                conn.execute(
+                    "INSERT INTO groups (id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at)
+                     VALUES (?1, ?2, NULL, ?3, NULL, 0, 0, ?4, ?5)",
+                    (&group_id, &group_name, &group_name, &now, &now),
+                )?;
+            }
+
+            // Add group_id column to profiles table
+            conn.execute(
+                "ALTER TABLE profiles ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE RESTRICT",
+                [],
+            )?;
+
+            // Create index for profiles.group_id
+            conn.execute(
+                "CREATE INDEX idx_profiles_group ON profiles(group_id)",
+                [],
+            )?;
+
+            // Populate profiles.group_id by matching group_name to group path
+            conn.execute(
+                "UPDATE profiles
+                 SET group_id = (
+                     SELECT id FROM groups
+                     WHERE groups.path = COALESCE(profiles.group_name, 'Ungrouped')
+                 )",
+                [],
+            )?;
+
+            // Verify all profiles have valid group_id
+            let count: i32 = conn.query_row(
+                "SELECT COUNT(*) FROM profiles WHERE group_id IS NULL",
+                [],
+                |row| row.get(0)
+            )?;
+
+            if count > 0 {
+                return Err(rusqlite::Error::ExecuteReturnedResults);
+            }
+
+            // Record migration
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+                (4, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
         Ok(())
     }
 
@@ -867,6 +1040,103 @@ impl Database {
     fn delete_profile(&self, id: &str) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute("DELETE FROM profiles WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    // Group CRUD operations
+    fn get_all_groups(&self) -> SqlResult<Vec<Group>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at
+             FROM groups ORDER BY path"
+        )?;
+
+        let groups = stmt
+            .query_map([], |row| {
+                Ok(Group {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    parent_id: row.get(2)?,
+                    path: row.get(3)?,
+                    icon: row.get(4)?,
+                    is_favorite: row.get::<_, i32>(5)? != 0,
+                    display_order: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(groups)
+    }
+
+    fn get_group_by_id(&self, id: &str) -> SqlResult<Option<Group>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at
+             FROM groups WHERE id = ?1"
+        )?;
+
+        let mut groups = stmt.query_map([id], |row| {
+            Ok(Group {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                path: row.get(3)?,
+                icon: row.get(4)?,
+                is_favorite: row.get::<_, i32>(5)? != 0,
+                display_order: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+
+        groups.next().transpose()
+    }
+
+    fn create_group(&self, group: &Group) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO groups (id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            (
+                &group.id,
+                &group.name,
+                &group.parent_id,
+                &group.path,
+                &group.icon,
+                if group.is_favorite { 1 } else { 0 },
+                &group.display_order,
+                &group.created_at,
+                &group.updated_at,
+            ),
+        )?;
+        Ok(())
+    }
+
+    fn update_group(&self, group: &Group) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE groups
+             SET name = ?2, parent_id = ?3, path = ?4, icon = ?5, is_favorite = ?6, display_order = ?7, updated_at = ?8
+             WHERE id = ?1",
+            (
+                &group.id,
+                &group.name,
+                &group.parent_id,
+                &group.path,
+                &group.icon,
+                if group.is_favorite { 1 } else { 0 },
+                &group.display_order,
+                &group.updated_at,
+            ),
+        )?;
+        Ok(())
+    }
+
+    fn delete_group(&self, id: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute("DELETE FROM groups WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -1296,6 +1566,206 @@ fn delete_profile(db: State<Database>, id: String) -> Result<(), String> {
 
     // Also delete password from keychain if exists
     let _ = delete_password(&id);
+
+    Ok(())
+}
+
+// Group management commands
+#[tauri::command]
+fn get_groups(db: State<Database>) -> Result<Vec<Group>, String> {
+    db.get_all_groups()
+        .map_err(|e| format!("Failed to get groups: {}", e))
+}
+
+#[derive(Deserialize)]
+struct CreateGroupInput {
+    name: String,
+    parent_id: Option<String>,
+    icon: Option<String>,
+}
+
+#[tauri::command]
+fn create_group(db: State<Database>, input: CreateGroupInput) -> Result<String, String> {
+    // Validate group name
+    validate_group(&input.name)?;
+
+    // Calculate path based on parent
+    let path = if let Some(ref parent_id) = input.parent_id {
+        // Get parent group to construct path
+        let parent = db.get_group_by_id(parent_id)
+            .map_err(|e| format!("Failed to get parent group: {}", e))?
+            .ok_or_else(|| "Parent group not found".to_string())?;
+
+        // Calculate depth to enforce 3-level limit
+        let parent_depth = parent.path.matches('/').count();
+        if parent_depth >= 2 {
+            return Err("Maximum group depth (3 levels) reached".to_string());
+        }
+
+        format!("{}/{}", parent.path, input.name)
+    } else {
+        input.name.clone()
+    };
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let id = Uuid::new_v4().to_string();
+
+    let group = Group {
+        id: id.clone(),
+        name: input.name,
+        parent_id: input.parent_id,
+        path,
+        icon: input.icon,
+        is_favorite: false,
+        display_order: 0,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    db.create_group(&group)
+        .map_err(|e| format!("Failed to create group: {}", e))?;
+
+    Ok(id)
+}
+
+#[derive(Deserialize)]
+struct UpdateGroupInput {
+    id: String,
+    name: String,
+    icon: Option<String>,
+}
+
+#[tauri::command]
+fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), String> {
+    // Validate group name
+    validate_group(&input.name)?;
+
+    // Get existing group
+    let mut group = db.get_group_by_id(&input.id)
+        .map_err(|e| format!("Failed to get group: {}", e))?
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    // If name changed, update path and all descendant paths
+    if group.name != input.name {
+        let old_path = group.path.clone();
+
+        // Calculate new path
+        group.path = if let Some(ref parent_id) = group.parent_id {
+            let parent = db.get_group_by_id(parent_id)
+                .map_err(|e| format!("Failed to get parent group: {}", e))?
+                .ok_or_else(|| "Parent group not found".to_string())?;
+            format!("{}/{}", parent.path, input.name)
+        } else {
+            input.name.clone()
+        };
+
+        // Update name
+        group.name = input.name;
+        group.icon = input.icon;
+        group.updated_at = chrono::Utc::now().to_rfc3339();
+
+        // Update this group
+        db.update_group(&group)
+            .map_err(|e| format!("Failed to update group: {}", e))?;
+
+        // Update all descendant paths
+        let all_groups = db.get_all_groups()
+            .map_err(|e| format!("Failed to get groups: {}", e))?;
+
+        for mut descendant in all_groups {
+            if descendant.path.starts_with(&format!("{}/", old_path)) {
+                descendant.path = descendant.path.replace(&old_path, &group.path);
+                descendant.updated_at = chrono::Utc::now().to_rfc3339();
+                db.update_group(&descendant)
+                    .map_err(|e| format!("Failed to update descendant group: {}", e))?;
+            }
+        }
+    } else {
+        // Just update icon
+        group.icon = input.icon;
+        group.updated_at = chrono::Utc::now().to_rfc3339();
+        db.update_group(&group)
+            .map_err(|e| format!("Failed to update group: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct DeleteGroupInput {
+    id: String,
+    delete_profiles: bool,
+}
+
+#[tauri::command]
+fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), String> {
+    // Get the group to be deleted
+    let group = db.get_group_by_id(&input.id)
+        .map_err(|e| format!("Failed to get group: {}", e))?
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    if input.delete_profiles {
+        // Cascade delete: Delete group (CASCADE will handle sub-groups and profiles via FK)
+        db.delete_group(&input.id)
+            .map_err(|e| format!("Failed to delete group: {}", e))?;
+    } else {
+        // Move profiles to parent: Get all profiles in this group and descendants
+        let conn = db.conn.lock().expect("Database lock poisoned");
+
+        // Get all descendant groups
+        let descendant_ids: Vec<String> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM groups WHERE path LIKE ?1 OR path = ?2"
+            ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+            let rows = stmt.query_map([format!("{}/%", group.path), group.path.clone()], |row| row.get(0))
+                .map_err(|e| format!("Failed to query descendants: {}", e))?;
+
+            let result: Result<Vec<_>, _> = rows.collect();
+            result.map_err(|e| format!("Failed to collect descendants: {}", e))?
+        };
+
+        // Move all profiles from these groups to parent (or "Ungrouped" if top-level)
+        let target_group_id = if let Some(parent_id) = &group.parent_id {
+            parent_id.clone()
+        } else {
+            // Find or create "Ungrouped" group
+            let ungrouped = conn.query_row(
+                "SELECT id FROM groups WHERE name = 'Ungrouped' AND parent_id IS NULL",
+                [],
+                |row| row.get::<_, String>(0)
+            );
+
+            match ungrouped {
+                Ok(id) => id,
+                Err(_) => {
+                    // Create Ungrouped group
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let id = Uuid::new_v4().to_string();
+                    conn.execute(
+                        "INSERT INTO groups (id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at)
+                         VALUES (?1, 'Ungrouped', NULL, 'Ungrouped', NULL, 0, 0, ?2, ?3)",
+                        (&id, &now, &now),
+                    ).map_err(|e| format!("Failed to create Ungrouped group: {}", e))?;
+                    id
+                }
+            }
+        };
+
+        // Update all profiles in descendant groups
+        for group_id in descendant_ids {
+            conn.execute(
+                "UPDATE profiles SET group_id = ?1 WHERE group_id = ?2",
+                (&target_group_id, &group_id),
+            ).map_err(|e| format!("Failed to move profiles: {}", e))?;
+        }
+
+        drop(conn);
+
+        // Now delete the group (CASCADE will handle sub-groups)
+        db.delete_group(&input.id)
+            .map_err(|e| format!("Failed to delete group: {}", e))?;
+    }
 
     Ok(())
 }
@@ -2906,6 +3376,10 @@ pub fn run() {
             update_profile,
             delete_profile,
             get_profile_password,
+            get_groups,
+            create_group,
+            update_group,
+            delete_group,
             export_profiles,
             import_profiles,
             save_profiles_to_file,
