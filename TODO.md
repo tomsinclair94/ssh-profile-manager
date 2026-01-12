@@ -68,6 +68,12 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ localStorage migration: group names → group IDs
 - ✅ CSS styling: group menu button, context menu, hierarchical indentation
 
+**Phase 3 Cleanup Tasks:**
+- [ ] Fix Rust compiler warnings (non-critical):
+  - Unused variable `session_id` at `src/lib.rs:305:38` (prefix with underscore)
+  - Unused variable `abandoned_at` at `src/lib.rs:305:58` (prefix with underscore)
+  - Note: These are in thread cleanup code and don't affect functionality
+
 **Phase 3 Test Plan:** 🧪 Ready for Testing
 
 Use this checklist to thoroughly test Phase 3 functionality. Check off each item as you test it.
