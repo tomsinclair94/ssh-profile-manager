@@ -161,6 +161,14 @@ pub struct Group {
     pub updated_at: String,
 }
 
+// Hierarchical group tree node
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GroupTreeNode {
+    #[serde(flatten)]
+    pub group: Group,
+    pub children: Vec<GroupTreeNode>,
+}
+
 // Profile metadata structure for extended properties
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileMetadata {
@@ -293,7 +301,7 @@ impl SessionRegistry {
                     let before_count = threads.len();
 
                     // Remove threads that have finished
-                    threads.retain(|(session_id, handle, abandoned_at)| {
+                    threads.retain(|(_session_id, handle, _abandoned_at)| {
                         if handle.is_finished() {
                             #[cfg(debug_assertions)]
                             println!(
@@ -1768,6 +1776,160 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
     }
 
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct MoveGroupInput {
+    id: String,
+    new_parent_id: Option<String>,
+}
+
+#[tauri::command]
+fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> {
+    // Get the group to be moved
+    let mut group = db.get_group_by_id(&input.id)
+        .map_err(|e| format!("Failed to get group: {}", e))?
+        .ok_or_else(|| "Group not found".to_string())?;
+
+    // Prevent moving a group into itself
+    if Some(&input.id) == input.new_parent_id.as_ref() {
+        return Err("Cannot move a group into itself".to_string());
+    }
+
+    // If moving to a parent, validate:
+    // 1. Parent exists
+    // 2. Not moving into own descendant (circular reference)
+    // 3. Depth limit not exceeded
+    if let Some(ref new_parent_id) = input.new_parent_id {
+        // Get new parent
+        let new_parent = db.get_group_by_id(new_parent_id)
+            .map_err(|e| format!("Failed to get parent group: {}", e))?
+            .ok_or_else(|| "Parent group not found".to_string())?;
+
+        // Check if new parent is a descendant of this group (circular reference)
+        if new_parent.path.starts_with(&format!("{}/", group.path)) || new_parent.path == group.path {
+            return Err("Cannot move a group into its own descendant".to_string());
+        }
+
+        // Calculate new depth
+        let new_parent_depth = new_parent.path.matches('/').count();
+        let group_depth = group.path.matches('/').count();
+        let group_subtree_depth = {
+            // Get all descendants to find max depth
+            let all_groups = db.get_all_groups()
+                .map_err(|e| format!("Failed to get groups: {}", e))?;
+            let mut max_relative_depth = 0;
+            for g in all_groups {
+                if g.path.starts_with(&format!("{}/", group.path)) {
+                    let relative_depth = g.path.matches('/').count() - group_depth;
+                    if relative_depth > max_relative_depth {
+                        max_relative_depth = relative_depth;
+                    }
+                }
+            }
+            max_relative_depth
+        };
+
+        // New depth would be: new_parent_depth + 1 (for this group) + group_subtree_depth
+        if new_parent_depth + 1 + group_subtree_depth > 2 {
+            return Err("Move would exceed maximum group depth (3 levels)".to_string());
+        }
+    }
+
+    let old_path = group.path.clone();
+
+    // Calculate new path
+    let new_path = if let Some(ref new_parent_id) = input.new_parent_id {
+        let new_parent = db.get_group_by_id(new_parent_id)
+            .map_err(|e| format!("Failed to get parent group: {}", e))?
+            .ok_or_else(|| "Parent group not found".to_string())?;
+        format!("{}/{}", new_parent.path, group.name)
+    } else {
+        // Moving to top level
+        group.name.clone()
+    };
+
+    // Update group
+    group.parent_id = input.new_parent_id;
+    group.path = new_path.clone();
+    group.updated_at = chrono::Utc::now().to_rfc3339();
+
+    db.update_group(&group)
+        .map_err(|e| format!("Failed to update group: {}", e))?;
+
+    // Update all descendant paths
+    let all_groups = db.get_all_groups()
+        .map_err(|e| format!("Failed to get groups: {}", e))?;
+
+    for mut descendant in all_groups {
+        if descendant.path.starts_with(&format!("{}/", old_path)) {
+            descendant.path = descendant.path.replace(&old_path, &new_path);
+            descendant.updated_at = chrono::Utc::now().to_rfc3339();
+            db.update_group(&descendant)
+                .map_err(|e| format!("Failed to update descendant group: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_group_tree(db: State<Database>) -> Result<Vec<GroupTreeNode>, String> {
+    // Get all groups
+    let all_groups = db.get_all_groups()
+        .map_err(|e| format!("Failed to get groups: {}", e))?;
+
+    // Build a map of group_id -> group for quick lookup
+    let group_map: HashMap<String, Group> = all_groups
+        .into_iter()
+        .map(|g| (g.id.clone(), g))
+        .collect();
+
+    // Build tree structure
+    fn build_tree_recursive(
+        parent_id: Option<&String>,
+        group_map: &HashMap<String, Group>,
+        used_ids: &mut std::collections::HashSet<String>,
+    ) -> Vec<GroupTreeNode> {
+        let mut children = Vec::new();
+
+        for (id, group) in group_map.iter() {
+            // Skip if already used
+            if used_ids.contains(id) {
+                continue;
+            }
+
+            // Check if this group belongs under the current parent
+            let matches = match (&group.parent_id, parent_id) {
+                (None, None) => true,
+                (Some(gp), Some(pp)) => gp == pp,
+                _ => false,
+            };
+
+            if matches {
+                used_ids.insert(id.clone());
+                let node_children = build_tree_recursive(Some(id), group_map, used_ids);
+                children.push(GroupTreeNode {
+                    group: group.clone(),
+                    children: node_children,
+                });
+            }
+        }
+
+        // Sort by display_order, then by name
+        children.sort_by(|a, b| {
+            a.group.display_order
+                .cmp(&b.group.display_order)
+                .then_with(|| a.group.name.cmp(&b.group.name))
+        });
+
+        children
+    }
+
+    let mut used_ids = std::collections::HashSet::new();
+    let tree = build_tree_recursive(None, &group_map, &mut used_ids);
+
+    Ok(tree)
 }
 
 #[tauri::command]
@@ -3380,6 +3542,8 @@ pub fn run() {
             create_group,
             update_group,
             delete_group,
+            move_group,
+            get_group_tree,
             export_profiles,
             import_profiles,
             save_profiles_to_file,

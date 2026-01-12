@@ -41,6 +41,17 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Registered commands in invoke_handler
 - ✅ Build successful - ready for Phase 2
 
+**Phase 2 Progress (Hierarchical Groups & Backend):** ✅ Completed
+- ✅ Sub-group creation with parent_id support (already in Phase 1)
+- ✅ Path calculation on group create/rename (already in Phase 1)
+- ✅ Recursive path updates on rename (already in Phase 1)
+- ✅ Group deletion modes - cascade vs. move profiles (already in Phase 1)
+- ✅ Depth limit validation - max 3 levels (already in Phase 1)
+- ✅ Implemented move_group command with path recalculation
+- ✅ Implemented get_group_tree command (hierarchical structure)
+- ✅ Registered new commands in invoke_handler
+- ✅ Build successful - ready for Phase 3
+
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned
 **Focus:** App-level tabs, pop-out windows
