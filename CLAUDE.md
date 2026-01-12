@@ -39,7 +39,11 @@ bun run build    # Production build
 4. `dist/index.html` (line ~22 + ~393: `vX.X.X` and `X.X.X`)
 5. `README.md` (line ~14 + ~16: badge versions)
 
-**Step 2: Update all dependencies to latest versions:**
+**Step 2: Enable Developer Tools:**
+Enable devtools for debugging during development:
+1. `src-tauri/tauri.conf.json` (line ~19: `"devtools": true`)
+
+**Step 3: Update all dependencies to latest versions:**
 ```bash
 # Update JavaScript dependencies
 bun update
@@ -51,7 +55,7 @@ cd src-tauri && cargo update && cd ..
 bun run build
 ```
 
-**Step 3: Commit changes:**
+**Step 4: Commit changes:**
 ```bash
 git add -A
 git commit -m "Bump version to X.X.X for dev branch"
@@ -59,17 +63,20 @@ git commit -m "Bump version to X.X.X for dev branch"
 
 **Why update dependencies?** Keeping dependencies current at the start of each release prevents Dependabot from creating many PRs during development. This gives you control over when updates happen and ensures all updates are tested together with your new features.
 
+**Developer Tools:** With devtools enabled, you can right-click in the application to access the console for debugging during development. This helps with frontend debugging and Tauri command inspection.
+
 ## Release Process
 
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes
-3. Code review (`code-reviewer` agent)
-4. Refactor (`refactoring-specialist` agent) - optional, skip if not needed
-5. Security review (`security-engineer` agent)
-6. Fix CRITICAL/HIGH/MEDIUM issues
-7. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
-8. Commit & push
+3. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
+4. Code review (`code-reviewer` agent)
+5. Refactor (`refactoring-specialist` agent) - optional, skip if not needed
+6. Security review (`security-engineer` agent)
+7. Fix CRITICAL/HIGH/MEDIUM issues
+8. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
+9. Commit & push
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled

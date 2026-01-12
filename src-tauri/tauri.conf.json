@@ -16,7 +16,7 @@
         "minHeight": 420,
         "resizable": true,
         "fullscreen": false,
-        "devtools": false
+        "devtools": true
       }
     ],
     "security": {
