@@ -235,6 +235,12 @@ function validateField(fieldId, value) {
             return validateUsernameField(trimmedValue);
         case 'profile-group':
             return validateGroup(trimmedValue);
+        case 'group-name':
+            // Group name is required (unlike profile-group which is optional)
+            if (trimmedValue.length === 0) {
+                return { valid: false, error: 'Group name is required' };
+            }
+            return validateGroup(trimmedValue);
         default:
             return { valid: true };
     }
@@ -1676,6 +1682,10 @@ async function init() {
     // Set OS-specific browse hint
     setBrowseHint();
 
+    // Check migration FIRST before loading any state
+    // This prevents loading corrupted v0.6.5 data
+    checkAndPerformMigration();
+
     // Load filter and collapsed states BEFORE loading profiles
     // so that renderProfiles() can apply filters immediately
     loadFilterState();
@@ -1795,16 +1805,29 @@ async function loadGroups() {
 
         // Perform one-time migration from v0.6.5 to v0.7.0
         performV070Migration();
+
+        // Re-render profiles now that groups are loaded
+        // This is needed because loadProfiles() was called before groups were loaded
+        renderProfiles(searchInput?.value || '');
+
+        // Update filter badge after groups are loaded
+        updateFilterBadge();
     } catch (error) {
         console.error('Failed to load groups:', error);
         groups = [];
         groupTree = [];
+        // Re-render profiles even on error
+        renderProfiles(searchInput?.value || '');
+        // Update badge even on error
+        updateFilterBadge();
     }
 }
 
-// Perform one-time migration from v0.6.5 to v0.7.0
-function performV070Migration() {
+// Check and perform migration EARLY (before loading state)
+// This prevents loading corrupted v0.6.5 data
+function checkAndPerformMigration() {
     const MIGRATION_VERSION_KEY = 'migrationVersion';
+    const MIGRATION_TOAST_SHOWN_KEY = 'migrationToastShown_0.7.0';
     const CURRENT_VERSION = '0.7.0';
 
     // Check if migration has already been performed
@@ -1812,29 +1835,60 @@ function performV070Migration() {
 
     if (lastMigrationVersion === CURRENT_VERSION) {
         // Migration already done, skip
-        return;
+        return false;
     }
 
-    debug.log('Performing v0.7.0 migration...');
+    debug.log('Performing v0.7.0 migration (early)...');
 
-    // Reset filters - show all groups
-    filteredGroups = new Set();
-    saveFilterState();
-
-    // Expand all groups
-    collapsedGroups = new Set();
-    saveCollapsedState();
+    // Clear localStorage keys that contain v0.6.5 data (group names instead of IDs)
+    // This prevents validation errors when loading state
+    localStorage.removeItem('filteredGroups');
+    localStorage.removeItem('collapsedGroups');
 
     // Mark migration as complete
     localStorage.setItem(MIGRATION_VERSION_KEY, CURRENT_VERSION);
+    // Remove toast flag to ensure toast shows after migration
+    localStorage.removeItem(MIGRATION_TOAST_SHOWN_KEY);
 
-    debug.log('v0.7.0 migration complete - filters reset, all groups expanded');
+    debug.log('v0.7.0 migration (early) complete - cleared old state');
+
+    return true; // Migration performed
+}
+
+// Complete migration after groups are loaded
+// This shows the user notification and re-renders
+function performV070Migration() {
+    const MIGRATION_VERSION_KEY = 'migrationVersion';
+    const MIGRATION_TOAST_SHOWN_KEY = 'migrationToastShown_0.7.0';
+    const CURRENT_VERSION = '0.7.0';
+
+    // Check if migration has already been performed
+    const lastMigrationVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
+
+    if (lastMigrationVersion !== CURRENT_VERSION) {
+        // This should not happen since checkAndPerformMigration() runs first
+        debug.warn('Migration marker not found in performV070Migration()');
+        return;
+    }
+
+    // Check if migration toast was already shown
+    const migrationToastShown = localStorage.getItem(MIGRATION_TOAST_SHOWN_KEY);
+    if (migrationToastShown) {
+        return; // Already shown
+    }
+
+    debug.log('Completing v0.7.0 migration...');
 
     // Re-render profiles with new expanded state
     renderProfiles(searchInput?.value || '');
 
     // Show user notification
     showToast('Upgraded to v0.7.0 with hierarchical groups! All groups are now visible and expanded.', TOAST_DURATION_LONG, 'success');
+
+    // Mark toast as shown permanently
+    localStorage.setItem(MIGRATION_TOAST_SHOWN_KEY, 'true');
+
+    debug.log('v0.7.0 migration complete');
 }
 
 // Update profile count badge
@@ -2109,10 +2163,15 @@ function renderProfiles(filter = '') {
 
     // Filter profiles
     const filteredProfiles = profiles.filter(profile => {
-        // First check if profile's group is filtered out
+        // First check if profile's group or any ancestor is filtered out
         const groupId = profile.group_id;
-        if (groupId && filteredGroups.has(groupId)) {
-            return false; // Hide this profile because its group is filtered
+        if (groupId && isGroupOrAncestorFiltered(groupId)) {
+            return false; // Hide this profile because its group or an ancestor is filtered
+        }
+
+        // Also check for ungrouped if "ungrouped" is filtered
+        if (!groupId && filteredGroups.has('ungrouped')) {
+            return false;
         }
 
         // Then apply search filter
@@ -2210,8 +2269,12 @@ function renderGroupNode(group, profilesByGroupId, depth) {
             <div class="profile-group-header" data-group-id="${group.id}" ${indentStyle}>
                 <span class="group-chevron">${chevron}</span>
                 <span class="group-name">${escapeHtml(group.name)}</span>
+                <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Group actions">
+                    <svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor">
+                        <path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z"/>
+                    </svg>
+                </button>
                 <span class="badge group-count-badge">${groupProfiles.length}</span>
-                <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Group actions">⋮</button>
             </div>
             <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
     `;
@@ -2454,8 +2517,10 @@ async function deleteGroup(groupId) {
 
         try {
             await invoke('delete_group', {
-                id: groupId,
-                deleteProfiles: true
+                input: {
+                    id: groupId,
+                    delete_profiles: true
+                }
             });
 
             await loadGroups();
@@ -2528,8 +2593,10 @@ async function deleteGroup(groupId) {
         const deleteProfiles = result === 'delete-all';
 
         await invoke('delete_group', {
-            id: groupId,
-            deleteProfiles: deleteProfiles
+            input: {
+                id: groupId,
+                delete_profiles: deleteProfiles
+            }
         });
 
         await loadGroups();
@@ -2714,8 +2781,51 @@ function setupEventListeners() {
     formFields.forEach(fieldId => {
         const field = document.getElementById(fieldId);
         if (field) {
+            // Skip profile-group since it has custom handlers
+            if (fieldId === 'profile-group') return;
+
             field.addEventListener('input', checkFormChanged);
             field.addEventListener('change', checkFormChanged);
+        }
+    });
+
+    // Profile group searchable dropdown handlers
+    const profileGroupInput = document.getElementById('profile-group');
+    if (profileGroupInput) {
+        profileGroupInput.addEventListener('input', (e) => {
+            showProfileGroupDropdown(e.target.value);
+        });
+
+        profileGroupInput.addEventListener('focus', () => {
+            showProfileGroupDropdown(profileGroupInput.value);
+        });
+
+        profileGroupInput.addEventListener('keydown', handleProfileGroupKeydown);
+    }
+
+    // Add Group button from profile modal
+    const addGroupFromProfileBtn = document.getElementById('add-group-from-profile-btn');
+    if (addGroupFromProfileBtn) {
+        addGroupFromProfileBtn.addEventListener('click', async () => {
+            // Hide profile group dropdown if open
+            hideProfileGroupDropdown();
+            // Open group modal to create new group
+            await openGroupModal();
+        });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        const profileGroupDropdown = document.getElementById('profile-group-dropdown');
+        const profileGroupInput = document.getElementById('profile-group');
+        const addGroupBtn = document.getElementById('add-group-from-profile-btn');
+
+        if (profileGroupDropdown && !profileGroupDropdown.classList.contains('hidden')) {
+            if (!profileGroupInput.contains(e.target) &&
+                !profileGroupDropdown.contains(e.target) &&
+                !addGroupBtn.contains(e.target)) {
+                hideProfileGroupDropdown();
+            }
         }
     });
 
@@ -2929,10 +3039,19 @@ function setupEventListeners() {
         await saveGroup();
     });
 
-    // Group name input character counter
+    // Group name input validation and character counter
     if (groupNameInput) {
         groupNameInput.addEventListener('input', (e) => {
+            handleRealtimeValidation('group-name', e.target.value);
             updateCharCounter('group-name', e.target.value);
+            checkGroupFormChanged();
+        });
+    }
+
+    // Group parent dropdown change
+    if (groupParentSelect) {
+        groupParentSelect.addEventListener('change', () => {
+            checkGroupFormChanged();
         });
     }
 
@@ -3570,11 +3689,11 @@ function saveCollapsedState() {
 }
 
 function updateFilterBadge() {
-    const allGroups = getAllGroups();
-    const selectedGroups = allGroups.length - filteredGroups.size;
+    const topLevelGroups = getTopLevelGroups();
+    const selectedGroups = topLevelGroups.length - filteredGroups.size;
 
     // Always show badge with X/Y format
-    filterBadge.textContent = `${selectedGroups}/${allGroups.length}`;
+    filterBadge.textContent = `${selectedGroups}/${topLevelGroups.length}`;
 }
 
 function getAllGroups() {
@@ -3586,32 +3705,92 @@ function getAllGroups() {
     return Array.from(groupsWithProfiles);
 }
 
-function buildFilterGroupsList() {
-    // Get all groups (from backend groups array)
-    const allGroups = [...groups];
+function getTopLevelGroups() {
+    // Return only top-level group IDs (no parent)
+    const topLevelGroupIds = [];
+
+    // Get top-level groups from the groups array
+    groups.forEach(group => {
+        if (!group.parent_id) {
+            topLevelGroupIds.push(group.id);
+        }
+    });
 
     // Add ungrouped if there are ungrouped profiles
     const hasUngrouped = profiles.some(p => !p.group_id);
     if (hasUngrouped) {
-        allGroups.push({ id: 'ungrouped', name: 'Ungrouped', path: 'Ungrouped' });
+        topLevelGroupIds.push('ungrouped');
     }
 
-    if (allGroups.length === 0) {
+    return topLevelGroupIds;
+}
+
+// Check if a profile belongs to a group or any of its descendants
+function isProfileInGroupOrDescendants(profile, groupId) {
+    if (!profile.group_id) return false;
+
+    // Check if profile's group matches
+    if (profile.group_id === groupId) return true;
+
+    // Check if profile's group is a descendant
+    const profileGroup = groups.find(g => g.id === profile.group_id);
+    if (!profileGroup) return false;
+
+    // Walk up the parent chain to see if we find the target group
+    let currentGroup = profileGroup;
+    while (currentGroup && currentGroup.parent_id) {
+        if (currentGroup.parent_id === groupId) return true;
+        currentGroup = groups.find(g => g.id === currentGroup.parent_id);
+    }
+
+    return false;
+}
+
+// Check if any ancestor of a group is filtered
+function isGroupOrAncestorFiltered(groupId) {
+    if (!groupId) return false;
+
+    // Check if this group itself is filtered
+    if (filteredGroups.has(groupId)) return true;
+
+    // Check if any ancestor is filtered
+    const group = groups.find(g => g.id === groupId);
+    if (!group || !group.parent_id) return false;
+
+    // Recursively check parent
+    return isGroupOrAncestorFiltered(group.parent_id);
+}
+
+function buildFilterGroupsList() {
+    // Get only TOP-LEVEL groups (no parent_id)
+    // This simplifies the filter UI and prevents bloat
+    const topLevelGroups = groups.filter(g => !g.parent_id);
+
+    // Add ungrouped if there are ungrouped profiles
+    const hasUngrouped = profiles.some(p => !p.group_id);
+    if (hasUngrouped) {
+        topLevelGroups.push({ id: 'ungrouped', name: 'Ungrouped', path: 'Ungrouped' });
+    }
+
+    if (topLevelGroups.length === 0) {
         filterGroupsList.innerHTML = '<div class="filter-empty-state">No groups available</div>';
         return;
     }
 
-    // Sort by path (hierarchical)
-    allGroups.sort((a, b) => (a.path || a.name).localeCompare(b.path || b.name));
+    // Sort by name
+    topLevelGroups.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     let html = '';
-    allGroups.forEach(group => {
+    topLevelGroups.forEach(group => {
         const isChecked = !filteredGroups.has(group.id);
+
+        // Count profiles in this group AND all its descendants
         const groupProfiles = profiles.filter(p => {
             if (group.id === 'ungrouped') {
                 return !p.group_id;
             }
-            return p.group_id === group.id;
+            // Check if profile is in this group or any descendant
+            return isProfileInGroupOrDescendants(p, group.id);
         });
 
         html += `
@@ -3622,7 +3801,7 @@ function buildFilterGroupsList() {
                            data-group-id="${group.id}"
                            tabindex="0"
                            ${isChecked ? 'checked' : ''}>
-                    <span class="filter-group-name">${escapeHtml(group.path || group.name)}</span>
+                    <span class="filter-group-name">${escapeHtml(group.name)}</span>
                 </label>
                 <span class="filter-group-count">${groupProfiles.length}</span>
             </div>
@@ -4731,7 +4910,16 @@ async function openModal(profile = null) {
         document.getElementById('profile-username').value = profile.username;
         document.getElementById('profile-auth-method').value = profile.auth_method || 'none';
         document.getElementById('profile-key-path').value = profile.key_path || '';
-        document.getElementById('profile-group').value = profile.group_id || '';
+
+        // Set group display and ID fields
+        const group = groups.find(g => g.id === profile.group_id);
+        if (group) {
+            document.getElementById('profile-group').value = group.path;
+            document.getElementById('profile-group-id').value = group.id;
+        } else {
+            document.getElementById('profile-group').value = '';
+            document.getElementById('profile-group-id').value = '';
+        }
 
         // Retrieve password from keychain if auth method is password
         if (profile.auth_method === 'password') {
@@ -4800,7 +4988,7 @@ function getCurrentFormValues() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value,
         password: document.getElementById('profile-password').value,
-        group: document.getElementById('profile-group').value
+        group: document.getElementById('profile-group-id').value // Use hidden field for group ID
     };
 }
 
@@ -4858,6 +5046,41 @@ function hasUnsavedProfileChanges() {
     }
 
     return false;
+}
+
+// Check if group form has required fields and handle Save button state
+function checkGroupFormChanged() {
+    const groupName = groupNameInput.value.trim();
+    const parentId = groupParentSelect.value || null;
+
+    // Group name is required
+    if (!groupName) {
+        groupSaveBtn.disabled = true;
+        return;
+    }
+
+    // Validate group name
+    const validationResult = validateField('group-name', groupName);
+    if (!validationResult.valid) {
+        groupSaveBtn.disabled = true;
+        return;
+    }
+
+    // If creating new group, enable if name is valid
+    if (!editingGroupId) {
+        groupSaveBtn.disabled = false;
+        return;
+    }
+
+    // For editing: check if anything changed
+    const group = groups.find(g => g.id === editingGroupId);
+    if (!group) {
+        groupSaveBtn.disabled = true;
+        return;
+    }
+
+    const hasChanged = groupName !== group.name || parentId !== group.parent_id;
+    groupSaveBtn.disabled = !hasChanged;
 }
 
 // Close modal (force close without confirmation)
@@ -4929,7 +5152,7 @@ async function saveProfile() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value || null,
         password: document.getElementById('profile-password').value || null,
-        group_id: document.getElementById('profile-group').value || null
+        group_id: document.getElementById('profile-group-id').value || null // Use hidden field
     };
 
     try {
@@ -5062,6 +5285,9 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     debug.log('openGroupModal called with group:', group, 'preselectedParentId:', preselectedParentId);
     editingGroupId = group ? group.id : null;
 
+    // Populate parent group dropdown FIRST
+    populateParentGroupSelect(editingGroupId);
+
     if (group) {
         groupModalTitle.textContent = 'Edit Group';
         groupNameInput.value = group.name;
@@ -5069,16 +5295,19 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     } else {
         groupModalTitle.textContent = preselectedParentId ? 'New Subgroup' : 'New Group';
         groupForm.reset();
+        // Set parent AFTER populating dropdown
         groupParentSelect.value = preselectedParentId || '';
     }
-
-    // Populate parent group dropdown
-    populateParentGroupSelect(editingGroupId);
 
     groupModal.classList.remove('hidden');
 
     // Initialize character counter
     updateCharCounter('group-name', groupNameInput.value);
+
+    // Set initial Save button state
+    // For new groups: disabled until name is entered
+    // For editing: disabled until changes are made
+    checkGroupFormChanged();
 
     // Focus first field
     setTimeout(() => {
@@ -5102,23 +5331,130 @@ function populateParentGroupSelect(excludeGroupId = null) {
     });
 }
 
-// Populate profile group dropdown with hierarchical options
-function populateProfileGroupSelect() {
-    const profileGroupSelect = document.getElementById('profile-group');
-    if (!profileGroupSelect) return;
+// Populate profile group searchable dropdown
+let profileGroupDropdownVisible = false;
+let focusedDropdownIndex = -1;
+let filteredGroupOptions = [];
 
-    // Clear existing options except the first one
-    profileGroupSelect.innerHTML = '<option value="">-- Ungrouped --</option>';
+function populateProfileGroupSelect() {
+    // This function is now called to initialize the searchable dropdown
+    // Actual population happens in showProfileGroupDropdown()
+}
+
+function showProfileGroupDropdown(filterText = '') {
+    const profileGroupInput = document.getElementById('profile-group');
+    const profileGroupDropdown = document.getElementById('profile-group-dropdown');
+    if (!profileGroupInput || !profileGroupDropdown) return;
 
     // Sort groups by path (hierarchical)
     const sortedGroups = [...groups].sort((a, b) => a.path.localeCompare(b.path));
 
-    // Add groups as options
-    sortedGroups.forEach(group => {
-        const option = document.createElement('option');
-        option.value = group.id;
-        option.textContent = group.path; // Show full path
-        profileGroupSelect.appendChild(option);
+    // Filter groups based on input
+    filteredGroupOptions = sortedGroups.filter(g =>
+        g.path.toLowerCase().includes(filterText.toLowerCase())
+    );
+
+    // Add "Ungrouped" option at the beginning
+    filteredGroupOptions.unshift({ id: '', name: 'Ungrouped', path: 'Ungrouped' });
+
+    // Build dropdown HTML
+    let html = '';
+    if (filteredGroupOptions.length === 0) {
+        html = '<div class="searchable-dropdown-empty">No groups found</div>';
+    } else {
+        const currentGroupId = document.getElementById('profile-group-id').value;
+        filteredGroupOptions.forEach((group, index) => {
+            const isSelected = group.id === currentGroupId;
+            html += `
+                <div class="searchable-dropdown-item ${isSelected ? 'selected' : ''}"
+                     data-group-id="${group.id}"
+                     data-index="${index}">
+                    ${escapeHtml(group.path)}
+                </div>
+            `;
+        });
+    }
+
+    profileGroupDropdown.innerHTML = html;
+    profileGroupDropdown.classList.remove('hidden');
+    profileGroupDropdownVisible = true;
+    focusedDropdownIndex = -1;
+
+    // Attach click handlers
+    profileGroupDropdown.querySelectorAll('.searchable-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const groupId = e.currentTarget.dataset.groupId;
+            const group = filteredGroupOptions.find(g => g.id === groupId);
+            selectProfileGroup(group);
+        });
+    });
+}
+
+function hideProfileGroupDropdown() {
+    const profileGroupDropdown = document.getElementById('profile-group-dropdown');
+    if (profileGroupDropdown) {
+        profileGroupDropdown.classList.add('hidden');
+        profileGroupDropdownVisible = false;
+        focusedDropdownIndex = -1;
+    }
+}
+
+function selectProfileGroup(group) {
+    const profileGroupInput = document.getElementById('profile-group');
+    const profileGroupIdInput = document.getElementById('profile-group-id');
+
+    if (group && group.id !== '') {
+        profileGroupInput.value = group.path;
+        profileGroupIdInput.value = group.id;
+    } else {
+        // Ungrouped
+        profileGroupInput.value = '';
+        profileGroupIdInput.value = '';
+    }
+
+    hideProfileGroupDropdown();
+    checkFormChanged();
+}
+
+function handleProfileGroupKeydown(e) {
+    if (!profileGroupDropdownVisible) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            e.preventDefault();
+            const profileGroupInput = document.getElementById('profile-group');
+            showProfileGroupDropdown(profileGroupInput.value);
+        }
+        return;
+    }
+
+    const items = document.querySelectorAll('.searchable-dropdown-item');
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedDropdownIndex = Math.min(focusedDropdownIndex + 1, items.length - 1);
+        updateFocusedDropdownItem(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedDropdownIndex = Math.max(focusedDropdownIndex - 1, -1);
+        updateFocusedDropdownItem(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedDropdownIndex >= 0 && focusedDropdownIndex < filteredGroupOptions.length) {
+            selectProfileGroup(filteredGroupOptions[focusedDropdownIndex]);
+        }
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideProfileGroupDropdown();
+    }
+}
+
+function updateFocusedDropdownItem(items) {
+    items.forEach((item, index) => {
+        if (index === focusedDropdownIndex) {
+            item.classList.add('focused');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('focused');
+        }
     });
 }
 
@@ -5160,16 +5496,21 @@ async function saveGroup() {
         if (editingGroupId) {
             // Update existing group
             await invoke('update_group', {
-                id: editingGroupId,
-                name: groupName,
-                icon: null // Icons will be added in Phase 4
+                input: {
+                    id: editingGroupId,
+                    name: groupName,
+                    icon: null // Icons will be added in Phase 4
+                }
             });
             showToast('Group updated successfully!');
         } else {
             // Create new group
             await invoke('create_group', {
-                name: groupName,
-                parentId: parentId
+                input: {
+                    name: groupName,
+                    parent_id: parentId,
+                    icon: null
+                }
             });
             showToast('Group created successfully!');
         }

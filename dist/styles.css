@@ -188,6 +188,20 @@ body {
 .btn-settings {
     background-color: #6c757d;
     color: white;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    width: 34px;
+}
+
+.btn-settings svg {
+    display: block;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
 }
 
 .btn-settings:hover {
@@ -392,8 +406,8 @@ body {
 .profile-group-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 8px;
+    padding: 6px 16px;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
@@ -432,20 +446,22 @@ body {
 
 .group-count-badge {
     /* Inherits from .badge class */
+    margin-left: auto; /* Push to the right */
 }
 
 /* Group menu button */
 .group-menu-btn {
-    padding: 4px 8px;
-    font-size: 18px;
+    padding: 8px;
     line-height: 1;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    margin-left: auto;
+    opacity: 1; /* Always visible */
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.profile-group-header:hover .group-menu-btn {
-    opacity: 1;
+.group-menu-btn svg {
+    display: block;
 }
 
 .btn-icon {
@@ -685,6 +701,19 @@ button.keyboard-selected {
     transform: none;
     box-shadow: none;
     background-color: var(--border-color);
+}
+
+.btn-secondary-header {
+    background-color: rgba(108, 117, 125, 0.2);
+    border: 1px solid rgba(108, 117, 125, 0.4);
+    color: var(--text-color);
+}
+
+.btn-secondary-header:hover {
+    background-color: rgba(108, 117, 125, 0.3);
+    border-color: rgba(108, 117, 125, 0.6);
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px rgba(108, 117, 125, 0.3);
 }
 
 .btn-secondary {
@@ -1212,6 +1241,68 @@ form {
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
+.input-group .btn-icon-text {
+    flex-shrink: 0;
+    padding: 8px 12px;
+}
+
+/* Searchable Dropdown */
+.searchable-dropdown-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+.searchable-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    margin-top: 4px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    max-height: 300px;
+    overflow-y: auto;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.searchable-dropdown.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.searchable-dropdown-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background-color 0.15s ease;
+    font-size: 14px;
+}
+
+.searchable-dropdown-item:hover,
+.searchable-dropdown-item.focused {
+    background-color: var(--surface-hover);
+}
+
+.searchable-dropdown-item.selected {
+    background-color: rgba(0, 120, 212, 0.1);
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.searchable-dropdown-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 12px;
@@ -1279,9 +1370,16 @@ form {
     margin-bottom: 4px !important;
 }
 
-/* Show on focus */
-.form-group input:focus + .input-tooltip,
-.form-group select:focus + .input-tooltip {
+/* Show on hover (when not focused) */
+.form-group input:hover:not(:focus) + .input-tooltip,
+.form-group select:hover:not(:focus) + .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Show when field is invalid */
+.form-group input.validation-error + .input-tooltip,
+.form-group select.validation-error + .input-tooltip {
     opacity: 1;
     visibility: visible;
 }
