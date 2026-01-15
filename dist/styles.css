@@ -832,12 +832,13 @@ button.keyboard-selected {
 
 .confirm-body {
     padding: 20px 24px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-color);
 }
 
 .confirm-body #confirm-message {
-    line-height: 1.6;
-    color: var(--text-color);
-    font-size: 14px;
+    /* Inherits from .confirm-body */
 }
 
 .confirm-body .profile-name {

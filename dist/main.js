@@ -56,7 +56,7 @@ const VALIDATION = {
     name: {
         pattern: /^[a-zA-Z0-9\s\-_().\[\]#]+$/,
         maxLength: 64,
-        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] # allowed'
+        message: 'Only letters, numbers, spaces, and the following special characters are allowed:\n- _ ( ) . [ ] #'
     },
     description: {
         pattern: /^[^<>]*$/,
@@ -66,7 +66,7 @@ const VALIDATION = {
     hostname: {
         pattern: /^[a-zA-Z0-9.\-_]+$/,
         maxLength: 64,
-        message: 'Only letters, numbers, dots, hyphens, underscores allowed'
+        message: 'Only letters, numbers, and the following special characters are allowed:\n. - _'
     },
     ipv4: {
         pattern: /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
@@ -81,12 +81,12 @@ const VALIDATION = {
     username: {
         pattern: /^[a-zA-Z0-9_\-.@#]+$/,
         maxLength: 128,
-        message: 'Only letters, numbers, underscores, hyphens, dots, @, # allowed'
+        message: 'Only letters, numbers, and the following special characters are allowed:\n_ - . @ #'
     },
     group: {
         pattern: /^[a-zA-Z0-9\s\-_().\[\]#\/]+$/,
-        maxLength: 255, // Increased to accommodate full hierarchical paths (e.g., "Group1/Group2/Group3")
-        message: 'Only letters, numbers, spaces, and - _ ( ) . [ ] # / allowed'
+        maxLength: 194, // Max path: 64 chars * 3 levels + 2 slashes = 194 chars
+        message: 'Group Name: Only letters, numbers, spaces, and the following special characters are allowed:\n- _ ( ) . [ ] # /'
     }
 };
 
@@ -218,6 +218,24 @@ function validateGroup(group) {
     return { valid: true };
 }
 
+function validateGroupName(groupName) {
+    // Group names (not paths) have a max length of 64 characters
+    const MAX_GROUP_NAME_LENGTH = 64;
+
+    if (groupName.length === 0) {
+        return { valid: false, error: 'Group name is required' };
+    }
+    if (groupName.length > MAX_GROUP_NAME_LENGTH) {
+        return { valid: false, error: `Maximum ${MAX_GROUP_NAME_LENGTH} characters` };
+    }
+    // Remove '/' from pattern for group names (not paths)
+    const groupNamePattern = /^[a-zA-Z0-9\s\-_().\[\]#]+$/;
+    if (!groupNamePattern.test(groupName)) {
+        return { valid: false, error: 'Only letters, numbers, spaces, and the following special characters are allowed:\n- _ ( ) . [ ] #' };
+    }
+    return { valid: true };
+}
+
 // Master validator
 function validateField(fieldId, value) {
     const trimmedValue = value.trim();
@@ -236,11 +254,8 @@ function validateField(fieldId, value) {
         case 'profile-group':
             return validateGroup(trimmedValue);
         case 'group-name':
-            // Group name is required (unlike profile-group which is optional)
-            if (trimmedValue.length === 0) {
-                return { valid: false, error: 'Group name is required' };
-            }
-            return validateGroup(trimmedValue);
+            // Validate group name (64 char limit, no slashes)
+            return validateGroupName(trimmedValue);
         default:
             return { valid: true };
     }
@@ -2089,7 +2104,7 @@ async function removeRecentConnection(profileId) {
         showToast('Removed from recent connections', TOAST_DURATION_SHORT);
     } catch (error) {
         console.error('Failed to remove recent connection:', error);
-        showToast('Failed to remove recent connection: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -2114,7 +2129,7 @@ async function clearRecentConnections() {
         showToast('Recent connections cleared', TOAST_DURATION_SHORT);
     } catch (error) {
         console.error('Failed to clear recent connections:', error);
-        showToast('Failed to clear recent connections: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -2564,10 +2579,18 @@ async function deleteGroup(groupId) {
 
     // If group is empty (no profiles or subgroups), just delete it
     if (profileCount === 0 && subgroupCount === 0) {
+        const confirmMessage = buildConfirmMessage({
+            lines: [
+                { prefix: 'Group: ', highlight: `"${group.name}"`, highlightClass: 'group-name' }
+            ],
+            warnings: ['This action cannot be undone.'],
+            question: 'Are you sure you want to delete this group?'
+        });
+
         const confirmed = await customConfirm(
-            `Are you sure you want to delete the group "${group.name}"?`,
+            confirmMessage,
             {
-                title: 'Delete Group',
+                title: 'Delete Empty Group',
                 okText: 'Delete',
                 cancelText: 'Cancel',
                 okClass: 'btn-danger'
@@ -2589,7 +2612,7 @@ async function deleteGroup(groupId) {
             showToast('Group deleted successfully!');
         } catch (error) {
             console.error('Failed to delete group:', error);
-            showToast('Failed to delete group: ' + error, TOAST_DURATION_LONG, 'error');
+            showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
         }
         return;
     }
@@ -2603,11 +2626,10 @@ async function deleteGroup(groupId) {
             '',
             'Choose how to handle the contents:'
         ],
-        warnings: [
+        list: [
             `Delete All: Permanently deletes all profiles and subgroups`,
             `Move to Parent: Moves profiles/subgroups to ${parentText}, then deletes group`
-        ],
-        question: ''
+        ]
     });
 
     // Create a custom confirmation dialog with three buttons
@@ -2617,15 +2639,18 @@ async function deleteGroup(groupId) {
         modal.style.display = 'flex';
 
         modal.innerHTML = `
-            <div class="modal-content modal-content-small">
+            <div class="modal-content confirm-modal-content">
                 <div class="modal-header">
                     <h2>Delete Group</h2>
                 </div>
-                <div class="modal-body" id="delete-group-confirm-body"></div>
-                <div class="modal-footer">
-                    <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
-                    <button id="move-to-parent-btn" class="btn btn-primary">Move to Parent</button>
-                    <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+                <div class="confirm-body" id="delete-group-confirm-body"></div>
+                <div class="form-actions">
+                    <div class="form-actions-left"></div>
+                    <div class="form-actions-right">
+                        <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
+                        <button id="move-to-parent-btn" class="btn btn-primary">Move to Parent</button>
+                        <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -2670,7 +2695,7 @@ async function deleteGroup(groupId) {
         }
     } catch (error) {
         console.error('Failed to delete group:', error);
-        showToast('Failed to delete group: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -3215,7 +3240,7 @@ function setupEventListeners() {
                 await shell.open(target.href);
             } catch (error) {
                 console.error('Failed to open link:', error);
-                showToast('Failed to open link: ' + error, TOAST_DURATION_LONG, 'error');
+                showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
             }
         }
     });
@@ -3645,7 +3670,7 @@ async function checkForUpdates(silent = false) {
     } catch (error) {
         console.error('Failed to check for updates:', error);
         if (!silent) {
-            showToast('Failed to check for updates: ' + error, TOAST_DURATION_LONG, 'error');
+            showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
         }
     }
 }
@@ -4263,7 +4288,7 @@ async function browseTerminalApp() {
         // If result is null, user cancelled - do nothing
     } catch (error) {
         console.error('Failed to browse for terminal app:', error);
-        showToast('Failed to open application browser: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4295,7 +4320,7 @@ async function exportProfiles() {
         }
     } catch (error) {
         console.error('Failed to export profiles:', error);
-        showToast('Failed to export profiles: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4428,7 +4453,7 @@ async function importProfiles(file) {
         debug.log('Profiles imported successfully');
     } catch (error) {
         console.error('Failed to import profiles:', error);
-        showToast('Failed to import profiles: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4479,7 +4504,7 @@ async function deleteAllProfiles() {
         debug.log('All profiles deleted');
     } catch (error) {
         console.error('Failed to delete all profiles:', error);
-        showToast('Failed to delete all profiles: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4543,7 +4568,7 @@ async function backupSettings() {
         }
     } catch (error) {
         console.error('Failed to backup settings:', error);
-        showToast('Failed to backup settings: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4867,7 +4892,7 @@ async function restoreSettings(file) {
         debug.log('Settings restored successfully');
     } catch (error) {
         console.error('Failed to restore settings:', error);
-        showToast('Failed to restore settings: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4939,7 +4964,7 @@ async function resetSettings() {
         debug.log('Settings reset successfully');
     } catch (error) {
         console.error('Failed to reset settings:', error);
-        showToast('Failed to reset settings: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -4956,7 +4981,7 @@ async function browseSshKey() {
         // If result is null, user cancelled - do nothing
     } catch (error) {
         console.error('Failed to browse for SSH key:', error);
-        showToast('Failed to open file browser: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -5083,9 +5108,20 @@ function checkFormChanged() {
     // Check if required fields are populated (for both new and edit)
     const requiredFieldsPopulated = areRequiredFieldsPopulated();
 
-    // If creating a new profile, enable Save only when required fields are populated
+    // Check if any field has a validation error
+    const fieldsToValidate = [
+        'profile-name', 'profile-description', 'profile-host',
+        'profile-port', 'profile-username'
+    ];
+
+    const hasValidationError = fieldsToValidate.some(fieldId => {
+        const field = document.getElementById(fieldId);
+        return field && field.classList.contains('validation-error');
+    });
+
+    // If creating a new profile, enable Save only when required fields are populated AND valid
     if (!editingProfileId) {
-        profileSaveBtn.disabled = !requiredFieldsPopulated;
+        profileSaveBtn.disabled = !requiredFieldsPopulated || hasValidationError;
         return;
     }
 
@@ -5098,8 +5134,8 @@ function checkFormChanged() {
         currentValues[key] !== originalFormValues[key]
     );
 
-    // Enable Save only if required fields are populated AND something changed
-    profileSaveBtn.disabled = !requiredFieldsPopulated || !hasChanged;
+    // Enable Save only if required fields are populated AND something changed AND no validation errors
+    profileSaveBtn.disabled = !requiredFieldsPopulated || !hasChanged || hasValidationError;
 }
 
 // Check if there are unsaved profile changes
@@ -5132,9 +5168,9 @@ function checkGroupFormChanged() {
         return;
     }
 
-    // Validate group name
-    const validationResult = validateField('group-name', groupName);
-    if (!validationResult.valid) {
+    // Check if field has validation error (red border)
+    const hasValidationError = groupNameInput.classList.contains('validation-error');
+    if (hasValidationError) {
         groupSaveBtn.disabled = true;
         return;
     }
@@ -5245,7 +5281,7 @@ async function saveProfile() {
         showToast(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
     } catch (error) {
         console.error('Failed to save profile:', error);
-        showToast('Failed to save profile: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -5346,7 +5382,7 @@ async function deleteProfile(id) {
         return true;
     } catch (error) {
         console.error('Failed to delete profile:', error);
-        showToast('Failed to delete profile: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
         return false;
     }
 }
@@ -5373,6 +5409,9 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     }
 
     groupModal.classList.remove('hidden');
+
+    // Clear any previous validation errors
+    groupNameInput.classList.remove('validation-error');
 
     // Initialize character counter
     updateCharCounter('group-name', groupNameInput.value);
@@ -5542,21 +5581,10 @@ async function closeGroupModal() {
 async function saveGroup() {
     const groupName = groupNameInput.value.trim();
 
-    // Validate group name
-    if (!groupName) {
-        showToast('Group name is required', TOAST_DURATION_SHORT, 'error');
-        return;
-    }
-
-    // Validate against pattern
-    if (!VALIDATION.group.pattern.test(groupName)) {
-        showToast(VALIDATION.group.message, TOAST_DURATION_LONG, 'error');
-        return;
-    }
-
-    // Validate length
-    if (groupName.length > VALIDATION.group.maxLength) {
-        showToast(`Group name must be ${VALIDATION.group.maxLength} characters or less`, TOAST_DURATION_LONG, 'error');
+    // Validate group name using validateGroupName (64 char limit, no slashes)
+    const validationResult = validateGroupName(groupName);
+    if (!validationResult.valid) {
+        showToast(validationResult.error, TOAST_DURATION_LONG, 'error');
         return;
     }
 
@@ -5593,7 +5621,7 @@ async function saveGroup() {
         closeGroupModal();
     } catch (error) {
         console.error('Failed to save group:', error);
-        showToast('Failed to save group: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     } finally {
         isSubmitting = false;
         groupSaveBtn.disabled = false;
@@ -5627,7 +5655,7 @@ async function connectToProfile(id) {
         await loadRecentConnections();
     } catch (error) {
         console.error('Failed to connect:', error);
-        showToast('Failed to connect: ' + error, TOAST_DURATION_LONG, 'error');
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -5636,6 +5664,38 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Utility: Clean up error messages to be more user-friendly
+function cleanErrorMessage(error) {
+    let errorStr = String(error);
+
+    // Handle UNIQUE constraint errors with user-friendly messages
+    if (errorStr.includes('UNIQUE constraint failed: index \'idx_groups_unique_name_parent\'') ||
+        errorStr.includes('UNIQUE constraint') && errorStr.includes('groups')) {
+        return 'A group with this name already exists at this level';
+    }
+
+    if (errorStr.includes('UNIQUE constraint failed: profiles.name') ||
+        (errorStr.includes('UNIQUE constraint') && errorStr.includes('profiles'))) {
+        return 'A profile with this name already exists';
+    }
+
+    // Extract the innermost meaningful error message by removing "Failed to..." prefixes
+    // Example: "Failed to save group: Failed to update group: Maximum depth reached"
+    // becomes "Maximum depth reached"
+    const failedToPattern = /^(Failed to [^:]+:\s*)+(.+)$/;
+    const match = errorStr.match(failedToPattern);
+    if (match && match[2]) {
+        errorStr = match[2].trim();
+    }
+
+    // If the cleaned error still contains technical jargon, try to simplify
+    if (errorStr.includes('UNIQUE constraint')) {
+        return 'An item with this name already exists';
+    }
+
+    return errorStr;
 }
 
 // Utility: Build confirmation message using safe DOM manipulation
@@ -5673,7 +5733,7 @@ function buildConfirmMessage(config) {
             const div = createDiv('');
             if (typeof line === 'string') {
                 div.textContent = line;
-            } else if (line.text) {
+            } else if (typeof line === 'object' && line !== null) {
                 // Line can have parts with different styling
                 if (line.prefix) div.appendChild(document.createTextNode(line.prefix));
                 if (line.highlight) {
@@ -5681,7 +5741,7 @@ function buildConfirmMessage(config) {
                     div.appendChild(span);
                 }
                 if (line.suffix) div.appendChild(document.createTextNode(line.suffix));
-                if (!line.prefix && !line.highlight && !line.suffix) {
+                if (line.text && !line.prefix && !line.highlight && !line.suffix) {
                     div.textContent = line.text;
                 }
             }
@@ -5955,7 +6015,7 @@ async function openEmbeddedTerminal(profileId) {
 
     } catch (error) {
         console.error('Failed to open terminal:', error);
-        showToast('Failed to open terminal: ' + error, 'error');
+        showToast(cleanErrorMessage(error), 'error');
         closeEmbeddedTerminal();
     }
 }
