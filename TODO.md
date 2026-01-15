@@ -84,11 +84,11 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - [x] Fix group filtering to hide group headers and sub-groups
 - [x] Fix cascading profile counts (parent groups now show total including descendants)
 
-**Phase B - High Priority:**
-- [ ] Fix context menu positioning (goes off-screen on right side)
-- [ ] Fix multiple context menus appearing simultaneously
-- [ ] Fix collapse all button for empty groups containing sub-groups
-- [ ] Set Ungrouped as default in profile group dropdown
+**Phase B - High Priority:** ✅ Completed
+- [x] Fix context menu positioning (goes off-screen on right side)
+- [x] Fix multiple context menus appearing simultaneously
+- [x] Fix collapse all button for empty groups containing sub-groups
+- [x] Set Ungrouped as default in profile group dropdown
 
 **Phase C - UI Polish:**
 - [ ] Fix delete group modal formatting issues

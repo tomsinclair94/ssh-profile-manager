@@ -2466,12 +2466,18 @@ function showGroupMenu(groupId, event) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
+    // Close any existing context menus first
+    const existingMenus = document.querySelectorAll('.group-context-menu');
+    existingMenus.forEach(existingMenu => {
+        if (document.body.contains(existingMenu)) {
+            document.body.removeChild(existingMenu);
+        }
+    });
+
     // Create a simple inline menu (temporary solution)
     const menu = document.createElement('div');
     menu.className = 'group-context-menu';
     menu.style.position = 'absolute';
-    menu.style.left = `${event.clientX}px`;
-    menu.style.top = `${event.clientY}px`;
 
     menu.innerHTML = `
         <button class="group-menu-item" data-action="rename">Rename Group</button>
@@ -2480,6 +2486,34 @@ function showGroupMenu(groupId, event) {
     `;
 
     document.body.appendChild(menu);
+
+    // Calculate menu dimensions
+    const menuRect = menu.getBoundingClientRect();
+    const menuWidth = menuRect.width;
+    const menuHeight = menuRect.height;
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+
+    // Calculate position, adjusting if menu would go off-screen
+    let left = event.clientX;
+    let top = event.clientY;
+
+    // Check right edge
+    if (left + menuWidth > windowWidth) {
+        left = windowWidth - menuWidth - 10; // 10px margin from edge
+    }
+
+    // Check bottom edge
+    if (top + menuHeight > windowHeight) {
+        top = windowHeight - menuHeight - 10; // 10px margin from edge
+    }
+
+    // Ensure menu doesn't go off left or top edge
+    if (left < 10) left = 10;
+    if (top < 10) top = 10;
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
 
     // Handle menu item clicks
     menu.querySelectorAll('.group-menu-item').forEach(item => {
@@ -3724,12 +3758,21 @@ function updateFilterBadge() {
 }
 
 function getAllGroups() {
-    // Return all group IDs that have profiles
-    const groupsWithProfiles = new Set();
-    profiles.forEach(profile => {
-        groupsWithProfiles.add(profile.group_id || 'ungrouped');
+    // Return all group IDs (including empty groups that only have sub-groups)
+    const allGroupIds = new Set();
+
+    // Add all groups from the groups array
+    groups.forEach(group => {
+        allGroupIds.add(group.id);
     });
-    return Array.from(groupsWithProfiles);
+
+    // Add ungrouped if there are ungrouped profiles
+    const hasUngroupedProfiles = profiles.some(profile => !profile.group_id);
+    if (hasUngroupedProfiles) {
+        allGroupIds.add('ungrouped');
+    }
+
+    return Array.from(allGroupIds);
 }
 
 function getTopLevelGroups() {
@@ -4970,6 +5013,9 @@ async function openModal(profile = null) {
         profileForm.reset();
         document.getElementById('profile-port').value = 22;
         document.getElementById('profile-auth-method').value = 'none';
+        // Set default group to Ungrouped (empty values)
+        document.getElementById('profile-group').value = '';
+        document.getElementById('profile-group-id').value = '';
         deleteProfileBtn.classList.add('hidden');
     }
 
