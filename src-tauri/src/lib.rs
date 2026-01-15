@@ -1722,7 +1722,33 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         .ok_or_else(|| "Group not found".to_string())?;
 
     if input.delete_profiles {
-        // Cascade delete: Delete group (CASCADE will handle sub-groups and profiles via FK)
+        // Cascade delete: Delete profiles first, then group (CASCADE will handle sub-groups via FK)
+        let conn = db.conn.lock().expect("Database lock poisoned");
+
+        // Get all descendant group IDs (including the group itself)
+        let descendant_ids: Vec<String> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM groups WHERE path LIKE ?1 OR path = ?2"
+            ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+            let rows = stmt.query_map([format!("{}/%", group.path), group.path.clone()], |row| row.get(0))
+                .map_err(|e| format!("Failed to query descendants: {}", e))?;
+
+            let result: Result<Vec<_>, _> = rows.collect();
+            result.map_err(|e| format!("Failed to collect descendants: {}", e))?
+        };
+
+        // Delete all profiles in these groups
+        for group_id in descendant_ids {
+            conn.execute(
+                "DELETE FROM profiles WHERE group_id = ?1",
+                [&group_id],
+            ).map_err(|e| format!("Failed to delete profiles: {}", e))?;
+        }
+
+        drop(conn);
+
+        // Now delete the group (CASCADE will handle sub-groups)
         db.delete_group(&input.id)
             .map_err(|e| format!("Failed to delete group: {}", e))?;
     } else {

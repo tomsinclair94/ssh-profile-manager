@@ -74,12 +74,50 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - Unused variable `abandoned_at` at `src/lib.rs:305:58` (prefix with underscore)
   - Note: These are in thread cleanup code and don't affect functionality
 
+**Phase 3 - Critical Bug Fixes:** 🔧 In Progress
+
+**Phase A - Critical Blockers:** ✅ Completed
+- [x] Fix profile validation to allow hierarchical paths (slash character in group paths)
+- [x] Fix sub-group visual indentation CSS (20px per level not showing) - Fixed with CSS classes (depth-1, depth-2, depth-3)
+- [x] Fix profile card indentation to match parent group - Also uses CSS depth classes
+- [x] Fix group deletion FOREIGN KEY constraint error
+- [x] Fix group filtering to hide group headers and sub-groups
+- [x] Fix cascading profile counts (parent groups now show total including descendants)
+
+**Phase B - High Priority:**
+- [ ] Fix context menu positioning (goes off-screen on right side)
+- [ ] Fix multiple context menus appearing simultaneously
+- [ ] Fix collapse all button for empty groups containing sub-groups
+- [ ] Set Ungrouped as default in profile group dropdown
+
+**Phase C - UI Polish:**
+- [ ] Fix delete group modal formatting issues
+- [ ] Improve toast error messages (cleaner, user-friendly versions)
+
+**Phase 3 - Extra Features (Nice-to-Have):**
+- [ ] Tooltip behavior when field is focused (allow hover even when typing)
+- [ ] Modal auto-scroll for dropdowns (scroll to show full dropdown)
+- [ ] Better sub-group collapse behavior (collapse sub-groups when parent collapses, not just hide)
+
+**Phase 4 Progress (New Version Splash Screen):** 📋 Planned
+
+**Features:**
+- [ ] Splash screen on first launch of new version
+- [ ] Display high-level changelog (major features/fixes only)
+- [ ] Link to GitHub release for full changelog
+- [ ] Close button with "Don't show again" checkbox (default enabled)
+- [ ] Persistence: don't show again if dismissed with checkbox
+- [ ] Show again if dismissed without checkbox until finally dismissed
+- [ ] Version/GitHub link in settings/about should show splash screen
+- [ ] Link should always point to matching version Git release
+
 **Phase 3 Test Plan:** 🧪 Ready for Testing
 
 Use this checklist to thoroughly test Phase 3 functionality. Check off each item as you test it.
 - I have tested all items
 - I have marked a 'Y' against items that pass
 - I have marked a 'N' against items that pass
+- I have marked a '/' against items I no longer need to test / will test at a later date
 - I have optionally added 'SEE NOTES' to items that pass/fail but have some recommended changes
 - Under each Main Test group I have added optional Notes and a test/failure summary with details
 - All tests were conducted using my existing production 0.6.5 build and upgrading to the 0.7.0 production build from the project
@@ -94,33 +132,23 @@ Use this checklist to thoroughly test Phase 3 functionality. Check off each item
 - [Y] **1.3** Close v0.6.5 and install v0.7.0
 - [Y] **1.4** Launch v0.7.0 - verify:
   - [Y] All profiles appear under their correct groups (migrated by name)
-  - [N] Toast notification shows: "Upgraded to v0.7.0 with hierarchical groups!"
-  - [N] All groups are expanded (none collapsed)
+  - [Y] Toast notification shows: "Upgraded to v0.7.0 with hierarchical groups!" - SEE NOTES
+  - [Y] All groups are expanded (none collapsed)
   - [Y] All groups are visible (no filters active)
   - [Y] Filter badge shows "X/X" (all selected)
   - [Y] Ungrouped profiles appear in "Ungrouped" section
   
 Notes:
-- UI redesign:
-  - New Group button moves to header:
-    - Logo | Title (version underneath) | Expandable white space | New Profile | New Group | Settings
-    - Due to increating item count (will have to wait until implemented), we may need to tweak how small size (under 800px) is handled
-    - New Group button should have a colour, but not as obvious as the blue for New Profile (main action, draws users eyes to it)
-  - Below header section revert back to:
-    - Search Bar (expandable) | Expand/Collapse Groups | Filter Groups | Profile Count
-    - Same collapse behaviour under 800px
-  - Fix inconsistency with button names, what is best for the 'new item' actions
-    - buttons without +, just text (e.g. New Group)
-    - buttons with +, no text (e.g. + Group)
-    - buttons with both + and text (e.g. + New Group)
-    - review thoughts above on suggested 'new item' action approach
+- toast notification worked after successful upgrade/migration... However, I think it might be good to present a splash screen on first launch of a new version that states high level changelog
+  - the new splash screen should contain a high level of features/fixes (only major stuff) and a link to the release on GitHub to see full change log
+  - the splash screen should have a close button and a check box that says 'don't show again' (default enabled)
+  - if user closes splash screen, it doesn't show on subsequence launches
+  - if user closes splash screen and unticks 'don't show again', it shows the next time (until user finally dismisses with the option ticked)
+- with the new splash screen approach, it should always have a link to the matching version Git release
+  - the version/github link current in the settings/about section instead of going to the GitHub release, should show the new splash screen instead
 
-2 tests do not pass:
- - there was a popup notification around not able to colapse/expand due to corrupted data - therefore the new notification about migration never appeared
- - manually had to colapse/expand to get everything to show but after this, everything looks to be fine:
-   - all profiles appear
-   - all groups appear (including ungrouped)
-   - filters reset correctly
+Results:
+All tests passed!
 
 #### 2. Group Creation
 - [Y] **2.1** Click "+ Add Group" button
@@ -129,65 +157,54 @@ Notes:
   - [Y] Character counter shows "11 / 64"
   - [Y] Tooltip shows validation rules - SEE NOTES
 - [Y] **2.4** Parent dropdown shows "-- Top Level --" (default)
-- [N] **2.5** Click "Save" - verify:
-  - [N] Modal closes
-  - [N] New group "Web Servers" appears in main list
-  - [N] Toast shows: "Group created successfully!"
-  - [N] Group is expanded by default
+- [Y] **2.5** Click "Save" - verify:
+  - [Y] Modal closes
+  - [Y] New group "Web Servers" appears in main list
+  - [Y] Toast shows: "Group created successfully!"
+  - [Y] Group is expanded by default
   
 Notes:
-- Group Name helptext does not fit on the screen, it shows above and covers the 'New Group' title
-  - Suggest tooltips are changed to only popup if the field becomes invalid? Maybe tooltip could be shown on each field with a ? button at the end of each field?
-  - user types too many or incorrect characters etc. will show the tooltip, otherwise it's hidden when focused and maybe visible by ? button mentioned above
-  - review thoughts above on suggested approach
-  
-5 tests do not pass:
-- Unable to create group due to error:
-Failed to save group: invalid args `input` for command `create_group`: command create_group missing required key input
-- As I cannot create a group, I cannot test:
-  - Modal closes
-  - New group appears
-  - Successfull notification toast
-  - Group is expanded by default
-- New Group modal should disable Save until all fields populated (consistency with the other settings/profile modal in the app)
+- tool tip functions better (only on hover of field), not persistent - also on hover of the field name
+  - when field is in focus (to type) it is not possible to hover any more. Can this be changed so it's possible to still hover over the field even when it is focused?
+  - if you focus field and start typing, the mouse is hidden anyway. so if use selected box, types but then moves mouse to hover the field, even if it's still in focus to type, the tooltip should show
+
+Results:
+All tests passed!
 
 #### 3. Sub-Group Creation
 - [Y] **3.1** Hover over "Web Servers" group header
-  - [Y] Menu button (⋮) appears on hover - SEE NOTES
+  - [Y] Menu button (⋮) appears on hover - we changed this to a persistent cog icon, but working
 - [Y] **3.2** Click menu button (⋮)
   - [Y] Context menu appears with: Rename Group, Add Subgroup, Delete Group - SEE NOTES
 - [Y] **3.3** Click "Add Subgroup"
   - [Y] Modal opens with title "New Subgroup"
-  - [N] Parent dropdown pre-selected to "Web Servers"
+  - [Y] Parent dropdown pre-selected to "Web Servers"
 - [Y] **3.4** Enter name: "Apache Servers"
-- [N] **3.5** Click "Save" - verify:
+- [Y] **3.5** Click "Save" - verify:
   - [N] Sub-group appears indented under "Web Servers" (20px indent)
-  - [N] Toast shows: "Group created successfully!"
+  - [Y] Toast shows: "Group created successfully!"
   
 Notes:
-- Menu button appears. It should be more obvious it's a menu (it's hard to see). It's also to the right of the profile counter, should be to the left.
-- As menu button is far right, the menu popup goes to the right and is then partially cut off the screen (fixing above may resolve this)
+- As menu button is far right, the menu popup goes to the right and is then partially cut off the screen so need to adjust
+- Menu button also retains the pop up if you then select a setting cog on another group, then you have 2 menus showing etc. this needs to be fixed so only 1 menu can ever be displayed at a time
 
-4 tests do not pass:
-- Parent dropdown is NOT pre-selected
-- Unable to create group due to error (this is the same error as the Group creation):
-Failed to save group: invalid args `input` for command `create_group`: command create_group missing required key input
-- As I cannot create a group, I cannot test:
-  - Modal closes
-  - New sub-group appears
-  - Successfull notification toast
-  - Group is expanded by default
-- New Sub-Group modal should disable Save until all fields populated (consistency with the other settings/profile modal in the app)
+Results:
+1 test did not pass fully
+- The Sub-Group did appear, however there was no indent so it is not obvious it is a nested Sub-Group. It looks like another top level group but with slightly smaller margin between the two. It needs to be more obvious it is a nested Sub-Group
 
 #### 4. Deep Nesting (3-Level Hierarchy)
-- [N] **4.1** Create sub-group under "Apache Servers" named "Staging"
+- [Y] **4.1** Create sub-group under "Apache Servers" named "Staging"
   - [N] Verify 40px indentation (2 levels deep)
-- [N] **4.2** Try to create sub-group under "Staging"
-  - [N] Backend should reject (max 3 levels)
-  - [N] Toast error appears
+- [Y] **4.2** Try to create sub-group under "Staging"
+  - [Y] Backend should reject (max 3 levels)
+  - [Y] Toast error appears - SEE NOTES
+  
+Notes:
+- Toast worked fine but error message needs refinging and maybe adopt a 'Error' on 1 line then the actual Error on a 2nd line. We likely need to fix consistency for all the Toast notifications (good and bad) so maybe this can be part of a larger code base fix for all Toasts?
 
-5 tests do not pass:
-- As I cannot create group/sub-group, i cannot test any of these
+(Results:
+1 test did not pass fully
+- The Sub-Group did appear, however there was no indent so it is not obvious it is a nested Sub-Group. Similar to above, it looks like 3 Groups now all together, there is no indenting for the 1st or 2nd level Sub-Group
 
 #### 5. Group Renaming
 - [Y] **5.1** Click menu (⋮) on "Web Servers"
@@ -195,76 +212,72 @@ Failed to save group: invalid args `input` for command `create_group`: command c
   - [Y] Modal opens with title "Edit Group"
   - [Y] Current name "Web Servers" is pre-filled
 - [Y] **5.3** Change to "Production Web Servers"
-- [N] **5.4** Click "Save" - verify:
-  - [N] Group name updates in UI
-  - [N] Toast shows: "Group updated successfully!"
-  - [N] Sub-groups remain under renamed group
+- [Y] **5.4** Click "Save" - verify:
+  - [Y] Group name updates in UI
+  - [Y] Toast shows: "Group updated successfully!"
+  - [Y] Sub-groups remain under renamed group
 
-4 tests do not pass:
-- likely related to the errors above, when updating a Group, there is an error:
-Failed to save group: invalid args `input` for command `update_group`: command update_group missing required key input
-- Edit Group modal should disable Save until all fields populated (consistency with the other settings/profile modal in the app)
+Results:
+All tests passed!
 
 #### 6. Profile Assignment to Groups
 - [Y] **6.1** Click "+ New Profile" to create a profile
-- [Y] **6.2** In profile form, locate "Group" dropdown
-  - [Y] Dropdown shows "-- Ungrouped --" as default
-  - [N] Dropdown shows all groups with hierarchical paths:
+- [Y] **6.2** In profile form, locate "Group" dropdown - SEE NOTES
+  - [N] Dropdown shows "-- Ungrouped --" as default
+  - [Y] Dropdown shows all groups with hierarchical paths:
     - [Y] "Production Web Servers"
-    - [N] "Production Web Servers/Apache Servers"
-    - [N] "Production Web Servers/Apache Servers/Staging"
-    - [N] Other groups...
-- [N] **6.3** Select "Production Web Servers/Apache Servers"
+    - [Y] "Production Web Servers/Apache Servers"
+    - [Y] "Production Web Servers/Apache Servers/Staging"
+    - [Y] Other groups...
+- [Y] **6.3** Select "Production Web Servers/Apache Servers"
 - [Y] **6.4** Fill required fields and save
-- [Y] **6.5** Verify profile appears under "Apache Servers" sub-group
+- [N] **6.5** Verify profile appears under "Apache Servers" sub-group
 
 Notes:
-- Implementation approach was not exactly what I was hoping for
-  - Group field should be typable (free-form), but each time you type, it should dynamically search for groups that match
-  - User can then select from the items that are popping up (so they don't have to type the full thing)
-  - If they contine typing something that does not exist, it will create that group (visual hint that this is what will happen)
-  - Use / to denote a Sub-Group in the suggestions and if creating new - for example:
-    - User types ParentGroupExample/SubGroupExample
-    - 2 new groups created (the 'ParentGroupExample' Group at top level and 'SubGroupExample' as a sub-group of the parent)
-    - Profile is saved under Sub-Group 'SubGroupExample'
+- Drop-Down loads okay, however there is no margin at the bottom of the dropdown and the modal (can send screenshot to show)
+  - as the drop-down opening means the modal needs to scroll down a bit to see it, it should probably auto scroll. current behaviour opens drop-down but you can only see the first few entries and the whole modal needs to be scrolled to see the entire drop-down window space
     
-5 tests do not pass:
-- Unable to test showing hiertarchical paths as I cannot create sub-groups
+Results:
+2 tests do not pass:
+- Ungrouped was not the default group selected
+- Unable to save Profile. When you select a Sub-Group which therefor uses a path like 'group/sub-group' it products an error:
+  - Group: Only letters, numbers, spaces, and - _ ( ) . [ ] # allowed
 
 #### 7. Hierarchical Rendering
-- [N] **7.1** Verify visual hierarchy:
-  - [N] Top-level groups have no indentation
+- [Y] **7.1** Verify visual hierarchy:
+  - [Y] Top-level groups have no indentation
   - [N] 1st level sub-groups have 20px left padding on header
   - [N] 2nd level sub-groups have 40px left padding on header
   - [N] Profiles within groups also show indentation
-- [N] **7.2** Expand/collapse top-level group
-  - [N] All child groups and profiles hide/show together
-  - [N] Chevron changes: ▶ (collapsed) ↔ ▼ (expanded)
+- [Y] **7.2** Expand/collapse top-level group
+  - [Y] All child groups and profiles hide/show together - SEE NOTES
+  - [Y] Chevron changes: ▶ (collapsed) ↔ ▼ (expanded)
 
-8 tests do not pass:
-- Unable to test hiertarchical rendering as I cannot create sub-groups
+Notes:
+- although all sub-groups become hidden, they aren't actually collapsed. the behaviour if you collapse a group/sub-group, the subsequent sub-group(s) below should be collapsed AND hidden
+
+Results:
+3 tests do not pass:
+- Mentioned in a previous section, the indentation is not shown for the Sub-Group (both layers)
+- Unabled to test indentation as I cannot create a profile in a Sub-Group (issue mentioned above)
 
 #### 8. Group Filtering
 - [Y] **8.1** Click "Filter Groups" button
-- [N] **8.2** Popup appears showing all groups with hierarchical paths
-- [N] **8.3** Uncheck "Production Web Servers"
+- [Y] **8.2** Popup appears showing all groups with hierarchical paths - we changed this to only show top-level groups (it does and does not show sub-groups, which is correct)
+- [Y] **8.3** Uncheck "Production Web Servers"
   - [N] Group and all sub-groups/profiles disappear from main list
-  - [N] Badge updates to show "X-1/X"
-- [N] **8.4** Re-check the group
-  - [N] Group reappears with all contents
-  - [N] Badge updates to "X/X"
-- [N] **8.5** Click "Clear All Filters"
-  - [N] All groups become visible
-  - [N] Badge shows "X/X"
+  - [Y] Badge updates to show "X-1/X"
+- [Y] **8.4** Re-check the group
+  - [Y] Group reappears with all contents
+  - [Y] Badge updates to "X/X"
+- [Y] **8.5** Click "Clear All Filters"
+  - [Y] All groups become visible
+  - [Y] Badge shows "X/X"
 
-Notes:
-- It was in the plan that 'Sub Groups' are NOT part of the filters
-- Group filters only applies to the top level 'Parent' Groups
-- If a Parent Group is unchecked, itself and ANY sub-groups, are hidden from the list
-- simplistic approach, does not completely bloat the filter list
-
-10 tests do not pass:
-- Unable to test hiertarchical group filters as I cannot create sub-groups
+Results:
+1 test does not pass:
+- When unselecting a Group, it does not remove from the list
+  - I tested further and it looks like any profiles under the group become 'hidden' but any Sub-Groups and the Group itself do not hide like in previous versions - the top-level group when filtered out should hide, including all it's potential Sub-groups (all layers) and all Profiles
 
 #### 9. Collapse/Expand All
 - [Y] **9.1** Collapse several groups manually
@@ -272,95 +285,98 @@ Notes:
   - [Y] All groups expand
   - [Y] Button text changes to "Collapse Groups"
 - [Y] **9.3** Click "Collapse Groups" button
-  - [Y] All groups collapse
+  - [N] All groups collapse
   - [Y] Button text changes to "Expand Groups"
 
-Notes:
-- All tests passed; however I am unable to test this works in full due to not being able to create sub-groups
+Results:
+1 test does not pass:
+- the Collapse button at the top does NOT seem to collapse a Group that contains a Sub-Group - this seems to be the case when the Group/Sub-Group has no profiles (it did collapse a Group that contain a Sub-Group and Profiles)
 
 #### 10. Group Deletion - Empty Group
-- [N] **10.1** Create a new empty group "Test Group"
-- [N] **10.2** Click menu (⋮) → "Delete Group"
-  - [N] Simple confirmation appears: "Are you sure...?"
-  - [N] Two buttons: "Delete" (danger), "Cancel"
-- [N] **10.3** Click "Delete"
-  - [N] Group disappears
-  - [N] Toast shows: "Group deleted successfully!"
+- [Y] **10.1** Create a new empty group "Test Group"
+- [Y] **10.2** Click menu (⋮) → "Delete Group"
+  - [Y] Simple confirmation appears: "Are you sure...?" - SEE NOTES
+  - [Y] Two buttons: "Delete" (danger), "Cancel"
+- [Y] **10.3** Click "Delete"
+  - [Y] Group disappears
+  - [Y] Toast shows: "Group deleted successfully!"
 
-all tests do not pass:
-- Unable to create new Groups/Sub-Groups so cannot test
+Notes:
+- Confirmation modal is fine but similar to Profile delete, should be a bigger warning (e.g. This action cannot be undone.)
+
+Results:
+All tests passed!
 
 #### 11. Group Deletion - Delete All Mode
-- [N] **11.1** Create group "Temp" with 2 profiles
-- [N] **11.2** Click menu (⋮) → "Delete Group"
-  - [N] Confirmation shows: "Contains: 2 profile(s) and 0 subgroup(s)"
-  - [N] Three buttons: "Delete All", "Move to Parent", "Cancel"
-  - [N] Warning text explains both options
-- [N] **11.3** Click "Delete All"
+- [Y] **11.1** Create group "Temp" with 2 profiles
+- [Y] **11.2** Click menu (⋮) → "Delete Group"
+  - [Y] Confirmation shows: "Contains: 2 profile(s) and 0 subgroup(s)" - 
+  - [Y] Three buttons: "Delete All", "Move to Parent", "Cancel"
+  - [Y] Warning text explains both options
+- [Y] **11.3** Click "Delete All"
   - [N] Group AND all profiles deleted
   - [N] Toast shows: "Group and all contents deleted successfully!"
 
-all tests do not pass:
-- Unable to create new Groups/Sub-Groups so cannot test
+Notes:
+- Delete Group Modal shows but the formatting is all wrong (can provide screenshot)
+
+Results:
+2 tests do not pass:
+- Unabled to delete group (so also get no deleted success Toast). Error when attempting to delete:
+  - Failed to delete group: Failed to delete group: FOREIGN KEY constraint failed
 
 #### 12. Group Deletion - Move to Parent Mode
-- [N] **12.1** Create hierarchy:
-  - [N] "Parent Group"
-    - [N] "Child Group" (with 2 profiles)
-- [N] **12.2** Delete "Child Group" using "Move to Parent"
-  - [N] Profiles move to "Parent Group"
-  - [N] "Child Group" disappears
-  - [N] Toast shows: "Group deleted. Contents moved to parent group."
-  - [N] Verify 2 profiles now appear under "Parent Group"
+- [/] **12.1** Create hierarchy:
+  - [/] "Parent Group"
+    - [/] "Child Group" (with 2 profiles)
+- [/] **12.2** Delete "Child Group" using "Move to Parent"
+  - [/] Profiles move to "Parent Group"
+  - [/] "Child Group" disappears
+  - [/] Toast shows: "Group deleted. Contents moved to parent group."
+  - [/] Verify 2 profiles now appear under "Parent Group"
 
-all tests do not pass:
-- Unable to create new Groups/Sub-Groups so cannot test
+Unable to test - as I cannot create a profile in a Sub-Group, I cannot test this
 
 #### 13. Group Deletion - Top-Level Move to Parent
-- [N] **13.1** Create top-level group "Temporary" with 2 profiles
-- [N] **13.2** Delete using "Move to Parent"
-  - [N] Profiles move to "Ungrouped" section
-  - [N] Toast shows: "Group deleted. Contents moved to top level."
+- [Y] **13.1** Create top-level group "Temporary" with 2 profiles
+- [Y] **13.2** Delete using "Move to Parent"
+  - [Y] Profiles move to "Ungrouped" section
+  - [Y] Toast shows: "Group deleted. Contents moved to top level."
 
-Notes:
-- I like the approach (profiles can move to 'ungrouped' but maybe an additional helptext/tip is shown that this will be the case when deleting a top level group)
-
-all tests do not pass:
-- Unable to create new Groups/Sub-Groups so cannot test
+Results:
+All tests passed!
 
 #### 14. Persistence Testing
 - [Y] **14.1** Create groups, collapse some, filter some
 - [Y] **14.2** Close and relaunch app
   - [Y] Groups persist
-  - [N] Collapsed state persists
-  - [N] Filter state persists
+  - [Y] Collapsed state persists
+  - [Y] Filter state persists
   - [Y] Profiles remain in correct groups
 
-2 tests do not pass:
-- collapsed state doesn't seem to persist, launching app shows nothing (like initial launch after migration)
-- Filter state doesn't appear to work fully. It does filter the profiles from being visible, but the group header is still shown (it should be completely hidden) - this ties into the notes above about filtering only being done at top group level ad EVERYTHING underneath is then hidden
+Results:
+All tests passed!
 
 #### 15. Edge Cases
 - [Y] **15.1** Group name with special characters:
   - [Y] Try: "Test-Group_2024 (Production) [v1.0] #main"
-  - [Y] Should work (allowed chars: - _ ( ) . [ ] #) - SEE NOTES
+  - [Y] Should work (allowed chars: - _ ( ) . [ ] #)
 - [Y] **15.2** Group name: 64 characters
   - [Y] Should work (max length)
   - [Y] Character counter shows "64 / 64"
 - [Y] **15.3** Group name: 65 characters
   - [Y] Should fail validation
 - [Y] **15.4** Duplicate group names at same level
-  - [N] Should fail (backend enforces uniqueness per parent)
-- [N] **15.5** Duplicate group names at different levels
-  - [N] Should work (different parent_id)
+  - [Y] Should fail (backend enforces uniqueness per parent) - SEE NOTES
+- [Y] **15.5** Duplicate group names at different levels
+  - [Y] Should work (different parent_id)
   
 Notes:
-- test for 'Test-Group_2024 (Production) [v1.0] #main' did work, but due to error about creating groups, it doesn't create it but there are no validation errors
-- noted a UI issue where when you type invalid characters the field does not highlight red around the edge (see the New Profile modal as this has similar validation rules and UI around this - New/Edit Group/Sub-Group modal should be consistent)
+- error toast worked for duplicate but needs a bit of cleaning up. User probably only wants to see a user friendly error
+  - Failed to save group: Failed to update group: UNIQUE constraint failed: index 'idx_groups_unique_name_parent'
 
-3 tests do not pass:
-- Duplicate Group name cannot test as I am unable to save a new group due to issue mentioned previously
-- Same goes to checking duplicate Sub-Group as I am unable to save a sub-group either
+Results:
+All tests passed!
 
 #### 16. Profile Editing
 - [Y] **16.1** Edit an existing profile
@@ -369,66 +385,63 @@ Notes:
   - [Y] Profile moves to new group in UI
   - [Y] Toast shows: "Profile updated successfully!"
 
+Results:
+All tests passed!
+
 #### 17. UI Polish
-- [Y] **17.1** Group menu button (⋮):
-  - [Y] Hidden by default
-  - [Y] Appears on group header hover
-  - [Y] Smooth opacity transition - SEE NOTES
+- [/] **17.1** Group menu button (⋮):
+  - [/] Hidden by default
+  - [/] Appears on group header hover
+  - [/] Smooth opacity transition
 - [Y] **17.2** Context menu:
   - [Y] Positioned near click location
   - [Y] Closes when clicking outside
-  - [Y] Items have hover effect - SEE NOTES
-- [N] **17.3** Hierarchical paths in dropdowns:
-  - [N] Clear and readable
-  - [N] Sorted alphabetically
-  - [N] Top-level option always first
+  - [Y] Items have hover effect
+- [Y] **17.3** Hierarchical paths in dropdowns:
+  - [Y] Clear and readable
+  - [Y] Sorted alphabetically
+  - [Y] Top-level option always first
 
 Notes:
-- Mentioned previously regarding the Group Menu button:
-  - It's quite small so hard to see, also should move to left of profile count.
-  - When it's larger/more obvious, transitions may be more obvious, too small at the moment to really see
-  - I think it may be best to be perminantly visible, more obvious to user there is a context menu
+- 17.1 no longer required - we changed to persistent cog icon
   
-4 tests do not pass:
-- Unable to create new Sub-Groups so cannot test Hierarchical paths in dropdowns
+Results:
+All tests passed!
 
 #### 18. Migration Edge Cases
 - [Y] **18.1** Verify second launch (migration already done):
   - [Y] No toast notification
-  - [N] No reset of filters/collapsed state - SEE NOTES
+  - [Y] No reset of filters/collapsed state
   - [Y] localStorage has `migrationVersion: "0.7.0"`
 
-Notes:
-- Mentioned previously, when launching, nothing is visible, have to collapse/expand toggle to see
-- Filters appear to be remembered correctly
-- Unable to test proper collapsed state due to having to toggle the button to see anything
+Results:
+All tests passed!
 
 #### 19. Performance
-- [ ] **19.1** Create 20+ groups with deep nesting
-  - [ ] UI remains responsive
-  - [ ] Rendering is smooth
-- [ ] **19.2** Create 100+ profiles across groups
-  - [ ] Search works quickly
-  - [ ] Expand/collapse is instant
+- [/] **19.1** Create 20+ groups with deep nesting
+  - [/] UI remains responsive
+  - [/] Rendering is smooth
+- [/] **19.2** Create 100+ profiles across groups
+  - [/] Search works quickly
+  - [/] Expand/collapse is instant
   
 Notes:
 - Not testing at this time (will do later when everything else is working)
 
 #### 20. Error Handling
 - [Y] **20.1** Try to rename group to empty string
-  - [Y] Should fail validation
-  - [N] Toast error appears
-- [N] **20.2** Try to create circular reference (if possible via UI)
-  - [N] Backend should prevent
-- [N] **20.3** Delete group while profile modal is open referencing that group
-  - [N] Should handle gracefully
+  - [/] Should fail validation - not required, no longer even lets you save
+  - [/] Toast error appears - not required, no longer even lets you save
+- [/] **20.2** Try to create circular reference (if possible via UI)
+  - [/] Backend should prevent
+- [/] **20.3** Delete group while profile modal is open referencing that group
+  - [/] Should handle gracefully
 
-5 tests do not pass:
-- Validation appears to work, sort of, it says 'fill out this field'
-  - similar to references above, the consistency of the validation doesn't follow what is used on the profile modal
-  - no error toast is displayed either
+Notes:
 - Unable to test 20.2 and 20.3 due to not being possible in the GUI
 
+Results:
+All tests passed!
 
 **Test Results Summary:**
 - Total Tests: 20 categories, ~80 individual checks

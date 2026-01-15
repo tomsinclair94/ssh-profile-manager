@@ -519,6 +519,32 @@ body {
     opacity: 0;
 }
 
+/* Hierarchical group indentation */
+.profile-group-header.depth-1 {
+    margin-left: 20px;
+}
+
+.profile-group-header.depth-2 {
+    margin-left: 40px;
+}
+
+.profile-group-header.depth-3 {
+    margin-left: 60px;
+}
+
+/* Profile card indentation to match parent group */
+.profile-card.depth-1 {
+    margin-left: 20px;
+}
+
+.profile-card.depth-2 {
+    margin-left: 40px;
+}
+
+.profile-card.depth-3 {
+    margin-left: 60px;
+}
+
 .profile-card {
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
