@@ -1656,6 +1656,7 @@ form {
     display: flex;
     flex-direction: column;
     overflow: hidden; /* Prevent modal itself from scrolling */
+    padding-bottom: 0; /* Override modal-content's 20px padding-bottom */
 }
 
 /* Header - Fixed at top */
@@ -1740,11 +1741,15 @@ form {
     padding: 16px 24px;
     border-top: 1px solid var(--border-color);
     background-color: var(--bg-color);
+    min-height: 68px; /* Prevent footer from collapsing at smaller widths */
+    display: flex;
+    align-items: center;
 }
 
 .version-splash-footer p {
     margin: 0;
     text-align: center;
+    width: 100%; /* Ensure paragraph takes full width for centered content */
 }
 
 .splash-github-link {
@@ -1776,7 +1781,7 @@ form {
 /* Actions - Fixed at bottom with Close button */
 .version-splash-actions {
     flex-shrink: 0;
-    padding: 14px 24px 10px 24px; /* Less padding at bottom to balance visual spacing */
+    padding: 14px 24px 16px 24px; /* Balanced padding for clean spacing */
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: center; /* Center the checkbox and button together */
@@ -1805,7 +1810,7 @@ form {
 }
 
 /* Responsive splash screen sizing */
-@media (max-width: 768px) {
+@media (max-width: 500px) {
     .version-splash-content {
         width: 95%;
         max-height: 90vh;
@@ -1829,10 +1834,11 @@ form {
 
     .version-splash-footer {
         padding: 12px 16px;
+        min-height: 60px; /* Maintain consistent height on mobile */
     }
 
     .version-splash-actions {
-        padding: 12px 16px 8px 16px; /* Less padding at bottom */
+        padding: 12px 16px 14px 16px; /* Balanced padding for clean spacing */
         /* Keep flex-direction: row (default) - don't stack */
         gap: 12px;
     }

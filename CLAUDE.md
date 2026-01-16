@@ -17,16 +17,16 @@ bun run build    # Production build
 
 ## Current Status
 
-**Released:** v0.6.5 (2026-01-09)
+**In Development:** v0.7.0
 **See:** TODO.md for roadmap and feature backlog
 
-**Latest Release Notes (v0.6.5):**
-- Hash (#) character support in Username, Profile Name, and Group Name fields
-- Fixed group filter badge showing "0/0" on startup
-- Fixed filters not applying correctly on startup
-- Fixed group name validation (64-char limit)
-- Improved duplicate profile workflow
-- Fixed modal close button confirmation logic
+**v0.7.0 Focus:**
+- Hierarchical group system with sub-groups (up to 3 levels)
+- Separate group management with Add, Rename, Delete options
+- Enhanced group filter with hierarchical display
+- Improved keyboard navigation with arrow key support
+- Version splash screen for major release announcements
+- Migration system documentation
 
 ## Version Management
 
@@ -153,6 +153,14 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Double-submit prevention: `isSubmitting` flag
 - Collapsible groups: localStorage
 
+**Migration System:**
+- Automatic version detection using `CURRENT_APP_VERSION` constant
+- Generic storage keys: `migrationVersion`, `migrationToastShown`, `lastSplashVersion`
+- Version-specific migrations use "less than" checks (handles skipped versions)
+- Two-phase: `checkAndPerformMigration()` (early, before data load) + `performPostLoadMigration()` (optional, for UI updates)
+- See detailed inline documentation in `dist/main.js` around line ~1920 for adding new migrations
+- Version splash screen automatically shows changelog on version changes
+
 **Password Authentication Limitations:**
 - Passwords are stored securely in the system keychain for reference and export purposes
 - **IMPORTANT:** Stored passwords are NOT automatically passed to SSH during connection
@@ -201,6 +209,7 @@ These warnings only affect Linux builds, which are not supported. Application ta
 
 **Add Tauri Command:** `#[tauri::command]` in lib.rs → `invoke_handler!` → `invoke('command_name', { params })`
 **Add Setting:** Update `SettingsData`/`SettingsOsSpecific` (Rust) + export/import + JS backup/restore/reset
+**Add Migration:** See inline docs in `dist/main.js` line ~1920 - use `< 'X.X.X'` pattern for version checks
 
 ## Development Agents
 

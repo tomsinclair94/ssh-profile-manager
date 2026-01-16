@@ -52,6 +52,7 @@ const TOAST_DURATION_LOADING = 10000; // 10 seconds (for loading states)
 const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
+// IMPORTANT: Update this for each release - used by migration system and splash screen
 const CURRENT_APP_VERSION = '0.7.0';
 
 const VERSION_CHANGELOG = {
@@ -1767,6 +1768,9 @@ async function init() {
     // Set OS-specific browse hint
     setBrowseHint();
 
+    // Clean up any old version-specific storage keys on app startup
+    cleanupOldStorageKeys();
+
     // Check migration FIRST before loading any state
     // This prevents loading corrupted v0.6.5 data
     checkAndPerformMigration();
@@ -1892,8 +1896,8 @@ async function loadGroups() {
         groupTree = await invoke('get_group_tree');
         debug.log('Groups loaded:', groups.length);
 
-        // Perform one-time migration from v0.6.5 to v0.7.0
-        performV070Migration();
+        // Perform post-load migration (shows toast, updates UI if needed)
+        performPostLoadMigration();
 
         // Re-render profiles now that groups are loaded
         // This is needed because loadProfiles() was called before groups were loaded
@@ -1912,51 +1916,113 @@ async function loadGroups() {
     }
 }
 
+// ============================================================================
+// MIGRATION SYSTEM
+// ============================================================================
+// This system handles version upgrades and data migrations automatically.
+//
+// HOW IT WORKS:
+// 1. On every app startup, checks if version has changed (compares stored version
+//    with CURRENT_APP_VERSION constant)
+// 2. If version changed, runs any necessary version-specific migrations
+// 3. Migrations use "less than" checks (e.g., < '0.7.0') so they run even if
+//    user skips versions (e.g., v0.6.5 → v0.8.0 will still run v0.7.0 migration)
+// 4. After all migrations, updates stored version to current version
+//
+// STORAGE KEYS:
+// - migrationVersion: Stores the last version user ran (e.g., "0.7.0")
+// - migrationToastShown: Boolean flag to show migration toast once per version
+// - lastSplashVersion: Stores last version where splash screen was shown
+// - splashDismissedUnchecked: Temporary flag if splash dismissed without checkbox
+//
+// ADDING NEW MIGRATIONS:
+// When creating v0.8.0, add migration logic in checkAndPerformMigration():
+//   if (lastMigrationVersion && lastMigrationVersion < '0.8.0') {
+//       // Migration logic here
+//   }
+// Optionally add post-load logic in performPostLoadMigration() for UI updates.
+// ============================================================================
+
+// Clean up old version-specific storage keys from previous versions
+// This removes legacy keys like "migrationToastShown_0.6.5" that accumulated
+// before we switched to generic keys in v0.7.0
+function cleanupOldStorageKeys() {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('migrationToastShown_')) {
+            keysToRemove.push(key);
+        }
+    }
+
+    keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        debug.log(`Cleaned up old storage key: ${key}`);
+    });
+
+    if (keysToRemove.length > 0) {
+        debug.log(`Removed ${keysToRemove.length} old version-specific storage key(s)`);
+    }
+}
+
 // Check and perform migration EARLY (before loading state)
-// This prevents loading corrupted v0.6.5 data
+// Runs version-specific data migrations when version changes are detected.
+// Called before any data is loaded to prevent incompatible state from being loaded.
 function checkAndPerformMigration() {
     const MIGRATION_VERSION_KEY = 'migrationVersion';
-    const MIGRATION_TOAST_SHOWN_KEY = 'migrationToastShown_0.7.0';
-    const CURRENT_VERSION = '0.7.0';
+    const MIGRATION_TOAST_SHOWN_KEY = 'migrationToastShown';
 
-    // Check if migration has already been performed
     const lastMigrationVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
 
-    if (lastMigrationVersion === CURRENT_VERSION) {
-        // Migration already done, skip
+    if (lastMigrationVersion === CURRENT_APP_VERSION) {
+        // Already on current version, no migration needed
         return false;
     }
 
-    debug.log('Performing v0.7.0 migration (early)...');
+    debug.log(`Version change detected: ${lastMigrationVersion || 'new install'} → ${CURRENT_APP_VERSION}`);
 
-    // Clear localStorage keys that contain v0.6.5 data (group names instead of IDs)
-    // This prevents validation errors when loading state
-    localStorage.removeItem('filteredGroups');
-    localStorage.removeItem('collapsedGroups');
+    // === Version-Specific Migration Logic ===
+    // IMPORTANT: Use "less than" comparisons to handle skipped versions.
+    // Example: If user goes v0.6.5 → v0.8.0 (skipping v0.7.0), the v0.7.0
+    // migration will still run because "0.6.5" < "0.7.0" is true.
 
-    // Mark migration as complete
-    localStorage.setItem(MIGRATION_VERSION_KEY, CURRENT_VERSION);
-    // Remove toast flag to ensure toast shows after migration
+    // v0.6.x → v0.7.0: Clear old group state (group names → group IDs)
+    // This migration clears localStorage keys that stored group names instead of IDs
+    if (lastMigrationVersion && lastMigrationVersion < '0.7.0') {
+        debug.log(`Running ${lastMigrationVersion} → v0.7.0 migration...`);
+        localStorage.removeItem('filteredGroups');
+        localStorage.removeItem('collapsedGroups');
+    }
+
+    // EXAMPLE: Future v0.8.0 migration
+    // if (lastMigrationVersion && lastMigrationVersion < '0.8.0') {
+    //     debug.log(`Running ${lastMigrationVersion} → v0.8.0 migration...`);
+    //     // Add migration logic here (clear old keys, transform data, etc.)
+    // }
+
+    // Mark migration as complete for current version
+    localStorage.setItem(MIGRATION_VERSION_KEY, CURRENT_APP_VERSION);
+    // Clear toast flag so migration toast shows once after upgrade
     localStorage.removeItem(MIGRATION_TOAST_SHOWN_KEY);
 
-    debug.log('v0.7.0 migration (early) complete - cleared old state');
+    debug.log(`Migration to ${CURRENT_APP_VERSION} complete`);
 
     return true; // Migration performed
 }
 
-// Complete migration after groups are loaded
-// This shows the user notification and re-renders
-function performV070Migration() {
+// Complete migration after data is loaded
+// Handles UI updates and shows user notifications after version-specific migrations.
+// Called after profiles/groups are loaded so UI can be updated properly.
+// NOTE: This is OPTIONAL - only needed if migration requires UI updates or toast notifications.
+function performPostLoadMigration() {
     const MIGRATION_VERSION_KEY = 'migrationVersion';
-    const MIGRATION_TOAST_SHOWN_KEY = 'migrationToastShown_0.7.0';
-    const CURRENT_VERSION = '0.7.0';
+    const MIGRATION_TOAST_SHOWN_KEY = 'migrationToastShown';
 
-    // Check if migration has already been performed
-    const lastMigrationVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
+    const currentMigrationVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
 
-    if (lastMigrationVersion !== CURRENT_VERSION) {
+    if (currentMigrationVersion !== CURRENT_APP_VERSION) {
         // This should not happen since checkAndPerformMigration() runs first
-        debug.warn('Migration marker not found in performV070Migration()');
+        debug.warn('Migration marker mismatch in performPostLoadMigration()');
         return;
     }
 
@@ -1966,18 +2032,27 @@ function performV070Migration() {
         return; // Already shown
     }
 
-    debug.log('Completing v0.7.0 migration...');
+    debug.log(`Completing post-load migration for ${CURRENT_APP_VERSION}...`);
 
-    // Re-render profiles with new expanded state
-    renderProfiles(searchInput?.value || '');
+    // === Version-Specific Post-Load Migration ===
+    // Use this section to show migration toasts or update UI after data loads.
+    // Most versions won't need this - only if you want to notify users of changes.
 
-    // Show user notification
-    showToast('Upgraded to v0.7.0 with hierarchical groups! All groups are now visible and expanded.', TOAST_DURATION_LONG, 'success');
+    // v0.7.0: Re-render with expanded groups, show migration toast
+    if (CURRENT_APP_VERSION === '0.7.0') {
+        renderProfiles(searchInput?.value || '');
+        showToast('Upgraded to v0.7.0 with hierarchical groups! All groups are now visible and expanded.', TOAST_DURATION_LONG, 'success');
+    }
+
+    // EXAMPLE: Future v0.8.0 post-load migration
+    // if (CURRENT_APP_VERSION === '0.8.0') {
+    //     showToast('Upgraded to v0.8.0 with new multi-tab system!', TOAST_DURATION_LONG, 'success');
+    // }
 
     // Mark toast as shown permanently
     localStorage.setItem(MIGRATION_TOAST_SHOWN_KEY, 'true');
 
-    debug.log('v0.7.0 migration complete');
+    debug.log(`Post-load migration for ${CURRENT_APP_VERSION} complete`);
 }
 
 // Version Splash Screen Functions

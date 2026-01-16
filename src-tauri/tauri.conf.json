@@ -12,8 +12,8 @@
         "title": "SSH Profile Manager",
         "width": 800,
         "height": 600,
-        "minWidth": 560,
-        "minHeight": 420,
+        "minWidth": 640,
+        "minHeight": 480,
         "resizable": true,
         "fullscreen": false,
         "devtools": true

@@ -137,21 +137,25 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Responsive layout: centered checkbox and button at all widths
 - ✅ Keyboard navigation: Tab cycles through GitHub link → Checkbox → Close button
 
-**Phase 4 Known Issues (To Fix):**
-- [ ] Modal bottom padding needs adjustment (more detail needed)
-- [ ] GitHub button padding needs refinement (more detail needed)
-- [ ] Storage keys review: clean up old version-specific keys, verify migration behavior
+**Phase 4 Known Issues:** ✅ All Resolved
+- [x] Modal bottom padding adjustment - Fixed by removing inherited 20px padding and adjusting actions padding to 16px
+- [x] GitHub button section stability - Fixed by adding min-height and flex layout to prevent shrinking
+- [x] Date positioning - Fixed by changing media query breakpoint from 768px to 500px
+- [x] Storage keys cleanup - Implemented cleanupOldStorageKeys() to remove version-specific keys, migrated to generic keys
+- [x] Minimum window size - Updated from 560x420 to 640x480 (maintains 4:3 ratio, divisible by 20)
+- [x] Migration system future-proofing - Refactored to use CURRENT_APP_VERSION constant, handles skipped versions correctly
+- [x] Migration system documentation - Added comprehensive inline docs (~line 1920) and CLAUDE.md reference
 - [ ] Full testing against test plan (see Phase 4 Test Plan below)
 
 **Phase 4 Test Plan:** 🧪 Ready for Testing
 
 Use this checklist to thoroughly test Phase 4 functionality. Check off each item as you test it.
-- [ ] I have tested all items
-- [ ] I have marked a 'Y' against items that pass
-- [ ] I have marked a 'N' against items that fail
-- [ ] I have marked a '/' against items I no longer need to test / will test at a later date
-- [ ] I have optionally added 'SEE NOTES' to items that pass/fail but have some recommended changes
-- [ ] Under each Main Test group I have added optional Notes and a test/failure summary with details
+- I have tested all items
+- I have marked a 'Y' against items that pass
+- I have marked a 'N' against items that fail
+- I have marked a '/' against items I no longer need to test / will test at a later date
+- I have optionally added 'SEE NOTES' to items that pass/fail but have some recommended changes
+- Under each Main Test group I have added optional Notes and a test/failure summary with details
 
 #### 1. First Launch Testing
 - [ ] **1.1** Clear localStorage to simulate fresh install:
