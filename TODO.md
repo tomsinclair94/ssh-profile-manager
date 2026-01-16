@@ -122,321 +122,271 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - [x] Better sub-group collapse behavior (collapse sub-groups when parent collapses, not just hide)
   - Recursive collapse of all descendant groups when parent collapses
 
-**Phase 4 Progress (New Version Splash Screen):** 📋 Planned
+**Phase 4 Progress (New Version Splash Screen):** ✅ Implemented - Ready for Testing
 
-**Features:**
-- [ ] Splash screen on first launch of new version
-- [ ] Display high-level changelog (major features/fixes only)
-- [ ] Link to GitHub release for full changelog
-- [ ] Close button with "Don't show again" checkbox (default enabled)
-- [ ] Persistence: don't show again if dismissed with checkbox
-- [ ] Show again if dismissed without checkbox until finally dismissed
-- [ ] Version/GitHub link in settings/about should show splash screen
-- [ ] Link should always point to matching version Git release
+**Features Implemented:**
+- ✅ Splash screen on first launch of new version
+- ✅ Display high-level changelog (major features/fixes only)
+- ✅ Link to GitHub release for full changelog
+- ✅ Close button with "Don't show again" checkbox (default checked)
+- ✅ Persistence: generic version tracking using localStorage
+- ✅ Show again if dismissed without checkbox until finally dismissed
+- ✅ Version link in settings/about opens splash screen instead of GitHub
+- ✅ Link always points to matching version Git release
+- ✅ Proper scrolling: only highlights list scrolls, header/footer fixed
+- ✅ Responsive layout: centered checkbox and button at all widths
+- ✅ Keyboard navigation: Tab cycles through GitHub link → Checkbox → Close button
 
-**Phase 3 Test Plan:** 🧪 Ready for Testing
+**Phase 4 Known Issues (To Fix):**
+- [ ] Modal bottom padding needs adjustment (more detail needed)
+- [ ] GitHub button padding needs refinement (more detail needed)
+- [ ] Storage keys review: clean up old version-specific keys, verify migration behavior
+- [ ] Full testing against test plan (see Phase 4 Test Plan below)
 
-Use this checklist to thoroughly test Phase 3 functionality. Check off each item as you test it.
-- I have tested all items
-- I have marked a 'Y' against items that pass
-- I have marked a 'N' against items that pass
-- I have marked a '/' against items I no longer need to test / will test at a later date
-- I have optionally added 'SEE NOTES' to items that pass/fail but have some recommended changes
-- Under each Main Test group I have added optional Notes and a test/failure summary with details
-- All tests were conducted using my existing production 0.6.5 build and upgrading to the 0.7.0 production build from the project
+**Phase 4 Test Plan:** 🧪 Ready for Testing
 
-#### 1. Migration Testing (v0.6.5 → v0.7.0)
-- [Y] **1.1** Fresh install: Delete `~/Library/Application Support/ssh-profile-manager/` directory
-- [Y] **1.2** Install v0.6.5 and create test data:
-  - [Y] Create 3-5 profiles with group names (e.g., "Production", "Development", "Testing")
-  - [Y] Create 2-3 ungrouped profiles
-  - [Y] Collapse some groups
-  - [Y] Filter out some groups (hide them)
-- [Y] **1.3** Close v0.6.5 and install v0.7.0
-- [Y] **1.4** Launch v0.7.0 - verify:
-  - [Y] All profiles appear under their correct groups (migrated by name)
-  - [Y] Toast notification shows: "Upgraded to v0.7.0 with hierarchical groups!" - SEE NOTES
-  - [Y] All groups are expanded (none collapsed)
-  - [Y] All groups are visible (no filters active)
-  - [Y] Filter badge shows "X/X" (all selected)
-  - [Y] Ungrouped profiles appear in "Ungrouped" section
-  
-Notes:
-- toast notification worked after successful upgrade/migration... However, I think it might be good to present a splash screen on first launch of a new version that states high level changelog
-  - the new splash screen should contain a high level of features/fixes (only major stuff) and a link to the release on GitHub to see full change log
-  - the splash screen should have a close button and a check box that says 'don't show again' (default enabled)
-  - if user closes splash screen, it doesn't show on subsequence launches
-  - if user closes splash screen and unticks 'don't show again', it shows the next time (until user finally dismisses with the option ticked)
-- with the new splash screen approach, it should always have a link to the matching version Git release
-  - the version/github link current in the settings/about section instead of going to the GitHub release, should show the new splash screen instead
+Use this checklist to thoroughly test Phase 4 functionality. Check off each item as you test it.
+- [ ] I have tested all items
+- [ ] I have marked a 'Y' against items that pass
+- [ ] I have marked a 'N' against items that fail
+- [ ] I have marked a '/' against items I no longer need to test / will test at a later date
+- [ ] I have optionally added 'SEE NOTES' to items that pass/fail but have some recommended changes
+- [ ] Under each Main Test group I have added optional Notes and a test/failure summary with details
 
-Results:
-All tests passed!
-
-#### 2. Group Creation
-- [Y] **2.1** Click "+ Add Group" button
-- [Y] **2.2** Modal opens with title "New Group"
-- [Y] **2.3** Enter group name: "Web Servers"
-  - [Y] Character counter shows "11 / 64"
-  - [Y] Tooltip shows validation rules - SEE NOTES
-- [Y] **2.4** Parent dropdown shows "-- Top Level --" (default)
-- [Y] **2.5** Click "Save" - verify:
-  - [Y] Modal closes
-  - [Y] New group "Web Servers" appears in main list
-  - [Y] Toast shows: "Group created successfully!"
-  - [Y] Group is expanded by default
-  
-Notes:
-- tool tip functions better (only on hover of field), not persistent - also on hover of the field name
-  - when field is in focus (to type) it is not possible to hover any more. Can this be changed so it's possible to still hover over the field even when it is focused?
-  - if you focus field and start typing, the mouse is hidden anyway. so if use selected box, types but then moves mouse to hover the field, even if it's still in focus to type, the tooltip should show
-
-Results:
-All tests passed!
-
-#### 3. Sub-Group Creation
-- [Y] **3.1** Hover over "Web Servers" group header
-  - [Y] Menu button (⋮) appears on hover - we changed this to a persistent cog icon, but working
-- [Y] **3.2** Click menu button (⋮)
-  - [Y] Context menu appears with: Rename Group, Add Subgroup, Delete Group - SEE NOTES
-- [Y] **3.3** Click "Add Subgroup"
-  - [Y] Modal opens with title "New Subgroup"
-  - [Y] Parent dropdown pre-selected to "Web Servers"
-- [Y] **3.4** Enter name: "Apache Servers"
-- [Y] **3.5** Click "Save" - verify:
-  - [Y] Sub-group appears indented under "Web Servers" (20px indent)
-  - [Y] Toast shows: "Group created successfully!"
-  
-Results:
-All tests passed! (Failed tests fixed in Phase A fixes)
-
-#### 4. Deep Nesting (3-Level Hierarchy)
-- [Y] **4.1** Create sub-group under "Apache Servers" named "Staging"
-  - [Y] Verify 40px indentation (2 levels deep)
-- [Y] **4.2** Try to create sub-group under "Staging"
-  - [Y] Backend should reject (max 3 levels)
-  - [Y] Toast error appears - SEE NOTES
-
-Results:
-All tests passed! (Failed tests fixed in Phase A fixes)
-
-#### 5. Group Renaming
-- [Y] **5.1** Click menu (⋮) on "Web Servers"
-- [Y] **5.2** Click "Rename Group"
-  - [Y] Modal opens with title "Edit Group"
-  - [Y] Current name "Web Servers" is pre-filled
-- [Y] **5.3** Change to "Production Web Servers"
-- [Y] **5.4** Click "Save" - verify:
-  - [Y] Group name updates in UI
-  - [Y] Toast shows: "Group updated successfully!"
-  - [Y] Sub-groups remain under renamed group
-
-Results:
-All tests passed!
-
-#### 6. Profile Assignment to Groups
-- [Y] **6.1** Click "+ New Profile" to create a profile
-- [Y] **6.2** In profile form, locate "Group" dropdown - SEE NOTES
-  - [Y] Dropdown shows "-- Ungrouped --" as default
-  - [Y] Dropdown shows all groups with hierarchical paths:
-    - [Y] "Production Web Servers"
-    - [Y] "Production Web Servers/Apache Servers"
-    - [Y] "Production Web Servers/Apache Servers/Staging"
-    - [Y] Other groups...
-- [Y] **6.3** Select "Production Web Servers/Apache Servers"
-- [Y] **6.4** Fill required fields and save
-- [Y] **6.5** Verify profile appears under "Apache Servers" sub-group
+#### 1. First Launch Testing
+- [ ] **1.1** Clear localStorage to simulate fresh install:
+  - [ ] Open browser console (if devtools enabled)
+  - [ ] Run: `localStorage.clear()`
+  - [ ] Reload app
+- [ ] **1.2** Launch v0.7.0 - verify:
+  - [ ] Migration toast appears first: "Upgraded to v0.7.0 with hierarchical groups!"
+  - [ ] 500ms later, splash screen appears automatically
+  - [ ] Splash screen shows "What's New in v0.7.0" title
+  - [ ] Release date shows: "Released on 2026-01-16"
+  - [ ] Subtitle shows: "Hierarchical Groups & Enhanced Organization"
+  - [ ] Highlights list displays 6 bullet points
+  - [ ] "View Full Release Notes" GitHub link is visible
+  - [ ] "Don't show this again" checkbox is checked by default
+  - [ ] "Close" button is visible at bottom-right
 
 Notes:
-- Drop-Down loads okay, however there is no margin at the bottom of the dropdown and the modal (can send screenshot to show)
-  - as the drop-down opening means the modal needs to scroll down a bit to see it, it should probably auto scroll. current behaviour opens drop-down but you can only see the first few entries and the whole modal needs to be scrolled to see the entire drop-down window space
-    
-Results:
-All tests passed! (Failed tests fixed in Phase A/B fixes)
-
-#### 7. Hierarchical Rendering
-- [Y] **7.1** Verify visual hierarchy:
-  - [Y] Top-level groups have no indentation
-  - [Y] 1st level sub-groups have 20px left padding on header
-  - [Y] 2nd level sub-groups have 40px left padding on header
-  - [Y] Profiles within groups also show indentation
-- [Y] **7.2** Expand/collapse top-level group
-  - [Y] All child groups and profiles hide/show together - SEE NOTES
-  - [Y] Chevron changes: ▶ (collapsed) ↔ ▼ (expanded)
 
 Results:
-All tests passed! (Failed tests fixed in Phase A fixes)
 
-#### 8. Group Filtering
-- [Y] **8.1** Click "Filter Groups" button
-- [Y] **8.2** Popup appears showing all groups with hierarchical paths - we changed this to only show top-level groups (it does and does not show sub-groups, which is correct)
-- [Y] **8.3** Uncheck "Production Web Servers"
-  - [Y] Group and all sub-groups/profiles disappear from main list
-  - [Y] Badge updates to show "X-1/X"
-- [Y] **8.4** Re-check the group
-  - [Y] Group reappears with all contents
-  - [Y] Badge updates to "X/X"
-- [Y] **8.5** Click "Clear All Filters"
-  - [Y] All groups become visible
-  - [Y] Badge shows "X/X"
-
-Results:
-All tests passed! (Failed tests fixed in Phase B fixes)
-
-#### 9. Collapse/Expand All
-- [Y] **9.1** Collapse several groups manually
-- [Y] **9.2** Click "Expand Groups" button
-  - [Y] All groups expand
-  - [Y] Button text changes to "Collapse Groups"
-- [Y] **9.3** Click "Collapse Groups" button
-  - [Y] All groups collapse
-  - [Y] Button text changes to "Expand Groups"
-
-Results:
-All tests passed! (Failed tests fixed in Phase B fixes)
-
-#### 10. Group Deletion - Empty Group
-- [Y] **10.1** Create a new empty group "Test Group"
-- [Y] **10.2** Click menu (⋮) → "Delete Group"
-  - [Y] Simple confirmation appears: "Are you sure...?" - SEE NOTES
-  - [Y] Two buttons: "Delete" (danger), "Cancel"
-- [Y] **10.3** Click "Delete"
-  - [Y] Group disappears
-  - [Y] Toast shows: "Group deleted successfully!"
-
-Results:
-All tests passed!
-
-#### 11. Group Deletion - Delete All Mode
-- [Y] **11.1** Create group "Temp" with 2 profiles
-- [Y] **11.2** Click menu (⋮) → "Delete Group"
-  - [Y] Confirmation shows: "Contains: 2 profile(s) and 0 subgroup(s)" - 
-  - [Y] Three buttons: "Delete All", "Move to Parent", "Cancel"
-  - [Y] Warning text explains both options
-- [Y] **11.3** Click "Delete All"
-  - [Y] Group AND all profiles deleted
-  - [Y] Toast shows: "Group and all contents deleted successfully!"
-
-Results:
-All tests passed! (Failed tests fixed in Phase A fixes)
-
-#### 12. Group Deletion - Move to Parent Mode
-- [Y] **12.1** Create hierarchy:
-  - [Y] "Parent Group"
-    - [Y] "Child Group" (with 2 profiles)
-- [/] **12.2** Delete "Child Group" using "Move to Parent"
-  - [/] Profiles move to "Parent Group"
-  - [/] "Child Group" disappears
-  - [/] Toast shows: "Group deleted. Contents moved to parent group."
-  - [/] Verify 2 profiles now appear under "Parent Group"
-
-Results:
-12.1 - Tests completed
-12.2 - Needs to be tested now Profile creation in Sub-Groups is fixed
-
-#### 13. Group Deletion - Top-Level Move to Parent
-- [Y] **13.1** Create top-level group "Temporary" with 2 profiles
-- [Y] **13.2** Delete using "Move to Parent"
-  - [Y] Profiles move to "Ungrouped" section
-  - [Y] Toast shows: "Group deleted. Contents moved to top level."
-
-Results:
-All tests passed!
-
-#### 14. Persistence Testing
-- [Y] **14.1** Create groups, collapse some, filter some
-- [Y] **14.2** Close and relaunch app
-  - [Y] Groups persist
-  - [Y] Collapsed state persists
-  - [Y] Filter state persists
-  - [Y] Profiles remain in correct groups
-
-Results:
-All tests passed!
-
-#### 15. Edge Cases
-- [Y] **15.1** Group name with special characters:
-  - [Y] Try: "Test-Group_2024 (Production) [v1.0] #main"
-  - [Y] Should work (allowed chars: - _ ( ) . [ ] #)
-- [Y] **15.2** Group name: 64 characters
-  - [Y] Should work (max length)
-  - [Y] Character counter shows "64 / 64"
-- [Y] **15.3** Group name: 65 characters
-  - [Y] Should fail validation
-- [Y] **15.4** Duplicate group names at same level
-  - [Y] Should fail (backend enforces uniqueness per parent) - SEE NOTES
-- [Y] **15.5** Duplicate group names at different levels
-  - [Y] Should work (different parent_id)
-
-Results:
-All tests passed!
-
-#### 16. Profile Editing
-- [Y] **16.1** Edit an existing profile
-- [Y] **16.2** Change its group assignment
-- [Y] **16.3** Save
-  - [Y] Profile moves to new group in UI
-  - [Y] Toast shows: "Profile updated successfully!"
-
-Results:
-All tests passed!
-
-#### 17. UI Polish
-- [Y] **17.1** Context menu:
-  - [Y] Positioned near click location
-  - [Y] Closes when clicking outside
-  - [Y] Items have hover effect
-- [Y] **17.2** Hierarchical paths in dropdowns:
-  - [Y] Clear and readable
-  - [Y] Sorted alphabetically
-  - [Y] Top-level option always first
-  
-Results:
-All tests passed!
-
-#### 18. Migration Edge Cases
-- [Y] **18.1** Verify second launch (migration already done):
-  - [Y] No toast notification
-  - [Y] No reset of filters/collapsed state
-  - [Y] localStorage has `migrationVersion: "0.7.0"`
-
-Results:
-All tests passed!
-
-#### 19. Performance
-- [/] **19.1** Create 20+ groups with deep nesting
-  - [/] UI remains responsive
-  - [/] Rendering is smooth
-- [/] **19.2** Create 100+ profiles across groups
-  - [/] Search works quickly
-  - [/] Expand/collapse is instant
-  
-Notes:
-- Not testing at this time (will do later when everything else is working)
-
-#### 20. Error Handling
-- [Y] **20.1** Try to rename group to empty string
-  - [/] Should fail validation - not required, no longer even lets you save
-  - [/] Toast error appears - not required, no longer even lets you save
-- [/] **20.2** Try to create circular reference (if possible via UI)
-  - [/] Backend should prevent
-- [/] **20.3** Delete group while profile modal is open referencing that group
-  - [/] Should handle gracefully
+#### 2. Splash Screen Content Verification
+- [ ] **2.1** Verify all 6 highlights are displayed:
+  - [ ] "Hierarchical group system with sub-groups (up to 3 levels)"
+  - [ ] "Separate group management with Add, Rename, Delete options"
+  - [ ] "Enhanced group filter with hierarchical display"
+  - [ ] "Improved keyboard navigation with arrow key support"
+  - [ ] "Version splash screen for major release announcements"
+  - [ ] "Performance improvements and bug fixes"
+- [ ] **2.2** Verify layout:
+  - [ ] Header stays visible when scrolling (title + date + subtitle)
+  - [ ] Only highlights list scrolls (if content is long)
+  - [ ] Footer stays visible (GitHub link)
+  - [ ] Actions stay visible (checkbox + Close button)
 
 Notes:
-- Unable to test 20.2 and 20.3 due to not being possible in the GUI
 
 Results:
-All tests passed!
+
+#### 3. GitHub Link Testing
+- [ ] **3.1** Click "View Full Release Notes" link
+  - [ ] Opens in new browser tab
+  - [ ] URL is: https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.0
+  - [ ] GitHub release page loads correctly
+  - [ ] Splash screen remains open in app
+
+Notes:
+
+Results:
+
+#### 4. Close with Checkbox (Don't Show Again)
+- [ ] **4.1** Verify checkbox is checked by default
+- [ ] **4.2** Click "Close" button
+  - [ ] Splash screen closes
+  - [ ] Can continue using app normally
+- [ ] **4.3** Reload app
+  - [ ] Migration toast does NOT appear (already migrated)
+  - [ ] Splash screen does NOT appear (dismissed with checkbox)
+- [ ] **4.4** Check localStorage:
+  - [ ] Open console and run: `localStorage.getItem('lastSplashVersion')`
+  - [ ] Should return: `"0.7.0"`
+  - [ ] Run: `localStorage.getItem('splashDismissedUnchecked')`
+  - [ ] Should return: `null` (removed when dismissed with checkbox)
+
+Notes:
+
+Results:
+
+#### 5. Close without Checkbox (Show Again)
+- [ ] **5.1** Clear localStorage and reload to reset
+- [ ] **5.2** Wait for splash screen to appear
+- [ ] **5.3** UNCHECK "Don't show this again" checkbox
+- [ ] **5.4** Click "Close" button
+  - [ ] Splash screen closes
+- [ ] **5.5** Reload app
+  - [ ] Splash screen appears again (because checkbox was unchecked)
+- [ ] **5.6** Check localStorage:
+  - [ ] Run: `localStorage.getItem('splashDismissedUnchecked')`
+  - [ ] Should return: `"true"`
+  - [ ] Run: `localStorage.getItem('lastSplashVersion')`
+  - [ ] Should return: `null` or old version (not updated to 0.7.0)
+- [ ] **5.7** This time, leave checkbox CHECKED and close
+- [ ] **5.8** Reload app
+  - [ ] Splash screen should NOT appear anymore
+
+Notes:
+
+Results:
+
+#### 6. Version Link in Settings
+- [ ] **6.1** Open Settings (gear icon)
+- [ ] **6.2** Scroll to "About" section
+- [ ] **6.3** Click on version number "0.7.0" link
+  - [ ] Settings modal stays open
+  - [ ] Splash screen opens on top of settings
+- [ ] **6.4** Close splash screen
+  - [ ] Returns to settings modal
+  - [ ] Can close settings normally
+- [ ] **6.5** Click version link multiple times
+  - [ ] Splash screen can be reopened repeatedly
+  - [ ] Each time shows same content
+  - [ ] Checkbox resets to checked each time
+
+Notes:
+
+Results:
+
+#### 7. Keyboard Navigation
+- [ ] **7.1** Open splash screen (via version link or fresh launch)
+- [ ] **7.2** Press Tab key repeatedly:
+  - [ ] First focus: GitHub link (blue outline)
+  - [ ] Second Tab: Checkbox (blue outline)
+  - [ ] Third Tab: Close button (blue outline)
+  - [ ] Fourth Tab: Cycles back to GitHub link
+- [ ] **7.3** Press Shift+Tab to cycle backwards:
+  - [ ] From Close → Checkbox → GitHub link → Close
+- [ ] **7.4** With checkbox focused, press Space:
+  - [ ] Checkbox toggles on/off
+- [ ] **7.5** Press Escape key:
+  - [ ] Splash screen closes
+  - [ ] Saves preference based on checkbox state
+
+Notes:
+
+Results:
+
+#### 8. Backdrop Click
+- [ ] **8.1** Open splash screen
+- [ ] **8.2** Click on dark area outside modal
+  - [ ] Splash screen closes
+  - [ ] Saves preference based on checkbox state
+
+Notes:
+
+Results:
+
+#### 9. Responsive Layout Testing
+- [ ] **9.1** Test at various window widths:
+  - [ ] Full width: Checkbox and Close button centered, on same row
+  - [ ] Medium width: Still on same row, centered
+  - [ ] Minimum width: Checkbox and Close stay on same row (never wrap)
+- [ ] **9.2** Verify spacing:
+  - [ ] No excessive padding at bottom
+  - [ ] Balanced spacing above and below checkbox/button section
+- [ ] **9.3** Verify scrolling:
+  - [ ] Modal itself never scrolls
+  - [ ] Only highlights list scrolls when content is too long
+  - [ ] Header (title, date, subtitle) always visible at top
+  - [ ] Footer (GitHub link) always visible above actions
+
+Notes:
+
+Results:
+
+#### 10. Version Upgrade Simulation
+- [ ] **10.1** Simulate being on old version:
+  - [ ] Run: `localStorage.setItem('lastSplashVersion', '0.6.5')`
+  - [ ] Run: `localStorage.removeItem('splashDismissedUnchecked')`
+- [ ] **10.2** Reload app
+  - [ ] Splash screen should appear (version change detected)
+  - [ ] Shows v0.7.0 content
+- [ ] **10.3** Dismiss with checkbox checked
+- [ ] **10.4** Reload app
+  - [ ] Splash screen should NOT appear
+  - [ ] localStorage should have `lastSplashVersion: "0.7.0"`
+
+Notes:
+
+Results:
+
+#### 11. localStorage Keys Review
+- [ ] **11.1** Check for old version-specific keys:
+  - [ ] Run: `Object.keys(localStorage).filter(k => k.includes('splash'))`
+  - [ ] Should only see: `lastSplashVersion` and possibly `splashDismissedUnchecked`
+  - [ ] Should NOT see: `splashScreenShown_0.7.0` or similar version-specific keys
+- [ ] **11.2** Verify migration keys:
+  - [ ] Run: `localStorage.getItem('migrationVersion')`
+  - [ ] Should return: `"0.7.0"`
+  - [ ] Run: `localStorage.getItem('migrationToastShown_0.7.0')`
+  - [ ] Should return: `"true"` (after first launch)
+
+Notes:
+
+Results:
+
+#### 12. Visual Polish
+- [ ] **12.1** Verify header layout:
+  - [ ] Title and date on same row
+  - [ ] Date aligned to right
+  - [ ] Subtitle below title (one line)
+- [ ] **12.2** Verify footer layout:
+  - [ ] GitHub button centered
+  - [ ] Button has GitHub icon on left
+  - [ ] Hover shows background color change
+  - [ ] Focus shows blue outline
+- [ ] **12.3** Verify actions layout:
+  - [ ] Checkbox and Close button centered together
+  - [ ] Both on same row at all widths
+  - [ ] Adequate spacing between checkbox and button
+- [ ] **12.4** Test in light and dark themes:
+  - [ ] All text is readable
+  - [ ] Borders are visible
+  - [ ] Colors match app theme
+
+Notes:
+
+Results:
+
+#### 13. Edge Cases
+- [ ] **13.1** Open splash screen while another modal is open:
+  - [ ] Opens settings modal
+  - [ ] Click version link
+  - [ ] Splash should open on top
+  - [ ] Close splash → returns to settings
+- [ ] **13.2** Rapid clicking:
+  - [ ] Click Close button multiple times rapidly
+  - [ ] Should only save once, close cleanly
+- [ ] **13.3** Multiple browser windows (if applicable):
+  - [ ] Open two app windows
+  - [ ] Dismiss in one window
+  - [ ] Reload other window
+  - [ ] Should respect dismissal (shared localStorage)
+
+Notes:
+
+Results:
 
 **Test Results Summary:**
-- Total Tests: 20 categories, ~80 individual checks
+- Total Tests: 13 categories, ~60 individual checks
 - Passed: ___
 - Failed: ___
 - Blockers: ___
 
 **Found Issues:**
-See all the annotation embedded in the testing plan above
+(Add notes for any issues found during testing)
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned

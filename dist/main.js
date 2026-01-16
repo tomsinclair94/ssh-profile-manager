@@ -51,6 +51,26 @@ const TOAST_DURATION_LONG = 4000;   // 4 seconds
 const TOAST_DURATION_LOADING = 10000; // 10 seconds (for loading states)
 const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
+// Version and Changelog Constants
+const CURRENT_APP_VERSION = '0.7.0';
+
+const VERSION_CHANGELOG = {
+    '0.7.0': {
+        title: 'Hierarchical Groups & Enhanced Organization',
+        subtitle: 'Hierarchical Groups & Enhanced Organization',
+        highlights: [
+            'Hierarchical group system with sub-groups (up to 3 levels)',
+            'Separate group management with Add, Rename, Delete options',
+            'Enhanced group filter with hierarchical display',
+            'Improved keyboard navigation with arrow key support',
+            'Version splash screen for major release announcements',
+            'Performance improvements and bug fixes'
+        ],
+        releaseDate: '2026-01-16',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.0'
+    }
+};
+
 // Validation patterns and rules
 const VALIDATION = {
     name: {
@@ -450,6 +470,12 @@ let groupNameInput;
 let groupParentSelect;
 let groupSaveBtn;
 let groupCloseBtn;
+// Version Splash Screen Elements
+let versionSplashModal;
+let versionSplashCloseBtn;
+let versionSplashDontShowCheckbox;
+let versionSplashGithubLink;
+let versionLink; // About section
 
 // Confirmation promise resolver
 let confirmResolver = null;
@@ -763,6 +789,38 @@ async function handleModalShortcuts(e) {
             }
             return;
         }
+
+        // Version Splash Screen modal
+        if (!versionSplashModal.classList.contains('hidden')) {
+            e.preventDefault();
+
+            // Tabbable items: GitHub link -> Checkbox -> Close button
+            const items = [versionSplashGithubLink, versionSplashDontShowCheckbox, versionSplashCloseBtn].filter(item => item);
+
+            if (items.length > 0) {
+                const currentIndex = items.indexOf(document.activeElement);
+                let nextIndex;
+
+                if (e.shiftKey) {
+                    // Shift+Tab - backwards
+                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                } else {
+                    // Tab - forwards
+                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                }
+
+                items[nextIndex].focus();
+            }
+            return;
+        }
+    }
+
+    // Space - Toggle checkbox in version splash screen
+    if (e.key === ' ' && !versionSplashModal.classList.contains('hidden')) {
+        if (document.activeElement === versionSplashDontShowCheckbox) {
+            // Let default behavior handle it
+            return;
+        }
     }
 
     // Escape - Close modal or cancel
@@ -773,6 +831,12 @@ async function handleModalShortcuts(e) {
         const terminalModal = document.getElementById('terminal-modal');
         if (terminalModal && !terminalModal.classList.contains('hidden')) {
             closeEmbeddedTerminal();
+            return;
+        }
+
+        // Close version splash screen modal
+        if (!versionSplashModal.classList.contains('hidden')) {
+            closeVersionSplashScreen();
             return;
         }
 
@@ -1691,6 +1755,12 @@ async function init() {
     groupParentSelect = document.getElementById('group-parent');
     groupSaveBtn = document.getElementById('group-save-btn');
     groupCloseBtn = document.getElementById('group-close-btn');
+    // Version Splash Screen Elements
+    versionSplashModal = document.getElementById('version-splash-modal');
+    versionSplashCloseBtn = document.getElementById('version-splash-close-btn');
+    versionSplashDontShowCheckbox = document.getElementById('version-splash-dont-show-checkbox');
+    versionSplashGithubLink = document.getElementById('version-splash-github-link');
+    versionLink = document.querySelector('.version-link');
 
     debug.log('DOM elements retrieved');
 
@@ -1711,6 +1781,10 @@ async function init() {
     await loadRecentConnections(); // Load recent connections after profiles
     loadRecentConnectionsLimit(); // Load recent connections limit into settings
     loadRecentConnectionsCollapsedState(); // Load recent connections collapsed state
+
+    // Check and show version splash screen if needed
+    checkAndShowVersionSplash();
+
     loadThemePreference();
     loadAutoUpdatePreference();
     loadIncludeProfilesPreference();
@@ -1904,6 +1978,172 @@ function performV070Migration() {
     localStorage.setItem(MIGRATION_TOAST_SHOWN_KEY, 'true');
 
     debug.log('v0.7.0 migration complete');
+}
+
+// Version Splash Screen Functions
+
+/**
+ * Check if the version splash screen should be shown
+ * Compares current version with last shown version
+ * @returns {boolean} - True if splash should be shown, false otherwise
+ */
+function shouldShowVersionSplash() {
+    const LAST_SPLASH_VERSION_KEY = 'lastSplashVersion';
+    const SPLASH_DISMISSED_UNCHECKED_KEY = 'splashDismissedUnchecked';
+
+    const lastShownVersion = localStorage.getItem(LAST_SPLASH_VERSION_KEY);
+    const dismissedUnchecked = localStorage.getItem(SPLASH_DISMISSED_UNCHECKED_KEY) === 'true';
+
+    // Show splash if:
+    // 1. Never shown before (first launch)
+    // 2. Current version is different from last shown version
+    // 3. Was dismissed without checkbox on this version (show again next launch)
+    if (!lastShownVersion) {
+        return true; // First time
+    }
+
+    if (lastShownVersion !== CURRENT_APP_VERSION) {
+        return true; // New version
+    }
+
+    if (dismissedUnchecked) {
+        return true; // Show again this session
+    }
+
+    return false;
+}
+
+/**
+ * Mark the version splash screen as shown with preference
+ * @param {boolean} dontShowAgain - True if user checked "Don't show again"
+ */
+function markVersionSplashShown(dontShowAgain) {
+    const LAST_SPLASH_VERSION_KEY = 'lastSplashVersion';
+    const SPLASH_DISMISSED_UNCHECKED_KEY = 'splashDismissedUnchecked';
+
+    if (dontShowAgain) {
+        // User checked "Don't show again" - mark this version as shown
+        localStorage.setItem(LAST_SPLASH_VERSION_KEY, CURRENT_APP_VERSION);
+        localStorage.removeItem(SPLASH_DISMISSED_UNCHECKED_KEY);
+        debug.log(`Version splash ${CURRENT_APP_VERSION} permanently dismissed`);
+    } else {
+        // User dismissed without checkbox - mark for showing again next launch
+        localStorage.setItem(SPLASH_DISMISSED_UNCHECKED_KEY, 'true');
+        // Don't update lastSplashVersion - keep it as old version or empty
+        debug.log(`Version splash ${CURRENT_APP_VERSION} dismissed until next launch`);
+    }
+}
+
+/**
+ * Populate the version splash screen with changelog data
+ * @param {string} version - The version to display (e.g., '0.7.0')
+ */
+function populateVersionSplash(version) {
+    const changelog = VERSION_CHANGELOG[version];
+
+    if (!changelog) {
+        debug.warn(`No changelog data found for version ${version}`);
+        return false;
+    }
+
+    // Set title and subtitle
+    const titleElement = document.getElementById('version-splash-title');
+    const subtitleElement = document.getElementById('version-splash-subtitle');
+    const descriptionElement = document.getElementById('version-splash-description');
+
+    if (titleElement) {
+        titleElement.textContent = `What's New in v${version}`;
+    }
+
+    if (subtitleElement) {
+        subtitleElement.textContent = changelog.subtitle || changelog.title;
+    }
+
+    if (descriptionElement) {
+        descriptionElement.textContent = `Released on ${changelog.releaseDate}`;
+    }
+
+    // Populate highlights list
+    const highlightsList = document.getElementById('version-splash-highlights');
+    if (highlightsList) {
+        highlightsList.innerHTML = ''; // Clear existing items
+
+        changelog.highlights.forEach(highlight => {
+            const li = document.createElement('li');
+            li.textContent = highlight;
+            highlightsList.appendChild(li);
+        });
+    }
+
+    // Set GitHub link
+    if (versionSplashGithubLink) {
+        versionSplashGithubLink.href = changelog.githubUrl;
+    }
+
+    debug.log(`Version splash populated for ${version}`);
+    return true;
+}
+
+/**
+ * Show the version splash screen modal
+ * @param {string} version - The version to display (e.g., '0.7.0')
+ */
+function showVersionSplashScreen(version) {
+    // Populate with changelog data
+    const populated = populateVersionSplash(version);
+
+    if (!populated) {
+        // If no changelog data, open GitHub URL directly
+        const changelog = VERSION_CHANGELOG[version];
+        if (changelog && changelog.githubUrl) {
+            shell.open(changelog.githubUrl);
+        }
+        return;
+    }
+
+    // Reset checkbox to checked (default)
+    if (versionSplashDontShowCheckbox) {
+        versionSplashDontShowCheckbox.checked = true;
+    }
+
+    // Show modal
+    versionSplashModal.classList.remove('hidden');
+
+    // Focus GitHub link as first tabbable element
+    if (versionSplashGithubLink) {
+        versionSplashGithubLink.focus();
+    }
+
+    debug.log(`Version splash screen shown for ${version}`);
+}
+
+/**
+ * Close the version splash screen modal and save preference
+ */
+function closeVersionSplashScreen() {
+    const dontShowAgain = versionSplashDontShowCheckbox?.checked || false;
+
+    // Mark splash as shown with user preference
+    markVersionSplashShown(dontShowAgain);
+
+    // Hide modal
+    versionSplashModal.classList.add('hidden');
+
+    debug.log('Version splash screen closed');
+}
+
+/**
+ * Check and show version splash screen if needed
+ * Called during app initialization after migration completes
+ */
+function checkAndShowVersionSplash() {
+    // Check if splash should be shown
+    if (shouldShowVersionSplash()) {
+        // Wait 500ms after migration toast to show splash
+        setTimeout(() => {
+            showVersionSplashScreen(CURRENT_APP_VERSION);
+        }, 500);
+    }
 }
 
 // Update profile count badge
@@ -3004,6 +3244,26 @@ function setupEventListeners() {
             }
         }
     });
+
+    // Version Splash Screen Modal
+    versionSplashCloseBtn.addEventListener('click', () => {
+        closeVersionSplashScreen();
+    });
+
+    // Close splash screen when clicking backdrop
+    versionSplashModal.addEventListener('click', (e) => {
+        if (e.target === versionSplashModal) {
+            closeVersionSplashScreen();
+        }
+    });
+
+    // Version link in About section - open splash screen instead of GitHub
+    if (versionLink) {
+        versionLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showVersionSplashScreen(CURRENT_APP_VERSION);
+        });
+    }
 
     // Settings modal
     settingsBtn.addEventListener('click', () => {

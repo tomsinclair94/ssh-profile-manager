@@ -1646,6 +1646,199 @@ form {
 }
 
 /* ===========================
+   Version Splash Screen Styles
+   =========================== */
+
+.version-splash-content {
+    max-width: 640px;
+    max-height: 85vh;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent modal itself from scrolling */
+}
+
+/* Header - Fixed at top */
+.version-splash-header {
+    flex-shrink: 0;
+    padding: 24px 24px 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Title row with date on same line */
+.version-splash-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.version-splash-title-row h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-color);
+    flex-shrink: 0;
+}
+
+.version-splash-date {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    font-size: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#version-splash-intro h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* Body - Scrollable content */
+.version-splash-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    min-height: 0; /* Important for flex scrolling */
+}
+
+#version-splash-highlights-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.version-splash-highlights {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.version-splash-highlights li {
+    padding: 8px 0 8px 24px;
+    position: relative;
+    color: var(--text-color);
+    line-height: 1.5;
+}
+
+.version-splash-highlights li::before {
+    content: "•";
+    position: absolute;
+    left: 8px;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Footer - Fixed at bottom */
+.version-splash-footer {
+    flex-shrink: 0;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.version-splash-footer p {
+    margin: 0;
+    text-align: center;
+}
+
+.splash-github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background-color 0.15s ease;
+}
+
+.splash-github-link:hover {
+    background-color: var(--hover-color);
+}
+
+.splash-github-link:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.splash-github-link svg {
+    flex-shrink: 0;
+}
+
+/* Actions - Fixed at bottom with Close button */
+.version-splash-actions {
+    flex-shrink: 0;
+    padding: 14px 24px 10px 24px; /* Less padding at bottom to balance visual spacing */
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center; /* Center the checkbox and button together */
+    align-items: center;
+    gap: 16px;
+    flex-wrap: nowrap; /* Prevent wrapping to new line */
+}
+
+.version-splash-actions .checkbox-label {
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.version-splash-actions input[type="checkbox"]:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.version-splash-actions button {
+    flex-shrink: 0;
+}
+
+/* Responsive splash screen sizing */
+@media (max-width: 768px) {
+    .version-splash-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .version-splash-header {
+        padding: 16px 16px 12px 16px;
+    }
+
+    /* Stack title and date on mobile */
+    .version-splash-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        margin-bottom: 12px;
+    }
+
+    .version-splash-body {
+        padding: 16px;
+    }
+
+    .version-splash-footer {
+        padding: 12px 16px;
+    }
+
+    .version-splash-actions {
+        padding: 12px 16px 8px 16px; /* Less padding at bottom */
+        /* Keep flex-direction: row (default) - don't stack */
+        gap: 12px;
+    }
+}
+
+/* ===========================
    Recent Connections Styles
    =========================== */
 
