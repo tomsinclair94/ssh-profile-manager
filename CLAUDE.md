@@ -32,12 +32,14 @@ bun run build    # Production build
 
 **CRITICAL: When creating a new dev branch (`vX.X.X-dev`), follow these steps:**
 
-**Step 1: Bump version in ALL 7 locations:**
+**Step 1: Bump version in ALL locations:**
 1. `src-tauri/tauri.conf.json` (line ~4: `"version": "X.X.X"`)
 2. `src-tauri/Cargo.toml` (line ~3: `version = "X.X.X"`)
 3. `package.json` (line ~3: `"version": "X.X.X"`)
 4. `dist/index.html` (line ~22 + ~393: `vX.X.X` and `X.X.X`)
 5. `README.md` (line ~14 + ~16: badge versions)
+6. `dist/main.js` (line ~56: `CURRENT_APP_VERSION = 'X.X.X'`)
+7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry with version, releaseDate, subtitle, highlights, and githubUrl)
 
 **Step 2: Enable Developer Tools:**
 Enable devtools for debugging during development:
@@ -146,6 +148,29 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Modal trapping: `getAllTabbableItems()` for Tab cycling
 - Focus style: 2px outline + box-shadow
 - Popup auto-close: 100ms delay on blur
+
+**Modal Stack System:**
+- Dynamic stack tracking ensures keyboard navigation always targets the topmost modal
+- Stack: `modalStack` array (line ~484), functions: `pushModal()`, `popModal()`, `getTopmostModal()`
+- **Adding New Modals:**
+  1. Call `pushModal('modalId')` when showing modal (after `classList.remove('hidden')`)
+  2. Call `popModal('modalId')` when hiding modal (after `classList.add('hidden')`)
+  3. Add case to `handleModalShortcuts()` switch statements for Tab, Escape, Cmd/Ctrl+S
+  4. Create `getModalIdTabbableItems()` function if modal has focusable elements
+- **Example:**
+  ```javascript
+  function openMyModal() {
+      myModal.classList.remove('hidden');
+      pushModal('myModal');  // Add to stack
+  }
+
+  function closeMyModal() {
+      myModal.classList.add('hidden');
+      popModal('myModal');  // Remove from stack
+  }
+  ```
+- Handles nested modals automatically (e.g., splash screen over settings, confirm over profile)
+- No manual priority ordering needed - stack handles it dynamically
 
 **Security:**
 - Backend validation: XSS, command injection, path traversal

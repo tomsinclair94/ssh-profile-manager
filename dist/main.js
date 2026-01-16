@@ -476,7 +476,32 @@ let versionSplashModal;
 let versionSplashCloseBtn;
 let versionSplashDontShowCheckbox;
 let versionSplashGithubLink;
-let versionLink; // About section
+let versionLink; // About section in settings
+let mainVersionLink; // Main screen header
+
+// Modal Stack System - tracks which modal is topmost
+// When multiple modals are open (e.g., splash screen over settings),
+// this ensures keyboard navigation always targets the topmost modal
+const modalStack = [];
+
+function pushModal(modalId) {
+    if (!modalStack.includes(modalId)) {
+        modalStack.push(modalId);
+        debug.log(`Modal stack: pushed ${modalId}. Stack: [${modalStack.join(', ')}]`);
+    }
+}
+
+function popModal(modalId) {
+    const index = modalStack.indexOf(modalId);
+    if (index > -1) {
+        modalStack.splice(index, 1);
+        debug.log(`Modal stack: popped ${modalId}. Stack: [${modalStack.join(', ')}]`);
+    }
+}
+
+function getTopmostModal() {
+    return modalStack.length > 0 ? modalStack[modalStack.length - 1] : null;
+}
 
 // Confirmation promise resolver
 let confirmResolver = null;
@@ -518,7 +543,8 @@ function setupKeyboardShortcutListeners() {
         const inInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
         const inModal = !profileModal.classList.contains('hidden') ||
                        !settingsModal.classList.contains('hidden') ||
-                       !confirmModal.classList.contains('hidden');
+                       !confirmModal.classList.contains('hidden') ||
+                       !versionSplashModal.classList.contains('hidden');
 
         // Handle modal shortcuts (always active in modals)
         if (inModal) {
@@ -717,168 +743,213 @@ function getSettingsModalTabbableItems() {
     return items;
 }
 
+function getGroupModalTabbableItems() {
+    const items = [];
+
+    // Group name input
+    const groupNameInput = document.getElementById('group-name');
+    if (groupNameInput) items.push(groupNameInput);
+
+    // Parent group select
+    const groupParentSelect = document.getElementById('group-parent');
+    if (groupParentSelect) items.push(groupParentSelect);
+
+    // Header buttons (Save/Close at the end)
+    const saveBtn = document.getElementById('group-save-btn');
+    if (saveBtn && !saveBtn.disabled) items.push(saveBtn);
+
+    const closeBtn = document.getElementById('group-close-btn');
+    if (closeBtn && !closeBtn.disabled) items.push(closeBtn);
+
+    return items;
+}
+
 async function handleModalShortcuts(e) {
+    // Get the topmost modal from the stack
+    const topmostModal = getTopmostModal();
+
+    if (!topmostModal) return; // No modals open
+
     // Tab - Special handling for all modals
     if (e.key === 'Tab') {
-        // Confirm modal
-        if (!confirmModal.classList.contains('hidden')) {
-            e.preventDefault();
-            const focusedElement = document.activeElement;
+        e.preventDefault();
 
-            // If nothing is focused (mouse mode), focus cancel button as default
-            if (focusedElement !== confirmOkBtn && focusedElement !== confirmCancelBtn) {
-                confirmCancelBtn.focus();
+        switch (topmostModal) {
+            case 'confirm': {
+                const focusedElement = document.activeElement;
+
+                // If nothing is focused (mouse mode), focus cancel button as default
+                if (focusedElement !== confirmOkBtn && focusedElement !== confirmCancelBtn) {
+                    confirmCancelBtn.focus();
+                    return;
+                }
+
+                if (e.shiftKey) {
+                    // Shift+Tab - Cycle backwards
+                    if (focusedElement === confirmCancelBtn) {
+                        confirmOkBtn.focus();
+                    } else {
+                        confirmCancelBtn.focus();
+                    }
+                } else {
+                    // Tab - Cycle forwards
+                    if (focusedElement === confirmOkBtn) {
+                        confirmCancelBtn.focus();
+                    } else {
+                        confirmOkBtn.focus();
+                    }
+                }
                 return;
             }
 
-            if (e.shiftKey) {
-                // Shift+Tab - Cycle backwards
-                if (focusedElement === confirmCancelBtn) {
-                    confirmOkBtn.focus();
-                } else {
-                    confirmCancelBtn.focus();
+            case 'versionSplash': {
+                // Tabbable items: GitHub link -> Checkbox -> Close button
+                const items = [versionSplashGithubLink, versionSplashDontShowCheckbox, versionSplashCloseBtn].filter(item => item);
+
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
+
+                    if (e.shiftKey) {
+                        // Shift+Tab - backwards
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        // Tab - forwards
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
+
+                    items[nextIndex].focus();
                 }
-            } else {
-                // Tab - Cycle forwards
-                if (focusedElement === confirmOkBtn) {
-                    confirmCancelBtn.focus();
-                } else {
-                    confirmOkBtn.focus();
-                }
+                return;
             }
-            return;
-        }
 
-        // Profile modal
-        if (!profileModal.classList.contains('hidden')) {
-            e.preventDefault();
-            const items = getProfileModalTabbableItems();
-            if (items.length > 0) {
-                const currentIndex = items.indexOf(document.activeElement);
-                let nextIndex;
+            case 'profile': {
+                const items = getProfileModalTabbableItems();
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
 
-                if (e.shiftKey) {
-                    // Shift+Tab - backwards
-                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-                } else {
-                    // Tab - forwards
-                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    if (e.shiftKey) {
+                        // Shift+Tab - backwards
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        // Tab - forwards
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
+
+                    items[nextIndex].focus();
                 }
-
-                items[nextIndex].focus();
+                return;
             }
-            return;
-        }
 
-        // Settings modal
-        if (!settingsModal.classList.contains('hidden')) {
-            e.preventDefault();
-            const items = getSettingsModalTabbableItems();
-            if (items.length > 0) {
-                const currentIndex = items.indexOf(document.activeElement);
-                let nextIndex;
+            case 'settings': {
+                const items = getSettingsModalTabbableItems();
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
 
-                if (e.shiftKey) {
-                    // Shift+Tab - backwards
-                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-                } else {
-                    // Tab - forwards
-                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    if (e.shiftKey) {
+                        // Shift+Tab - backwards
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        // Tab - forwards
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
+
+                    items[nextIndex].focus();
                 }
-
-                items[nextIndex].focus();
+                return;
             }
-            return;
-        }
 
-        // Version Splash Screen modal
-        if (!versionSplashModal.classList.contains('hidden')) {
-            e.preventDefault();
+            case 'group': {
+                const items = getGroupModalTabbableItems();
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
 
-            // Tabbable items: GitHub link -> Checkbox -> Close button
-            const items = [versionSplashGithubLink, versionSplashDontShowCheckbox, versionSplashCloseBtn].filter(item => item);
+                    if (e.shiftKey) {
+                        // Shift+Tab - backwards
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        // Tab - forwards
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
 
-            if (items.length > 0) {
-                const currentIndex = items.indexOf(document.activeElement);
-                let nextIndex;
-
-                if (e.shiftKey) {
-                    // Shift+Tab - backwards
-                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-                } else {
-                    // Tab - forwards
-                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    items[nextIndex].focus();
                 }
-
-                items[nextIndex].focus();
+                return;
             }
-            return;
+
+            case 'terminal':
+                // Terminal modal handles Tab internally via xterm.js
+                // Don't prevent default, let xterm process it
+                return;
         }
     }
 
     // Space - Toggle checkbox in version splash screen
-    if (e.key === ' ' && !versionSplashModal.classList.contains('hidden')) {
+    if (e.key === ' ' && topmostModal === 'versionSplash') {
         if (document.activeElement === versionSplashDontShowCheckbox) {
             // Let default behavior handle it
             return;
         }
     }
 
-    // Escape - Close modal or cancel
+    // Escape - Close topmost modal
     if (e.key === 'Escape') {
         e.preventDefault();
 
-        // Close terminal modal first if open
-        const terminalModal = document.getElementById('terminal-modal');
-        if (terminalModal && !terminalModal.classList.contains('hidden')) {
-            closeEmbeddedTerminal();
-            return;
-        }
+        switch (topmostModal) {
+            case 'terminal':
+                closeEmbeddedTerminal();
+                return;
 
-        // Close version splash screen modal
-        if (!versionSplashModal.classList.contains('hidden')) {
-            closeVersionSplashScreen();
-            return;
-        }
+            case 'versionSplash':
+                closeVersionSplashScreen();
+                return;
 
-        // Close confirm modal first if open
-        if (!confirmModal.classList.contains('hidden')) {
-            if (confirmResolver) {
-                confirmResolver(false);
-                confirmResolver = null;
-            }
-            confirmModal.classList.add('hidden');
-            return;
-        }
+            case 'confirm':
+                if (confirmResolver) {
+                    confirmResolver(false);
+                    confirmResolver = null;
+                }
+                confirmModal.classList.add('hidden');
+                popModal('confirm');
+                return;
 
-        // Close settings modal
-        if (!settingsModal.classList.contains('hidden')) {
-            closeSettings();
-            return;
-        }
+            case 'settings':
+                closeSettings();
+                return;
 
-        // Close profile modal
-        if (!profileModal.classList.contains('hidden')) {
-            await closeModal();
-            return;
+            case 'profile':
+                await closeModal();
+                return;
+
+            case 'group':
+                await closeGroupModal();
+                return;
         }
     }
 
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-    // Cmd/Ctrl+S - Save (in profile or settings modal)
+    // Cmd/Ctrl+S - Save (in specific modals)
     if (cmdOrCtrl && e.key === 's') {
         e.preventDefault();
 
-        if (!profileModal.classList.contains('hidden')) {
-            saveProfile();
-            return;
-        }
+        switch (topmostModal) {
+            case 'profile':
+                saveProfile();
+                return;
 
-        if (!settingsModal.classList.contains('hidden')) {
-            saveSettings();
-            return;
+            case 'settings':
+                saveSettings();
+                return;
+
+            case 'group':
+                saveGroup();
+                return;
         }
     }
 
@@ -1761,7 +1832,8 @@ async function init() {
     versionSplashCloseBtn = document.getElementById('version-splash-close-btn');
     versionSplashDontShowCheckbox = document.getElementById('version-splash-dont-show-checkbox');
     versionSplashGithubLink = document.getElementById('version-splash-github-link');
-    versionLink = document.querySelector('.version-link');
+    versionLink = document.getElementById('settings-version-link');
+    mainVersionLink = document.getElementById('main-version-link');
 
     debug.log('DOM elements retrieved');
 
@@ -1837,7 +1909,7 @@ function setBrowseHint() {
 
 // Update scrollbar width CSS variable for search-bar alignment
 function updateScrollbarWidth() {
-    const BASE_PADDING = 24; // Match .search-bar base padding
+    const BASE_PADDING = 12; // Match .search-bar base padding
     const profilesContainer = document.getElementById('profiles-list');
     if (!profilesContainer) return;
 
@@ -2183,6 +2255,7 @@ function showVersionSplashScreen(version) {
 
     // Show modal
     versionSplashModal.classList.remove('hidden');
+    pushModal('versionSplash');
 
     // Focus GitHub link as first tabbable element
     if (versionSplashGithubLink) {
@@ -2203,6 +2276,7 @@ function closeVersionSplashScreen() {
 
     // Hide modal
     versionSplashModal.classList.add('hidden');
+    popModal('versionSplash');
 
     debug.log('Version splash screen closed');
 }
@@ -3259,6 +3333,7 @@ function setupEventListeners() {
             confirmResolver = null;
         }
         confirmModal.classList.add('hidden');
+        popModal('confirm');
         // Clear keyboard selections to prevent accidental actions after modal closes
         clearAllSelections();
     });
@@ -3269,6 +3344,7 @@ function setupEventListeners() {
             confirmResolver = null;
         }
         confirmModal.classList.add('hidden');
+        popModal('confirm');
         // Clear keyboard selections to prevent accidental actions after modal closes
         clearAllSelections();
     });
@@ -3293,6 +3369,7 @@ function setupEventListeners() {
                 confirmResolver = null;
             }
             confirmModal.classList.add('hidden');
+            popModal('confirm');
             // Clear keyboard selections to prevent accidental actions after modal closes
             clearAllSelections();
         }
@@ -3325,16 +3402,24 @@ function setupEventListeners() {
         closeVersionSplashScreen();
     });
 
-    // Close splash screen when clicking backdrop
-    versionSplashModal.addEventListener('click', (e) => {
-        if (e.target === versionSplashModal) {
-            closeVersionSplashScreen();
-        }
-    });
+    // Removed: backdrop click to close (users should use close button)
+    // versionSplashModal.addEventListener('click', (e) => {
+    //     if (e.target === versionSplashModal) {
+    //         closeVersionSplashScreen();
+    //     }
+    // });
 
     // Version link in About section - open splash screen instead of GitHub
     if (versionLink) {
         versionLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showVersionSplashScreen(CURRENT_APP_VERSION);
+        });
+    }
+
+    // Main screen version link - open splash screen
+    if (mainVersionLink) {
+        mainVersionLink.addEventListener('click', (e) => {
             e.preventDefault();
             showVersionSplashScreen(CURRENT_APP_VERSION);
         });
@@ -3748,6 +3833,7 @@ function customConfirm(message, options = {}) {
         confirmOkBtn.className = `btn ${okClass}`;
 
         confirmModal.classList.remove('hidden');
+        pushModal('confirm');
         confirmResolver = resolve;
 
         // Focus cancel button by default (safer option)
@@ -3834,6 +3920,7 @@ const debouncedCheckSettingsChanged = debounce(checkSettingsChanged, 50);
 
 function openSettings() {
     settingsModal.classList.remove('hidden');
+    pushModal('settings');
 
     // Scroll to top of modal content
     const modalContent = settingsModal.querySelector('.modal-content');
@@ -3863,6 +3950,7 @@ function openSettings() {
 // Force close settings without confirmation
 function forceCloseSettings() {
     settingsModal.classList.add('hidden');
+    popModal('settings');
     originalSettingsValues = {};
 }
 
@@ -5446,6 +5534,7 @@ async function openModal(profile = null) {
 
     updateAuthMethodVisibility();
     profileModal.classList.remove('hidden');
+    pushModal('profile');
 
     // Scroll to top of modal content
     const modalContent = profileModal.querySelector('.modal-content');
@@ -5595,6 +5684,7 @@ function checkGroupFormChanged() {
 // Close modal (force close without confirmation)
 function forceCloseModal() {
     profileModal.classList.add('hidden');
+    popModal('profile');
     editingProfileId = null;
     profileForm.reset();
     originalFormValues = {};
@@ -5736,6 +5826,7 @@ function duplicateProfile(id) {
     profileSaveBtn.disabled = true;
 
     profileModal.classList.remove('hidden');
+    pushModal('profile');
 }
 
 // Delete profile
@@ -5809,6 +5900,7 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     }
 
     groupModal.classList.remove('hidden');
+    pushModal('group');
 
     // Clear any previous validation errors
     groupNameInput.classList.remove('validation-error');
@@ -6022,6 +6114,7 @@ function updateFocusedDropdownItem(items) {
 // Close group modal
 async function closeGroupModal() {
     groupModal.classList.add('hidden');
+    popModal('group');
     editingGroupId = null;
     groupForm.reset();
 }
@@ -6251,6 +6344,7 @@ async function openEmbeddedTerminal(profileId) {
         terminalStatus.className = 'terminal-status connecting';
 
         terminalModal.classList.remove('hidden');
+        pushModal('terminal');
 
         // Initialize xterm.js
         const term = new Terminal({
@@ -6474,6 +6568,7 @@ async function closeEmbeddedTerminal() {
         // Just hide modal if no active session
         const terminalModal = document.getElementById('terminal-modal');
         terminalModal.classList.add('hidden');
+        popModal('terminal');
         return;
     }
 
@@ -6550,6 +6645,7 @@ async function closeEmbeddedTerminal() {
         const terminalModal = document.getElementById('terminal-modal');
         const terminalContainer = document.getElementById('terminal-container');
         terminalModal.classList.add('hidden');
+        popModal('terminal');
         terminalContainer.innerHTML = '<!-- xterm.js terminal will be mounted here -->';
     }
 }
