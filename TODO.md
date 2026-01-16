@@ -68,10 +68,10 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ localStorage migration: group names → group IDs
 - ✅ CSS styling: group menu button, context menu, hierarchical indentation
 
-**Phase 3 Cleanup Tasks:**
-- [ ] Fix Rust compiler warnings (non-critical):
-  - Unused variable `session_id` at `src/lib.rs:305:38` (prefix with underscore)
-  - Unused variable `abandoned_at` at `src/lib.rs:305:58` (prefix with underscore)
+**Phase 3 Cleanup Tasks:** ✅ Completed
+- [x] Fix Rust compiler warnings (non-critical):
+  - Fixed unused variable `session_id` at `src/lib.rs:305:38` (prefixed with underscore)
+  - Fixed unused variable `abandoned_at` at `src/lib.rs:305:58` (prefixed with underscore)
   - Note: These are in thread cleanup code and don't affect functionality
 
 **Phase 3 - Critical Bug Fixes:** ✅ All Phases (A, B, C) Completed
@@ -111,10 +111,16 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - Reduced maxLength from 255 to 194 characters (64*3 + 2 slashes)
   - Separated group NAME validation (64 chars, no slashes) from group PATH validation (194 chars, with slashes)
 
-**Phase 3 - Extra Features (Nice-to-Have):**
-- [ ] Tooltip behavior when field is focused (allow hover even when typing)
-- [ ] Modal auto-scroll for dropdowns (scroll to show full dropdown)
-- [ ] Better sub-group collapse behavior (collapse sub-groups when parent collapses, not just hide)
+**Phase 3 - Extra Features (Nice-to-Have):** ✅ Completed
+- [x] Tooltip behavior when field is focused (allow hover even when typing)
+  - Simplified: tooltips now always show below (consistent behavior)
+  - Hide when typing starts, reappear on hover
+- [x] Modal auto-scroll for dropdowns (scroll to show full dropdown)
+  - Dynamic padding injection to create scrollable space
+  - 20px breathing room below dropdown
+  - Padding restored when dropdown closes
+- [x] Better sub-group collapse behavior (collapse sub-groups when parent collapses, not just hide)
+  - Recursive collapse of all descendant groups when parent collapses
 
 **Phase 4 Progress (New Version Splash Screen):** 📋 Planned
 

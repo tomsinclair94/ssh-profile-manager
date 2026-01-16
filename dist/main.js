@@ -2450,12 +2450,34 @@ function attachProfileEventListeners() {
     });
 }
 
+// Get all descendant group IDs recursively
+function getDescendantGroupIds(groupId) {
+    const descendants = [];
+    const childGroups = groups.filter(g => g.parent_id === groupId);
+
+    childGroups.forEach(child => {
+        descendants.push(child.id);
+        // Recursively get descendants of this child
+        descendants.push(...getDescendantGroupIds(child.id));
+    });
+
+    return descendants;
+}
+
 // Toggle group collapse state
 function toggleGroup(groupId) {
     if (collapsedGroups.has(groupId)) {
+        // Expanding group
         collapsedGroups.delete(groupId);
     } else {
+        // Collapsing group - also collapse all descendant groups
         collapsedGroups.add(groupId);
+
+        // Collapse all sub-groups when parent collapses
+        const descendants = getDescendantGroupIds(groupId);
+        descendants.forEach(descendantId => {
+            collapsedGroups.add(descendantId);
+        });
     }
     saveCollapsedState();
 
@@ -3286,9 +3308,12 @@ function setupEventListeners() {
 
     // Setup dynamic tooltip positioning
     setupTooltipPositioning();
+
+    // Setup dropdown auto-scroll
+    setupDropdownAutoScroll();
 }
 
-// Setup dynamic tooltip positioning based on available viewport space
+// Setup tooltip hide/show behavior when typing
 function setupTooltipPositioning() {
     // Find all inputs and selects that have tooltips
     const inputsWithTooltips = document.querySelectorAll('.form-group input, .form-group select');
@@ -3297,25 +3322,65 @@ function setupTooltipPositioning() {
         const tooltip = input.nextElementSibling;
         if (!tooltip || !tooltip.classList.contains('input-tooltip')) return;
 
-        // On focus, check if there's enough space below to show tooltip
-        input.addEventListener('focus', () => {
-            // Get input position relative to viewport
-            const inputRect = input.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-
-            // Tooltip typically needs about 150px height (can vary based on content)
-            // Check if there's enough space below the input
-            const spaceBelow = viewportHeight - inputRect.bottom;
-            const tooltipHeight = 150; // Approximate tooltip height
-
-            if (spaceBelow < tooltipHeight) {
-                // Not enough space below, show tooltip above
-                tooltip.classList.add('tooltip-above');
-            } else {
-                // Enough space below, show tooltip normally
-                tooltip.classList.remove('tooltip-above');
-            }
+        // Hide tooltip when user starts typing
+        input.addEventListener('input', () => {
+            tooltip.classList.add('tooltip-hidden-typing');
         });
+
+        // Show tooltip again when hovering (after typing)
+        input.addEventListener('mouseenter', () => {
+            tooltip.classList.remove('tooltip-hidden-typing');
+        });
+
+        // Remove hiding class when field loses focus
+        input.addEventListener('blur', () => {
+            tooltip.classList.remove('tooltip-hidden-typing');
+        });
+    });
+}
+
+// Setup auto-scroll for dropdowns in modals
+function setupDropdownAutoScroll() {
+    // Find all select elements in modals
+    const selectElements = document.querySelectorAll('.modal-content select');
+
+    selectElements.forEach(select => {
+        // Listen for both click and focus events
+        const handleDropdown = () => {
+            // Small delay to ensure dropdown is rendered
+            setTimeout(() => {
+                // Find the modal container
+                const modal = select.closest('.modal-content');
+                if (!modal) return;
+
+                // Get positions
+                const selectRect = select.getBoundingClientRect();
+                const modalRect = modal.getBoundingClientRect();
+
+                // Estimate dropdown height based on number of options
+                // Each option is approximately 32px tall, show max 10 options visible
+                const optionCount = Math.min(select.options.length, 10);
+                const dropdownHeight = optionCount * 32;
+
+                // Calculate space available below the select within the modal
+                const spaceBelow = modalRect.bottom - selectRect.bottom;
+
+                // If dropdown would extend beyond modal, scroll to show it
+                if (spaceBelow < dropdownHeight) {
+                    // Calculate how much to scroll
+                    const scrollNeeded = dropdownHeight - spaceBelow + 20; // 20px padding
+
+                    // Smooth scroll the modal
+                    modal.scrollBy({
+                        top: scrollNeeded,
+                        behavior: 'smooth'
+                    });
+                }
+            }, 10);
+        };
+
+        select.addEventListener('click', handleDropdown);
+        select.addEventListener('focus', handleDropdown);
     });
 }
 
@@ -5500,6 +5565,47 @@ function showProfileGroupDropdown(filterText = '') {
             selectProfileGroup(group);
         });
     });
+
+    // Auto-scroll modal to show dropdown
+    setTimeout(() => {
+        const modal = profileGroupDropdown.closest('.modal-content');
+        if (!modal) return;
+
+        // Get positions after dropdown is fully rendered
+        const dropdownRect = profileGroupDropdown.getBoundingClientRect();
+        const modalRect = modal.getBoundingClientRect();
+
+        // We want 20px of breathing room below the dropdown
+        const desiredPadding = 20;
+
+        // Calculate how much the dropdown extends beyond the modal
+        const dropdownOverflow = dropdownRect.bottom - modalRect.bottom;
+
+        console.log('[DROPDOWN] Dropdown extends beyond modal by:', dropdownOverflow);
+
+        if (dropdownOverflow > -desiredPadding) {
+            // Add temporary padding to modal so there's room to scroll
+            const paddingNeeded = Math.abs(dropdownOverflow) + desiredPadding + 20; // Extra buffer
+            const originalPaddingBottom = modal.style.paddingBottom;
+            modal.style.paddingBottom = `${paddingNeeded}px`;
+            modal.dataset.originalPaddingBottom = originalPaddingBottom;
+
+            console.log('[DROPDOWN] Added padding:', paddingNeeded);
+
+            // Now scroll to show the dropdown with proper spacing
+            setTimeout(() => {
+                const scrollNeeded = Math.abs(dropdownOverflow) + desiredPadding;
+                console.log('[DROPDOWN] Scrolling by:', scrollNeeded);
+
+                modal.scrollBy({
+                    top: scrollNeeded,
+                    behavior: 'smooth'
+                });
+            }, 10);
+        } else {
+            console.log('[DROPDOWN] Dropdown fits within modal, no adjustment needed');
+        }
+    }, 50); // Delay to ensure dropdown is fully rendered
 }
 
 function hideProfileGroupDropdown() {
@@ -5508,6 +5614,14 @@ function hideProfileGroupDropdown() {
         profileGroupDropdown.classList.add('hidden');
         profileGroupDropdownVisible = false;
         focusedDropdownIndex = -1;
+
+        // Restore original modal padding if we modified it
+        const modal = profileGroupDropdown.closest('.modal-content');
+        if (modal && modal.dataset.originalPaddingBottom !== undefined) {
+            modal.style.paddingBottom = modal.dataset.originalPaddingBottom || '';
+            delete modal.dataset.originalPaddingBottom;
+            console.log('[DROPDOWN] Restored original padding');
+        }
     }
 }
 

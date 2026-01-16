@@ -824,6 +824,7 @@ button.keyboard-selected {
     max-height: 90vh;
     overflow-y: auto;
     overflow-x: hidden;
+    padding-bottom: 20px;
 }
 
 .confirm-modal-content {
@@ -1373,35 +1374,25 @@ form {
     overflow-y: auto;
 }
 
-/* For the last form group, show tooltip above instead of below */
-.form-group:last-child .input-tooltip {
-    top: auto;
-    bottom: 100%;
-    margin-top: 0;
-    margin-bottom: 4px;
-}
+/* Tooltips always show below - simple and consistent */
 
-/* For form groups near the bottom of scrollable containers, show tooltip above */
-.modal-content .form-group:nth-last-child(-n+2) .input-tooltip {
-    top: auto;
-    bottom: 100%;
-    margin-top: 0;
-    margin-bottom: 4px;
-}
-
-/* Dynamic tooltip positioning - added by JavaScript when viewport space is limited */
-.input-tooltip.tooltip-above {
-    top: auto !important;
-    bottom: 100% !important;
-    margin-top: 0 !important;
-    margin-bottom: 4px !important;
-}
-
-/* Show on hover (when not focused) */
-.form-group input:hover:not(:focus) + .input-tooltip,
-.form-group select:hover:not(:focus) + .input-tooltip {
+/* Show on hover (even when focused) */
+.form-group input:hover + .input-tooltip,
+.form-group select:hover + .input-tooltip {
     opacity: 1;
     visibility: visible;
+}
+
+/* Show tooltip when hovering over the label */
+.form-group label:hover ~ .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Hide tooltip when user is typing */
+.input-tooltip.tooltip-hidden-typing {
+    opacity: 0 !important;
+    visibility: hidden !important;
 }
 
 /* Show when field is invalid */

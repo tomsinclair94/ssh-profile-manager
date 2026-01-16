@@ -302,13 +302,13 @@ impl SessionRegistry {
                     let before_count = threads.len();
 
                     // Remove threads that have finished
-                    threads.retain(|(session_id, handle, abandoned_at)| {
+                    threads.retain(|(_session_id, handle, _abandoned_at)| {
                         if handle.is_finished() {
                             #[cfg(debug_assertions)]
                             println!(
                                 "Cleaned up abandoned thread for session {} (was abandoned {} seconds ago)",
-                                session_id,
-                                abandoned_at.elapsed().as_secs()
+                                _session_id,
+                                _abandoned_at.elapsed().as_secs()
                             );
                             false // Remove from vector
                         } else {
