@@ -75,8 +75,30 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Header and section padding optimization (consistent 12px left/right across all sections)
 - ✅ Typography improvements (title 24px, version 14px, logo 64px)
 
-**Phase 4 Progress (Export/Import Modes):** Not started
-- Check v0.7.0-hierarchical-groups-and-enhanced-organization.md plan for implementation details
+**Phase 4 Progress (Export/Import Modes):** In Progress
+
+**Phase 4A (Version Tracking Foundation):** ✅ Completed
+- ✅ Add `exportFormatVersion` field to all profile export commands
+- ✅ Implement export format versioning (semantic: major.minor)
+- ✅ Format 1.0: v0.6.x and earlier (flat groups, no metadata)
+- ✅ Format 2.0: v0.7.0+ (hierarchical groups, metadata, tags)
+- ✅ Implement compatibility checking on import (allow older major versions with migration, block newer major versions)
+- ✅ Implement format 1.0 → 2.0 migration for backward compatibility
+- ✅ Add error messaging with version guidance (direct users to correct app version)
+- ✅ Missing `exportFormatVersion` defaults to 1.0 for backward compatibility
+- ✅ Build successful with no warnings
+
+**Phase 4B (Individual Export/Import):** Not started
+- Implement export_profile command (includes metadata, tags, password with optional encryption)
+- Implement export_group command (recursive, includes sub-groups and all profiles)
+- Implement import_profile command (append mode, duplicate detection)
+- Implement import_group command (append mode, duplicate detection, parent selector)
+- Build export modal UI: Radio (Profile/Group/All), dropdown selector, include passwords checkbox
+- Build import modal UI: File picker, duplicate resolution (Skip/Rename/Overwrite per conflict)
+- Implement duplicate detection logic (name + host + username + group_path)
+- Add conflict resolution UI with "Apply to All" option
+- Export file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
+- Test all export/import modes with conflicts and nested groups
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned

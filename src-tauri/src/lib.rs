@@ -1327,6 +1327,7 @@ struct ProfileExport {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ExportData {
+    export_format_version: String,
     version: String,
     exported_at: String,
     profiles: Vec<ProfileExport>,
@@ -1334,6 +1335,8 @@ struct ExportData {
 
 #[derive(Debug, Deserialize)]
 struct ImportData {
+    #[serde(default)]
+    _export_format_version: Option<String>,  // Unused: compatibility checked on frontend
     profiles: Vec<ProfileExport>,
 }
 
@@ -1988,6 +1991,7 @@ fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<Strin
     }
 
     let export_data = ExportData {
+        export_format_version: "2.0".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         exported_at: chrono::Utc::now().to_rfc3339(),
         profiles: export_profiles,

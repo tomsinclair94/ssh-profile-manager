@@ -72,6 +72,26 @@ const VERSION_CHANGELOG = {
     }
 };
 
+// Export Format Versioning
+// IMPORTANT: Only bump version when export/import structure changes
+// Format: major.minor (semantic versioning)
+// - Major: Breaking changes (incompatible structure)
+// - Minor: Backward-compatible additions (new optional fields)
+const CURRENT_EXPORT_FORMAT = '2.0';
+
+const EXPORT_FORMAT_INFO = {
+    '1.0': {
+        description: 'v0.6.x and earlier (flat groups, no metadata)',
+        minAppVersion: '0.1.0',
+        maxAppVersion: '0.6.5'
+    },
+    '2.0': {
+        description: 'v0.7.0+ (hierarchical groups, metadata, tags)',
+        minAppVersion: '0.7.0',
+        maxAppVersion: null  // Current format, no max
+    }
+};
+
 // Validation patterns and rules
 const VALIDATION = {
     name: {
@@ -4812,6 +4832,92 @@ async function exportProfiles() {
     }
 }
 
+// Check export format compatibility for imports
+// Returns: { compatible: boolean, requiresMigration: boolean, message: string }
+function checkExportCompatibility(data) {
+    // Default to format 1.0 if not specified (backward compatibility with v0.6.x)
+    const exportFormatVersion = data.export_format_version || data.exportFormatVersion || '1.0';
+
+    // Parse version numbers
+    const [exportMajor, exportMinor] = exportFormatVersion.split('.').map(Number);
+    const [currentMajor, currentMinor] = CURRENT_EXPORT_FORMAT.split('.').map(Number);
+
+    // Check for invalid version format
+    if (isNaN(exportMajor) || isNaN(exportMinor)) {
+        return {
+            compatible: false,
+            requiresMigration: false,
+            message: `Invalid export format version: "${exportFormatVersion}"`
+        };
+    }
+
+    // Incompatible major version
+    if (exportMajor !== currentMajor) {
+        if (exportMajor < currentMajor) {
+            // Older major version - can migrate
+            const formatInfo = EXPORT_FORMAT_INFO[exportFormatVersion] || EXPORT_FORMAT_INFO['1.0'];
+            return {
+                compatible: true,
+                requiresMigration: true,
+                message: `This export was created with an older version (format ${exportFormatVersion}: ${formatInfo.description}). It will be automatically migrated to the current format.`
+            };
+        } else {
+            // Newer major version - incompatible
+            const formatInfo = EXPORT_FORMAT_INFO[exportFormatVersion];
+            const minVersion = formatInfo?.minAppVersion || 'a newer version';
+            return {
+                compatible: false,
+                requiresMigration: false,
+                message: `This export was created with a newer version (format ${exportFormatVersion}).\n\nPlease upgrade to SSH Profile Manager v${minVersion} or later to import this file.\n\nDownload: https://github.com/tomsinclair94/ssh-profile-manager/releases`
+            };
+        }
+    }
+
+    // Same major version, check minor
+    if (exportMinor > currentMinor) {
+        // Newer minor version - compatible but warn
+        return {
+            compatible: true,
+            requiresMigration: false,
+            message: `This export contains newer features (format ${exportFormatVersion}). Some features may not be imported.`
+        };
+    }
+
+    // Same version or older minor version - fully compatible
+    return {
+        compatible: true,
+        requiresMigration: false,
+        message: null
+    };
+}
+
+// Migrate export data from format 1.0 to 2.0
+// Format 1.0: flat groups (group_name), no metadata, no tags
+// Format 2.0: hierarchical groups (group_id), metadata, tags
+function migrateExportFormat_1_0_to_2_0(data) {
+    debug.log('Migrating export from format 1.0 to 2.0');
+
+    // Migrate each profile
+    const migratedProfiles = data.profiles.map(profile => {
+        return {
+            ...profile,
+            // Keep group_name for backward compatibility (will be resolved to group_id during import)
+            // The import process will handle creating/finding the appropriate group
+            group_id: null,  // Will be resolved during import based on group_name or path
+            // Add v0.7.0 fields with defaults
+            metadata: null,
+            tags: []
+        };
+    });
+
+    // Return migrated data with updated format version
+    return {
+        ...data,
+        export_format_version: '2.0',
+        profiles: migratedProfiles
+    };
+}
+
 // Validate profile import JSON structure
 function validateProfileImportData(data) {
     // Must have a profiles array
@@ -4879,6 +4985,35 @@ async function importProfiles(file) {
         } catch (parseError) {
             showToast('Invalid JSON file: File is not valid JSON format', TOAST_DURATION_LONG, 'error');
             return;
+        }
+
+        // Check export format compatibility
+        const compatibility = checkExportCompatibility(data);
+        if (!compatibility.compatible) {
+            showToast(`Incompatible export format:\n\n${compatibility.message}`, TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Perform migration if needed
+        if (compatibility.requiresMigration) {
+            const exportFormatVersion = data.export_format_version || data.exportFormatVersion || '1.0';
+
+            // Show migration info toast
+            if (compatibility.message) {
+                showToast(compatibility.message, TOAST_DURATION_LONG);
+                // Wait a moment for user to see the message
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            // Migrate based on source format
+            if (exportFormatVersion === '1.0') {
+                data = migrateExportFormat_1_0_to_2_0(data);
+                showToast('Migration complete. Proceeding with import...', TOAST_DURATION_SHORT);
+            }
+        } else if (compatibility.message) {
+            // Show info for newer minor versions (compatible but may have unknown features)
+            showToast(compatibility.message, TOAST_DURATION_LONG);
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
 
         // Validate the JSON structure
