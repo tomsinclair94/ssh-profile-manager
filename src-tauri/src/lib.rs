@@ -144,8 +144,7 @@ pub struct Profile {
     pub username: String,
     pub auth_method: String, // "key", "password", or "none"
     pub key_path: Option<String>,
-    pub group: Option<String>, // DEPRECATED: Keep for backward compatibility, use group_id
-    pub group_id: Option<String>, // v0.7.0+: References groups table
+    pub group_path: Option<String>, // v0.7.0+: Semantic path like "Work/Production/Servers"
 }
 
 // Group structure for hierarchical organization
@@ -935,31 +934,34 @@ impl Database {
                 )?;
             }
 
-            // Add group_id column to profiles table
+            // Rename group_name column to group_path (semantic path approach)
+            // SQLite doesn't support RENAME COLUMN before 3.25.0, so we:
+            // 1. Add new column
+            // 2. Copy data
+            // 3. Drop old column (in a recreate-table approach)
+
+            // Add group_path column
             conn.execute(
-                "ALTER TABLE profiles ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE RESTRICT",
+                "ALTER TABLE profiles ADD COLUMN group_path TEXT",
                 [],
             )?;
 
-            // Create index for profiles.group_id
-            conn.execute(
-                "CREATE INDEX idx_profiles_group ON profiles(group_id)",
-                [],
-            )?;
-
-            // Populate profiles.group_id by matching group_name to group path
+            // Populate group_path by matching group_name to group path
             conn.execute(
                 "UPDATE profiles
-                 SET group_id = (
-                     SELECT id FROM groups
-                     WHERE groups.path = COALESCE(profiles.group_name, 'Ungrouped')
-                 )",
+                 SET group_path = COALESCE(group_name, 'Ungrouped')",
                 [],
             )?;
 
-            // Verify all profiles have valid group_id
+            // Create index for profiles.group_path
+            conn.execute(
+                "CREATE INDEX idx_profiles_group_path ON profiles(group_path)",
+                [],
+            )?;
+
+            // Verify all profiles have valid group_path
             let count: i32 = conn.query_row(
-                "SELECT COUNT(*) FROM profiles WHERE group_id IS NULL",
+                "SELECT COUNT(*) FROM profiles WHERE group_path IS NULL OR group_path = ''",
                 [],
                 |row| row.get(0)
             )?;
@@ -981,7 +983,7 @@ impl Database {
     fn get_all_profiles(&self) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name, group_id
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
              FROM profiles ORDER BY name"
         )?;
 
@@ -996,8 +998,7 @@ impl Database {
                     username: row.get(5)?,
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
-                    group: row.get(8)?,
-                    group_id: row.get(9)?,
+                    group_path: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1008,8 +1009,8 @@ impl Database {
     fn create_profile(&self, profile: &Profile) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
-            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_name, group_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_path)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             (
                 &profile.id,
                 &profile.name,
@@ -1019,8 +1020,7 @@ impl Database {
                 &profile.username,
                 &profile.auth_method,
                 &profile.key_path,
-                &profile.group,
-                &profile.group_id,
+                &profile.group_path,
             ),
         )?;
         Ok(())
@@ -1031,7 +1031,7 @@ impl Database {
         conn.execute(
             "UPDATE profiles
              SET name = ?2, description = ?3, host = ?4, port = ?5,
-                 username = ?6, auth_method = ?7, key_path = ?8, group_name = ?9, group_id = ?10
+                 username = ?6, auth_method = ?7, key_path = ?8, group_path = ?9
              WHERE id = ?1",
             (
                 &profile.id,
@@ -1042,8 +1042,7 @@ impl Database {
                 &profile.username,
                 &profile.auth_method,
                 &profile.key_path,
-                &profile.group,
-                &profile.group_id,
+                &profile.group_path,
             ),
         )?;
         Ok(())
@@ -1155,7 +1154,7 @@ impl Database {
     fn get_profile_by_id(&self, id: &str) -> SqlResult<Option<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name, group_id
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
              FROM profiles WHERE id = ?1"
         )?;
 
@@ -1169,8 +1168,7 @@ impl Database {
                 username: row.get(5)?,
                 auth_method: row.get(6)?,
                 key_path: row.get(7)?,
-                group: row.get(8)?,
-                group_id: row.get(9)?,
+                group_path: row.get(8)?,
             })
         })?;
 
@@ -1356,16 +1354,16 @@ impl Database {
         Ok(tags)
     }
 
-    fn get_profiles_by_group_id(&self, group_id: &str) -> SqlResult<Vec<Profile>> {
+    fn get_profiles_by_group_path(&self, group_path: &str) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name, group_id
-             FROM profiles WHERE group_id = ?1
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+             FROM profiles WHERE group_path = ?1
              ORDER BY name"
         )?;
 
         let profiles = stmt
-            .query_map([group_id], |row| {
+            .query_map([group_path], |row| {
                 Ok(Profile {
                     id: row.get(0)?,
                     name: row.get(1)?,
@@ -1375,8 +1373,7 @@ impl Database {
                     username: row.get(5)?,
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
-                    group: row.get(8)?,
-                    group_id: row.get(9)?,
+                    group_path: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1444,11 +1441,11 @@ fn get_profile_password(profile_id: String) -> Result<String, String> {
     get_password(&profile_id)
 }
 
-// Export/Import structures
+// Export/Import structures (full export/import)
 #[derive(Debug, Serialize, Deserialize)]
 struct ProfileExport {
     #[serde(flatten)]
-    profile: Profile,
+    profile: Profile,  // Use Profile directly - group_path is already semantic
     password: Option<String>,
 }
 
@@ -1467,11 +1464,23 @@ struct ImportData {
     profiles: Vec<ProfileExport>,
 }
 
+// Portable group structure for export/import (uses semantic parent_path instead of parent_id UUID)
+#[derive(Debug, Serialize, Deserialize)]
+struct GroupPortable {
+    pub id: String,  // Exported but regenerated on import
+    pub name: String,
+    pub parent_path: Option<String>,  // Semantic path to parent instead of UUID
+    pub path: String,  // Full semantic path
+    pub icon: Option<String>,
+    pub is_favorite: bool,
+    pub display_order: i32,
+}
+
 // Individual profile/group export structures (v0.7.0+)
 #[derive(Debug, Serialize, Deserialize)]
 struct ProfileExportDetailed {
     #[serde(flatten)]
-    profile: Profile,
+    profile: Profile,  // Use Profile directly - group_path is already semantic
     password: Option<String>,
     metadata: Option<ProfileMetadata>,
     tags: Vec<Tag>,
@@ -1479,7 +1488,8 @@ struct ProfileExportDetailed {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct GroupExportDetailed {
-    group: Group,
+    #[serde(flatten)]
+    group: GroupPortable,  // Groups still need conversion for parent_id -> parent_path
     tags: Vec<Tag>,
     profiles: Vec<ProfileExportDetailed>,
     subgroups: Vec<GroupExportDetailed>,
@@ -1568,8 +1578,7 @@ struct CreateProfileInput {
     auth_method: String,
     key_path: Option<String>,
     password: Option<String>,
-    group: Option<String>, // DEPRECATED: Keep for backward compatibility
-    group_id: Option<String>, // v0.7.0+: Group ID reference
+    group_path: Option<String>, // v0.7.0+: Semantic path to group
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -1584,7 +1593,7 @@ impl std::fmt::Debug for CreateProfileInput {
             .field("auth_method", &self.auth_method)
             .field("key_path", &self.key_path)
             .field("password", &"[REDACTED]")
-            .field("group", &self.group)
+            .field("group_path", &self.group_path)
             .finish()
     }
 }
@@ -1601,9 +1610,9 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         validate_description(desc)?;
     }
 
-    // Validate group if provided
-    if let Some(ref group) = profile.group {
-        validate_group(group)?;
+    // Validate group_path if provided
+    if let Some(ref group_path) = profile.group_path {
+        validate_group(group_path)?;
     }
 
     let port = validate_port(profile.port.unwrap_or(22))? as i32;
@@ -1628,8 +1637,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         username: profile.username,
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
-        group: profile.group,
-        group_id: profile.group_id,
+        group_path: profile.group_path,
     };
 
     db.create_profile(&new_profile)
@@ -1659,8 +1667,7 @@ struct UpdateProfileInput {
     auth_method: String,
     key_path: Option<String>,
     password: Option<String>,
-    group: Option<String>, // DEPRECATED: Keep for backward compatibility
-    group_id: Option<String>, // v0.7.0+: Group ID reference
+    group_path: Option<String>, // v0.7.0+: Semantic path to group
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -1676,7 +1683,7 @@ impl std::fmt::Debug for UpdateProfileInput {
             .field("auth_method", &self.auth_method)
             .field("key_path", &self.key_path)
             .field("password", &"[REDACTED]")
-            .field("group", &self.group)
+            .field("group_path", &self.group_path)
             .finish()
     }
 }
@@ -1693,9 +1700,9 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         validate_description(desc)?;
     }
 
-    // Validate group if provided
-    if let Some(ref group) = profile.group {
-        validate_group(group)?;
+    // Validate group_path if provided
+    if let Some(ref group_path) = profile.group_path {
+        validate_group(group_path)?;
     }
 
     let port = validate_port(profile.port.unwrap_or(22))? as i32;
@@ -1718,8 +1725,7 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         username: profile.username,
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
-        group: profile.group,
-        group_id: profile.group_id,
+        group_path: profile.group_path,
     };
 
     db.update_profile(&updated_profile)
@@ -1849,7 +1855,7 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
         db.update_group(&group)
             .map_err(|e| format!("Failed to update group: {}", e))?;
 
-        // Update all descendant paths
+        // Update all descendant group paths
         let all_groups = db.get_all_groups()
             .map_err(|e| format!("Failed to get groups: {}", e))?;
 
@@ -1861,6 +1867,15 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
                     .map_err(|e| format!("Failed to update descendant group: {}", e))?;
             }
         }
+
+        // CASCADE UPDATE: Update all profile group_paths that reference this group or its descendants
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE profiles
+             SET group_path = REPLACE(group_path, ?1, ?2)
+             WHERE group_path = ?1 OR group_path LIKE ?3",
+            (&old_path, &group.path, format!("{}/%", old_path)),
+        ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
     } else {
         // Just update icon
         group.icon = input.icon;
@@ -1889,10 +1904,10 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         // Cascade delete: Delete profiles first, then group (CASCADE will handle sub-groups via FK)
         let conn = db.conn.lock().expect("Database lock poisoned");
 
-        // Get all descendant group IDs (including the group itself)
-        let descendant_ids: Vec<String> = {
+        // Get all descendant group paths (including the group itself)
+        let descendant_paths: Vec<String> = {
             let mut stmt = conn.prepare(
-                "SELECT id FROM groups WHERE path LIKE ?1 OR path = ?2"
+                "SELECT path FROM groups WHERE path LIKE ?1 OR path = ?2"
             ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
             let rows = stmt.query_map([format!("{}/%", group.path), group.path.clone()], |row| row.get(0))
@@ -1903,10 +1918,10 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         };
 
         // Delete all profiles in these groups
-        for group_id in descendant_ids {
+        for group_path in descendant_paths {
             conn.execute(
-                "DELETE FROM profiles WHERE group_id = ?1",
-                [&group_id],
+                "DELETE FROM profiles WHERE group_path = ?1",
+                [&group_path],
             ).map_err(|e| format!("Failed to delete profiles: {}", e))?;
         }
 
@@ -1919,10 +1934,10 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         // Move profiles to parent: Get all profiles in this group and descendants
         let conn = db.conn.lock().expect("Database lock poisoned");
 
-        // Get all descendant groups
-        let descendant_ids: Vec<String> = {
+        // Get all descendant group paths (including the group itself)
+        let descendant_paths: Vec<String> = {
             let mut stmt = conn.prepare(
-                "SELECT id FROM groups WHERE path LIKE ?1 OR path = ?2"
+                "SELECT path FROM groups WHERE path LIKE ?1 OR path = ?2"
             ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
             let rows = stmt.query_map([format!("{}/%", group.path), group.path.clone()], |row| row.get(0))
@@ -1932,38 +1947,40 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
             result.map_err(|e| format!("Failed to collect descendants: {}", e))?
         };
 
-        // Move all profiles from these groups to parent (or "Ungrouped" if top-level)
-        let target_group_id = if let Some(parent_id) = &group.parent_id {
-            parent_id.clone()
+        // Calculate target group path (parent path or "Ungrouped" if top-level)
+        let target_group_path = if let Some(parent_id) = &group.parent_id {
+            // Get parent group's path
+            let parent = db.get_group_by_id(parent_id)
+                .map_err(|e| format!("Failed to get parent group: {}", e))?
+                .ok_or_else(|| "Parent group not found".to_string())?;
+            parent.path
         } else {
-            // Find or create "Ungrouped" group
+            // Ensure "Ungrouped" group exists
             let ungrouped = conn.query_row(
                 "SELECT id FROM groups WHERE name = 'Ungrouped' AND parent_id IS NULL",
                 [],
                 |row| row.get::<_, String>(0)
             );
 
-            match ungrouped {
-                Ok(id) => id,
-                Err(_) => {
-                    // Create Ungrouped group
-                    let now = chrono::Utc::now().to_rfc3339();
-                    let id = Uuid::new_v4().to_string();
-                    conn.execute(
-                        "INSERT INTO groups (id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at)
-                         VALUES (?1, 'Ungrouped', NULL, 'Ungrouped', NULL, 0, 0, ?2, ?3)",
-                        (&id, &now, &now),
-                    ).map_err(|e| format!("Failed to create Ungrouped group: {}", e))?;
-                    id
-                }
+            if ungrouped.is_err() {
+                // Create Ungrouped group
+                let now = chrono::Utc::now().to_rfc3339();
+                let id = Uuid::new_v4().to_string();
+                conn.execute(
+                    "INSERT INTO groups (id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at)
+                     VALUES (?1, 'Ungrouped', NULL, 'Ungrouped', NULL, 0, 0, ?2, ?3)",
+                    (&id, &now, &now),
+                ).map_err(|e| format!("Failed to create Ungrouped group: {}", e))?;
             }
+
+            "Ungrouped".to_string()
         };
 
-        // Update all profiles in descendant groups
-        for group_id in descendant_ids {
+        // Update all profiles in descendant groups to move to target group path
+        for group_path in descendant_paths {
             conn.execute(
-                "UPDATE profiles SET group_id = ?1 WHERE group_id = ?2",
-                (&target_group_id, &group_id),
+                "UPDATE profiles SET group_path = ?1 WHERE group_path = ?2",
+                (&target_group_path, &group_path),
             ).map_err(|e| format!("Failed to move profiles: {}", e))?;
         }
 
@@ -2056,7 +2073,7 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
     db.update_group(&group)
         .map_err(|e| format!("Failed to update group: {}", e))?;
 
-    // Update all descendant paths
+    // Update all descendant group paths
     let all_groups = db.get_all_groups()
         .map_err(|e| format!("Failed to get groups: {}", e))?;
 
@@ -2068,6 +2085,15 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
                 .map_err(|e| format!("Failed to update descendant group: {}", e))?;
         }
     }
+
+    // CASCADE UPDATE: Update all profile group_paths that reference this group or its descendants
+    let conn = db.conn.lock().expect("Database lock poisoned");
+    conn.execute(
+        "UPDATE profiles
+         SET group_path = REPLACE(group_path, ?1, ?2)
+         WHERE group_path = ?1 OR group_path LIKE ?3",
+        (&old_path, &new_path, format!("{}/%", old_path)),
+    ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
 
     Ok(())
 }
@@ -2146,7 +2172,7 @@ fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<Strin
         };
 
         export_profiles.push(ProfileExport {
-            profile,
+            profile,  // Use profile directly - group_path is already semantic
             password,
         });
     }
@@ -2192,25 +2218,68 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
 
     // Now import the new profiles
     for profile_export in import_data.profiles {
-        // Generate new ID for imported profile to avoid conflicts
-        let new_id = Uuid::new_v4().to_string();
-
         let mut profile = profile_export.profile;
-        profile.id = new_id.clone();
 
-        // Create the profile
+        // Generate new ID for imported profile to avoid conflicts
+        profile.id = Uuid::new_v4().to_string();
+
+        // Create the profile (group_path is already set correctly)
         db.create_profile(&profile)
             .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
 
         // Store password if it exists
         if let Some(password) = profile_export.password {
             if !password.is_empty() {
-                store_password(&new_id, &password)?;
+                store_password(&profile.id, &password)?;
             }
         }
     }
 
     Ok(())
+}
+
+// Helper function: Get semantic group path from group_id (used for group export)
+fn get_group_path_by_id(db: &Database, group_id: &Option<String>) -> Result<Option<String>, String> {
+    match group_id {
+        None => Ok(None),
+        Some(id) => {
+            let group = db.get_group_by_id(id)
+                .map_err(|e| format!("Failed to get group: {}", e))?
+                .ok_or_else(|| format!("Group not found: {}", id))?;
+            Ok(Some(group.path))
+        }
+    }
+}
+
+// Helper function: Resolve semantic group path to group_id (used for group import)
+fn resolve_group_path_to_id(db: &Database, path: &Option<String>) -> Result<Option<String>, String> {
+    match path {
+        None => Ok(None),
+        Some(p) => {
+            let groups = db.get_all_groups()
+                .map_err(|e| format!("Failed to get groups: {}", e))?;
+
+            // Find group by exact path match
+            let group = groups.iter().find(|g| &g.path == p);
+
+            Ok(group.map(|g| g.id.clone()))
+        }
+    }
+}
+
+// Helper function: Convert Group to GroupPortable for export
+fn group_to_portable(db: &Database, group: &Group) -> Result<GroupPortable, String> {
+    let parent_path = get_group_path_by_id(db, &group.parent_id)?;
+
+    Ok(GroupPortable {
+        id: group.id.clone(),
+        name: group.name.clone(),
+        parent_path,
+        path: group.path.clone(),
+        icon: group.icon.clone(),
+        is_favorite: group.is_favorite,
+        display_order: group.display_order,
+    })
 }
 
 // Individual profile export (v0.7.0+)
@@ -2237,7 +2306,7 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
         .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
     let profile_export = ProfileExportDetailed {
-        profile,
+        profile,  // Use profile directly - group_path is already semantic
         password,
         metadata,
         tags,
@@ -2267,12 +2336,15 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool) 
             .map_err(|e| format!("Failed to get group: {}", e))?
             .ok_or_else(|| format!("Group not found: {}", group_id))?;
 
+        // Convert to portable format (with semantic parent path)
+        let group_portable = group_to_portable(db, &group)?;
+
         // Get group tags
         let tags = db.get_group_tags(group_id)
             .map_err(|e| format!("Failed to get group tags: {}", e))?;
 
         // Get all profiles in this group
-        let profiles = db.get_profiles_by_group_id(group_id)
+        let profiles = db.get_profiles_by_group_path(&group.path)
             .map_err(|e| format!("Failed to get profiles for group: {}", e))?;
 
         let mut profile_exports = Vec::new();
@@ -2290,7 +2362,7 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool) 
                 .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
             profile_exports.push(ProfileExportDetailed {
-                profile,
+                profile,  // Use profile directly - group_path is already semantic
                 password,
                 metadata,
                 tags: profile_tags,
@@ -2308,7 +2380,7 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool) 
         }
 
         Ok(GroupExportDetailed {
-            group,
+            group: group_portable,
             tags,
             profiles: profile_exports,
             subgroups: subgroup_exports,
@@ -2379,7 +2451,7 @@ fn import_profile_metadata_and_tags(
 fn import_profile(
     db: State<Database>,
     data: String,
-    target_group_id: Option<String>,
+    target_group_path: Option<String>,  // Semantic path for target group
     duplicate_action: String, // "skip", "rename", or "overwrite"
 ) -> Result<String, String> {
     // Parse import data
@@ -2389,30 +2461,16 @@ fn import_profile(
     let profile_export = import_data.profile;
     let mut profile = profile_export.profile;
 
-    // Get target group path for duplicate detection
-    let target_group_path = if let Some(group_id) = &target_group_id {
-        db.get_group_by_id(group_id)
-            .map_err(|e| format!("Failed to get target group: {}", e))?
-            .map(|g| g.path)
-    } else {
-        None
-    };
+    // Set target group_path (overriding the imported value)
+    profile.group_path = target_group_path.clone();
 
-    // Check for duplicates: same name + group_id
+    // Check for duplicates: same name + semantic group path
     // Profile names must be unique within their group (allows same name in different groups)
     let existing_profiles = db.get_all_profiles()
         .map_err(|e| format!("Failed to get existing profiles: {}", e))?;
 
     let duplicate = existing_profiles.iter().find(|p| {
-        p.name == profile.name
-            && match (&p.group_id, &target_group_id) {
-                (None, None) => true,
-                (Some(pid), Some(tid)) => {
-                    // Compare by group_id
-                    pid == tid
-                }
-                _ => false,
-            }
+        p.name == profile.name && p.group_path == target_group_path
     });
 
     let new_id = match (duplicate, duplicate_action.as_str()) {
@@ -2437,11 +2495,8 @@ fn import_profile(
         _ => return Err(format!("Invalid duplicate_action: {}", duplicate_action)),
     };
 
-    // Set new ID and group
+    // Set new ID
     profile.id = new_id.clone();
-    profile.group_id = target_group_id.clone();
-    // Clear deprecated group field
-    profile.group = target_group_path.clone();
 
     // Create the profile
     db.create_profile(&profile)
@@ -2465,7 +2520,7 @@ fn import_profile(
 fn import_group(
     db: State<Database>,
     data: String,
-    parent_group_id: Option<String>,
+    parent_group_path: Option<String>,  // Changed from parent_group_id to semantic path
     duplicate_action: String, // "skip", "rename", or "merge"
 ) -> Result<String, String> {
     fn import_group_recursive(
@@ -2475,26 +2530,27 @@ fn import_group(
         parent_path: Option<String>,
         duplicate_action: &str,
     ) -> Result<String, String> {
-        let mut group = group_export.group;
+        let mut group_portable = group_export.group;
 
         // Calculate new path based on parent
         let new_path = if let Some(pp) = &parent_path {
-            format!("{}/{}", pp, group.name)
+            format!("{}/{}", pp, group_portable.name)
         } else {
-            group.name.clone()
+            group_portable.name.clone()
         };
 
-        // Check for duplicate group (same name under same parent)
+        // Check for duplicate group (same name under same parent) using semantic paths
         let existing_groups = db.get_all_groups()
             .map_err(|e| format!("Failed to get existing groups: {}", e))?;
 
         let duplicate = existing_groups.iter().find(|g| {
-            g.name == group.name
-                && match (&g.parent_id, &parent_id) {
-                    (None, None) => true,
-                    (Some(a), Some(b)) => a == b,
-                    _ => false,
-                }
+            if g.name != group_portable.name {
+                return false;
+            }
+
+            // Compare by semantic parent paths instead of UUIDs
+            let existing_parent_path = get_group_path_by_id(db, &g.parent_id).ok().flatten();
+            existing_parent_path == parent_path
         });
 
         let group_id = match (duplicate, duplicate_action) {
@@ -2508,18 +2564,27 @@ fn import_group(
             (Some(_), "rename") | (None, _) => {
                 // Create new group
                 if duplicate.is_some() {
-                    group.name = format!("{} (imported)", group.name);
+                    group_portable.name = format!("{} (imported)", group_portable.name);
                 }
-                let new_id = Uuid::new_v4().to_string();
-                group.id = new_id.clone();
-                group.parent_id = parent_id.clone();
-                group.path = if let Some(pp) = &parent_path {
-                    format!("{}/{}", pp, group.name)
-                } else {
-                    group.name.clone()
+
+                // Create Group struct from GroupPortable
+                let group = Group {
+                    id: Uuid::new_v4().to_string(),
+                    name: group_portable.name.clone(),
+                    parent_id: parent_id.clone(),
+                    path: if let Some(pp) = &parent_path {
+                        format!("{}/{}", pp, group_portable.name)
+                    } else {
+                        group_portable.name.clone()
+                    },
+                    icon: group_portable.icon,
+                    is_favorite: group_portable.is_favorite,
+                    display_order: group_portable.display_order,
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                    updated_at: chrono::Utc::now().to_rfc3339(),
                 };
-                group.created_at = chrono::Utc::now().to_rfc3339();
-                group.updated_at = chrono::Utc::now().to_rfc3339();
+
+                let new_id = group.id.clone();
 
                 db.create_group(&group)
                     .map_err(|e| format!("Failed to create group '{}': {}", group.name, e))?;
@@ -2558,10 +2623,10 @@ fn import_group(
         // Import all profiles in this group
         for profile_export in group_export.profiles {
             let mut profile = profile_export.profile;
-            let profile_id = Uuid::new_v4().to_string();
-            profile.id = profile_id.clone();
-            profile.group_id = Some(group_id.clone());
-            profile.group = Some(new_path.clone());
+
+            // Generate new ID and set group_path
+            profile.id = Uuid::new_v4().to_string();
+            profile.group_path = Some(new_path.clone());
 
             db.create_profile(&profile)
                 .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
@@ -2569,12 +2634,12 @@ fn import_group(
             // Store password
             if let Some(password) = profile_export.password {
                 if !password.is_empty() {
-                    store_password(&profile_id, &password)?;
+                    store_password(&profile.id, &password)?;
                 }
             }
 
             // Import metadata and tags
-            import_profile_metadata_and_tags(db, &profile_id, profile_export.metadata, profile_export.tags)?;
+            import_profile_metadata_and_tags(db, &profile.id, profile_export.metadata, profile_export.tags)?;
         }
 
         // Import subgroups recursively
@@ -2589,16 +2654,10 @@ fn import_group(
     let import_data: SingleGroupExportData = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
 
-    // Get parent path if specified
-    let parent_path = if let Some(parent_id) = &parent_group_id {
-        db.get_group_by_id(parent_id)
-            .map_err(|e| format!("Failed to get parent group: {}", e))?
-            .map(|g| g.path)
-    } else {
-        None
-    };
+    // Resolve parent group path to group_id
+    let parent_group_id = resolve_group_path_to_id(&db, &parent_group_path)?;
 
-    import_group_recursive(&db, import_data.group, parent_group_id, parent_path, &duplicate_action)
+    import_group_recursive(&db, import_data.group, parent_group_id, parent_group_path, &duplicate_action)
 }
 
 
@@ -2699,7 +2758,7 @@ fn export_settings(
             };
 
             profile_exports.push(ProfileExport {
-                profile,
+                profile,  // Use profile directly - group_path is already semantic
                 password,
             });
         }

@@ -95,14 +95,28 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Implement import_group command (append mode, duplicate detection, parent selector)
 - ✅ Add database methods for metadata and tags (get_profile_metadata, get_profile_tags, etc.)
 - ✅ Create export structures (ProfileExportDetailed, GroupExportDetailed)
-- ✅ Implement duplicate detection logic (name + group_id only - allows same name in different groups)
+- ✅ Implement duplicate detection logic (name + group_path - allows same name in different groups)
 - ✅ Update frontend validation to match group-scoped uniqueness
 - ✅ Register all commands in invoke_handler (export_profile, export_group, import_profile, import_group)
 - ✅ Build verification successful (no errors)
 - ✅ Add import type detection function to frontend (detectImportType)
+- ✅ **REFACTOR:** Migrate from UUID-based group_id to semantic group_path approach
+  - ✅ Updated Migration 4 to add group_path column (instead of group_id)
+  - ✅ Modified Profile struct to use group_path (removed group and group_id fields)
+  - ✅ Removed ProfilePortable struct (Profile already has semantic paths)
+  - ✅ Simplified all export functions (no conversion needed - use Profile directly)
+  - ✅ Simplified all import functions (direct path comparison for duplicates)
+  - ✅ Updated database CRUD methods (create/update/get use group_path)
+  - ✅ Renamed get_profiles_by_group_id() → get_profiles_by_group_path()
+  - ✅ Updated Tauri command input structs (CreateProfileInput, UpdateProfileInput)
+  - ✅ Build verification successful with semantic paths
 
 **Backend Design Decisions:**
-- **Duplicate Detection:** Uses (name + group_id) as unique key
+- **Semantic Paths Everywhere:** Profiles store group_path directly ("Work/Production/Servers")
+  - Export/import is trivial - no UUID conversion required
+  - Duplicate detection compares semantic paths (portable across systems)
+  - Groups still use UUID parent_id internally (only converted at export boundary)
+- **Duplicate Detection:** Uses (name + group_path) as unique key
   - Profile names unique within their group only (allows same name in different groups)
   - Matches hierarchical group behavior (group names scoped to parent)
   - Connection details (host, username) NOT part of duplicate detection
@@ -112,17 +126,21 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - Default: "rename" for safest UX
 - **Tag Handling:** Tags matched by name; reuses existing tags with same name
 - **File Naming:** `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`, `sshpm-profiles-{date}.json`
+- **Group Rename/Move/Delete:** Cascade updates implemented for all profile group_paths
 
 **Phase 4C (Frontend UI - Individual Export/Import):** Not started
-- Build export mode selector UI (Radio: Profile/Group/All)
-- Add dropdown to select which profile/group to export
-- Update exportProfiles() function to handle three modes and call correct backend command
-- Update importProfiles() function to detect type and route to import_profile/import_group/import_profiles
-- Build duplicate resolution UI with Skip/Rename/Overwrite/Merge options
-- Add "Apply to All" checkbox for batch conflict resolution
-- Implement proper file naming for single profile/group exports
-- Optional: Add context menu "Export Profile" / "Export Group" options
-- Test all export/import modes (see testing checklist below)
+
+See `plans/v0.7.0-phase4c.md` for detailed implementation plan.
+
+**Summary:**
+- Profile card redesign: Connect, Edit, Actions button
+- Actions menu: Duplicate, Export (new), Delete
+- Group context menu: Add Export option (above Delete)
+- Settings: Rename "Export Profiles" → "Export All Profiles"
+- Import auto-detects type (profile/group/all) and routes accordingly
+- Conflict resolution uses buttons (Skip/Rename/Overwrite for profiles, Skip/Rename/Merge for groups)
+- No dedicated export modal - all exports are direct actions
+- Proper file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
 
 **Phase 4C Testing Checklist:**
 *Export Tests:*
