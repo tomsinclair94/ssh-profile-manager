@@ -4918,6 +4918,31 @@ function migrateExportFormat_1_0_to_2_0(data) {
     };
 }
 
+// Detect import type from JSON data
+// Returns: 'all', 'profile', 'group', or null for invalid
+function detectImportType(data) {
+    if (!data || typeof data !== 'object') {
+        return null;
+    }
+
+    // Check if it's a single profile export (v0.7.0+)
+    if (data.profile && typeof data.profile === 'object') {
+        return 'profile';
+    }
+
+    // Check if it's a single group export (v0.7.0+)
+    if (data.group && typeof data.group === 'object') {
+        return 'group';
+    }
+
+    // Check if it's a full export (has profiles array)
+    if (data.profiles && Array.isArray(data.profiles)) {
+        return 'all';
+    }
+
+    return null;
+}
+
 // Validate profile import JSON structure
 function validateProfileImportData(data) {
     // Must have a profiles array
@@ -5865,14 +5890,20 @@ async function saveProfile() {
         return;
     }
 
-    // Check for duplicate names (case-insensitive)
+    // Check for duplicate names within the same group (case-insensitive)
+    // Profile names must be unique within their group (allows same name in different groups)
+    const selectedGroupId = document.getElementById('profile-group-id').value || null;
     const duplicateProfile = profiles.find(p =>
         p.name.toLowerCase() === profileName.toLowerCase() &&
+        p.group_id === selectedGroupId &&
         p.id !== editingProfileId
     );
 
     if (duplicateProfile) {
-        showToast(`A profile named "${profileName}" already exists. Please choose a different name.`, TOAST_DURATION_LONG, 'error');
+        const groupContext = selectedGroupId
+            ? `in this group`
+            : `at the root level`;
+        showToast(`A profile named "${profileName}" already exists ${groupContext}. Please choose a different name.`, TOAST_DURATION_LONG, 'error');
         return;
     }
 

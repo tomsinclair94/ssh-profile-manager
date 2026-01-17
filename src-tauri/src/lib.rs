@@ -1283,6 +1283,133 @@ impl Database {
 
         Ok(())
     }
+
+    // Profile metadata methods
+    fn get_profile_metadata(&self, profile_id: &str) -> SqlResult<Option<ProfileMetadata>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT profile_id, icon, is_favorite, display_order FROM profile_metadata WHERE profile_id = ?1"
+        )?;
+
+        let mut metadata = stmt.query_map([profile_id], |row| {
+            Ok(ProfileMetadata {
+                profile_id: row.get(0)?,
+                icon: row.get(1)?,
+                is_favorite: row.get::<_, i32>(2)? != 0,
+                display_order: row.get(3)?,
+            })
+        })?;
+
+        if let Some(meta) = metadata.next() {
+            Ok(Some(meta?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    // Tag methods
+    fn get_profile_tags(&self, profile_id: &str) -> SqlResult<Vec<Tag>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT t.id, t.name, t.color, t.created_at
+             FROM tags t
+             JOIN profile_tags pt ON t.id = pt.tag_id
+             WHERE pt.profile_id = ?1
+             ORDER BY t.name"
+        )?;
+
+        let tags = stmt
+            .query_map([profile_id], |row| {
+                Ok(Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(tags)
+    }
+
+    fn get_group_tags(&self, group_id: &str) -> SqlResult<Vec<Tag>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT t.id, t.name, t.color, t.created_at
+             FROM tags t
+             JOIN group_tags gt ON t.id = gt.tag_id
+             WHERE gt.group_id = ?1
+             ORDER BY t.name"
+        )?;
+
+        let tags = stmt
+            .query_map([group_id], |row| {
+                Ok(Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(tags)
+    }
+
+    fn get_profiles_by_group_id(&self, group_id: &str) -> SqlResult<Vec<Profile>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_name, group_id
+             FROM profiles WHERE group_id = ?1
+             ORDER BY name"
+        )?;
+
+        let profiles = stmt
+            .query_map([group_id], |row| {
+                Ok(Profile {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    host: row.get(3)?,
+                    port: row.get(4)?,
+                    username: row.get(5)?,
+                    auth_method: row.get(6)?,
+                    key_path: row.get(7)?,
+                    group: row.get(8)?,
+                    group_id: row.get(9)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(profiles)
+    }
+
+    fn get_child_groups(&self, parent_id: &str) -> SqlResult<Vec<Group>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at
+             FROM groups WHERE parent_id = ?1
+             ORDER BY display_order, name"
+        )?;
+
+        let groups = stmt
+            .query_map([parent_id], |row| {
+                Ok(Group {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    parent_id: row.get(2)?,
+                    path: row.get(3)?,
+                    icon: row.get(4)?,
+                    is_favorite: row.get::<_, i32>(5)? != 0,
+                    display_order: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(groups)
+    }
 }
 
 // Password storage using system keychain
@@ -1338,6 +1465,40 @@ struct ImportData {
     #[serde(default)]
     _export_format_version: Option<String>,  // Unused: compatibility checked on frontend
     profiles: Vec<ProfileExport>,
+}
+
+// Individual profile/group export structures (v0.7.0+)
+#[derive(Debug, Serialize, Deserialize)]
+struct ProfileExportDetailed {
+    #[serde(flatten)]
+    profile: Profile,
+    password: Option<String>,
+    metadata: Option<ProfileMetadata>,
+    tags: Vec<Tag>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GroupExportDetailed {
+    group: Group,
+    tags: Vec<Tag>,
+    profiles: Vec<ProfileExportDetailed>,
+    subgroups: Vec<GroupExportDetailed>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SingleProfileExportData {
+    export_format_version: String,
+    version: String,
+    exported_at: String,
+    profile: ProfileExportDetailed,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SingleGroupExportData {
+    export_format_version: String,
+    version: String,
+    exported_at: String,
+    group: GroupExportDetailed,
 }
 
 // Settings export/import structures
@@ -2050,6 +2211,394 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// Individual profile export (v0.7.0+)
+#[tauri::command]
+fn export_profile(db: State<Database>, profile_id: String, include_password: bool) -> Result<String, String> {
+    // Get the profile
+    let profile = db.get_profile_by_id(&profile_id)
+        .map_err(|e| format!("Failed to get profile: {}", e))?
+        .ok_or_else(|| format!("Profile not found: {}", profile_id))?;
+
+    // Get password if needed
+    let password = if include_password && profile.auth_method == "password" {
+        get_password(&profile_id).ok()
+    } else {
+        None
+    };
+
+    // Get metadata (optional)
+    let metadata = db.get_profile_metadata(&profile_id)
+        .map_err(|e| format!("Failed to get profile metadata: {}", e))?;
+
+    // Get tags
+    let tags = db.get_profile_tags(&profile_id)
+        .map_err(|e| format!("Failed to get profile tags: {}", e))?;
+
+    let profile_export = ProfileExportDetailed {
+        profile,
+        password,
+        metadata,
+        tags,
+    };
+
+    let export_data = SingleProfileExportData {
+        export_format_version: "2.0".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        profile: profile_export,
+    };
+
+    serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize profile: {}", e))
+}
+
+// Individual group export (v0.7.0+) - recursive
+#[tauri::command]
+fn export_group(db: State<Database>, group_id: String, include_passwords: bool) -> Result<String, String> {
+    fn export_group_recursive(
+        db: &Database,
+        group_id: &str,
+        include_passwords: bool,
+    ) -> Result<GroupExportDetailed, String> {
+        // Get the group
+        let group = db.get_group_by_id(group_id)
+            .map_err(|e| format!("Failed to get group: {}", e))?
+            .ok_or_else(|| format!("Group not found: {}", group_id))?;
+
+        // Get group tags
+        let tags = db.get_group_tags(group_id)
+            .map_err(|e| format!("Failed to get group tags: {}", e))?;
+
+        // Get all profiles in this group
+        let profiles = db.get_profiles_by_group_id(group_id)
+            .map_err(|e| format!("Failed to get profiles for group: {}", e))?;
+
+        let mut profile_exports = Vec::new();
+        for profile in profiles {
+            let password = if include_passwords && profile.auth_method == "password" {
+                get_password(&profile.id).ok()
+            } else {
+                None
+            };
+
+            let metadata = db.get_profile_metadata(&profile.id)
+                .map_err(|e| format!("Failed to get profile metadata: {}", e))?;
+
+            let profile_tags = db.get_profile_tags(&profile.id)
+                .map_err(|e| format!("Failed to get profile tags: {}", e))?;
+
+            profile_exports.push(ProfileExportDetailed {
+                profile,
+                password,
+                metadata,
+                tags: profile_tags,
+            });
+        }
+
+        // Get all child groups recursively
+        let child_groups = db.get_child_groups(group_id)
+            .map_err(|e| format!("Failed to get child groups: {}", e))?;
+
+        let mut subgroup_exports = Vec::new();
+        for child_group in child_groups {
+            let subgroup = export_group_recursive(db, &child_group.id, include_passwords)?;
+            subgroup_exports.push(subgroup);
+        }
+
+        Ok(GroupExportDetailed {
+            group,
+            tags,
+            profiles: profile_exports,
+            subgroups: subgroup_exports,
+        })
+    }
+
+    let group_export = export_group_recursive(&db, &group_id, include_passwords)?;
+
+    let export_data = SingleGroupExportData {
+        export_format_version: "2.0".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        group: group_export,
+    };
+
+    serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize group: {}", e))
+}
+
+// Helper function to create profile_metadata and profile_tags
+fn import_profile_metadata_and_tags(
+    db: &Database,
+    profile_id: &str,
+    metadata: Option<ProfileMetadata>,
+    tags: Vec<Tag>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().expect("Database lock poisoned");
+
+    // Import metadata if provided
+    if let Some(meta) = metadata {
+        conn.execute(
+            "INSERT OR REPLACE INTO profile_metadata (profile_id, icon, is_favorite, display_order) VALUES (?1, ?2, ?3, ?4)",
+            (profile_id, meta.icon, if meta.is_favorite { 1 } else { 0 }, meta.display_order),
+        ).map_err(|e| format!("Failed to import profile metadata: {}", e))?;
+    }
+
+    // Import tags
+    for tag in tags {
+        // Create tag if it doesn't exist (by name)
+        let existing_tag: Option<String> = conn
+            .query_row("SELECT id FROM tags WHERE name = ?1", [&tag.name], |row| row.get(0))
+            .ok();
+
+        let tag_id = if let Some(existing_id) = existing_tag {
+            existing_id
+        } else {
+            // Create new tag with original or new ID
+            let new_tag_id = Uuid::new_v4().to_string();
+            conn.execute(
+                "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
+                (new_tag_id.clone(), tag.name, tag.color, chrono::Utc::now().to_rfc3339()),
+            ).map_err(|e| format!("Failed to create tag: {}", e))?;
+            new_tag_id
+        };
+
+        // Link tag to profile
+        conn.execute(
+            "INSERT OR IGNORE INTO profile_tags (profile_id, tag_id) VALUES (?1, ?2)",
+            (profile_id, tag_id),
+        ).map_err(|e| format!("Failed to link tag to profile: {}", e))?;
+    }
+
+    Ok(())
+}
+
+// Individual profile import (v0.7.0+) - append mode with duplicate detection
+#[tauri::command]
+fn import_profile(
+    db: State<Database>,
+    data: String,
+    target_group_id: Option<String>,
+    duplicate_action: String, // "skip", "rename", or "overwrite"
+) -> Result<String, String> {
+    // Parse import data
+    let import_data: SingleProfileExportData = serde_json::from_str(&data)
+        .map_err(|e| format!("Failed to parse import data: {}", e))?;
+
+    let profile_export = import_data.profile;
+    let mut profile = profile_export.profile;
+
+    // Get target group path for duplicate detection
+    let target_group_path = if let Some(group_id) = &target_group_id {
+        db.get_group_by_id(group_id)
+            .map_err(|e| format!("Failed to get target group: {}", e))?
+            .map(|g| g.path)
+    } else {
+        None
+    };
+
+    // Check for duplicates: same name + group_id
+    // Profile names must be unique within their group (allows same name in different groups)
+    let existing_profiles = db.get_all_profiles()
+        .map_err(|e| format!("Failed to get existing profiles: {}", e))?;
+
+    let duplicate = existing_profiles.iter().find(|p| {
+        p.name == profile.name
+            && match (&p.group_id, &target_group_id) {
+                (None, None) => true,
+                (Some(pid), Some(tid)) => {
+                    // Compare by group_id
+                    pid == tid
+                }
+                _ => false,
+            }
+    });
+
+    let new_id = match (duplicate, duplicate_action.as_str()) {
+        (Some(_), "skip") => {
+            return Ok("skipped".to_string());
+        }
+        (Some(dup), "overwrite") => {
+            // Delete existing profile and reuse ID
+            db.delete_profile(&dup.id)
+                .map_err(|e| format!("Failed to delete existing profile: {}", e))?;
+            let _ = delete_password(&dup.id);
+            dup.id.clone()
+        }
+        (Some(_), "rename") | (None, _) => {
+            // Generate new ID for renamed or new profile
+            if duplicate.is_some() {
+                // Add " (imported)" suffix to name
+                profile.name = format!("{} (imported)", profile.name);
+            }
+            Uuid::new_v4().to_string()
+        }
+        _ => return Err(format!("Invalid duplicate_action: {}", duplicate_action)),
+    };
+
+    // Set new ID and group
+    profile.id = new_id.clone();
+    profile.group_id = target_group_id.clone();
+    // Clear deprecated group field
+    profile.group = target_group_path.clone();
+
+    // Create the profile
+    db.create_profile(&profile)
+        .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
+
+    // Store password if it exists
+    if let Some(password) = profile_export.password {
+        if !password.is_empty() {
+            store_password(&new_id, &password)?;
+        }
+    }
+
+    // Import metadata and tags
+    import_profile_metadata_and_tags(&db, &new_id, profile_export.metadata, profile_export.tags)?;
+
+    Ok(new_id)
+}
+
+// Individual group import (v0.7.0+) - append mode with duplicate detection
+#[tauri::command]
+fn import_group(
+    db: State<Database>,
+    data: String,
+    parent_group_id: Option<String>,
+    duplicate_action: String, // "skip", "rename", or "merge"
+) -> Result<String, String> {
+    fn import_group_recursive(
+        db: &Database,
+        group_export: GroupExportDetailed,
+        parent_id: Option<String>,
+        parent_path: Option<String>,
+        duplicate_action: &str,
+    ) -> Result<String, String> {
+        let mut group = group_export.group;
+
+        // Calculate new path based on parent
+        let new_path = if let Some(pp) = &parent_path {
+            format!("{}/{}", pp, group.name)
+        } else {
+            group.name.clone()
+        };
+
+        // Check for duplicate group (same name under same parent)
+        let existing_groups = db.get_all_groups()
+            .map_err(|e| format!("Failed to get existing groups: {}", e))?;
+
+        let duplicate = existing_groups.iter().find(|g| {
+            g.name == group.name
+                && match (&g.parent_id, &parent_id) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => a == b,
+                    _ => false,
+                }
+        });
+
+        let group_id = match (duplicate, duplicate_action) {
+            (Some(_), "skip") => {
+                return Ok("skipped".to_string());
+            }
+            (Some(dup), "merge") => {
+                // Use existing group ID
+                dup.id.clone()
+            }
+            (Some(_), "rename") | (None, _) => {
+                // Create new group
+                if duplicate.is_some() {
+                    group.name = format!("{} (imported)", group.name);
+                }
+                let new_id = Uuid::new_v4().to_string();
+                group.id = new_id.clone();
+                group.parent_id = parent_id.clone();
+                group.path = if let Some(pp) = &parent_path {
+                    format!("{}/{}", pp, group.name)
+                } else {
+                    group.name.clone()
+                };
+                group.created_at = chrono::Utc::now().to_rfc3339();
+                group.updated_at = chrono::Utc::now().to_rfc3339();
+
+                db.create_group(&group)
+                    .map_err(|e| format!("Failed to create group '{}': {}", group.name, e))?;
+
+                // Import group tags
+                let conn = db.conn.lock().expect("Database lock poisoned");
+                for tag in group_export.tags {
+                    // Create tag if it doesn't exist
+                    let existing_tag: Option<String> = conn
+                        .query_row("SELECT id FROM tags WHERE name = ?1", [&tag.name], |row| row.get(0))
+                        .ok();
+
+                    let tag_id = if let Some(existing_id) = existing_tag {
+                        existing_id
+                    } else {
+                        let new_tag_id = Uuid::new_v4().to_string();
+                        conn.execute(
+                            "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
+                            (new_tag_id.clone(), tag.name, tag.color, chrono::Utc::now().to_rfc3339()),
+                        ).map_err(|e| format!("Failed to create tag: {}", e))?;
+                        new_tag_id
+                    };
+
+                    // Link tag to group
+                    conn.execute(
+                        "INSERT OR IGNORE INTO group_tags (group_id, tag_id) VALUES (?1, ?2)",
+                        (new_id.clone(), tag_id),
+                    ).map_err(|e| format!("Failed to link tag to group: {}", e))?;
+                }
+
+                new_id
+            }
+            _ => return Err(format!("Invalid duplicate_action: {}", duplicate_action)),
+        };
+
+        // Import all profiles in this group
+        for profile_export in group_export.profiles {
+            let mut profile = profile_export.profile;
+            let profile_id = Uuid::new_v4().to_string();
+            profile.id = profile_id.clone();
+            profile.group_id = Some(group_id.clone());
+            profile.group = Some(new_path.clone());
+
+            db.create_profile(&profile)
+                .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
+
+            // Store password
+            if let Some(password) = profile_export.password {
+                if !password.is_empty() {
+                    store_password(&profile_id, &password)?;
+                }
+            }
+
+            // Import metadata and tags
+            import_profile_metadata_and_tags(db, &profile_id, profile_export.metadata, profile_export.tags)?;
+        }
+
+        // Import subgroups recursively
+        for subgroup in group_export.subgroups {
+            import_group_recursive(db, subgroup, Some(group_id.clone()), Some(new_path.clone()), duplicate_action)?;
+        }
+
+        Ok(group_id)
+    }
+
+    // Parse import data
+    let import_data: SingleGroupExportData = serde_json::from_str(&data)
+        .map_err(|e| format!("Failed to parse import data: {}", e))?;
+
+    // Get parent path if specified
+    let parent_path = if let Some(parent_id) = &parent_group_id {
+        db.get_group_by_id(parent_id)
+            .map_err(|e| format!("Failed to get parent group: {}", e))?
+            .map(|g| g.path)
+    } else {
+        None
+    };
+
+    import_group_recursive(&db, import_data.group, parent_group_id, parent_path, &duplicate_action)
 }
 
 
@@ -3585,6 +4134,10 @@ pub fn run() {
             get_group_tree,
             export_profiles,
             import_profiles,
+            export_profile,
+            export_group,
+            import_profile,
+            import_group,
             save_profiles_to_file,
             browse_ssh_key,
             browse_terminal_app,

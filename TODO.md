@@ -28,7 +28,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - Favorites system for profiles and groups
 - Icon picker for profiles (predefined library)
 - Tag system with color-coding and filtering
-- Profile name uniqueness scoped to parent group
+- ✅ Profile name uniqueness scoped to parent group (allows same name in different groups)
 - Settings Export/Import renamed to Backup/Restore
 
 **Phase 1 Progress (Database Migration & Group CRUD):** ✅ Completed
@@ -75,7 +75,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Header and section padding optimization (consistent 12px left/right across all sections)
 - ✅ Typography improvements (title 24px, version 14px, logo 64px)
 
-**Phase 4 Progress (Export/Import Modes):** In Progress
+**Phase 4 Progress (Export/Import Modes):** Phase 4A ✅ | Phase 4B ✅ | Phase 4C 🔄
 
 **Phase 4A (Version Tracking Foundation):** ✅ Completed
 - ✅ Add `exportFormatVersion` field to all profile export commands
@@ -88,17 +88,74 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Missing `exportFormatVersion` defaults to 1.0 for backward compatibility
 - ✅ Build successful with no warnings
 
-**Phase 4B (Individual Export/Import):** Not started
-- Implement export_profile command (includes metadata, tags, password with optional encryption)
-- Implement export_group command (recursive, includes sub-groups and all profiles)
-- Implement import_profile command (append mode, duplicate detection)
-- Implement import_group command (append mode, duplicate detection, parent selector)
-- Build export modal UI: Radio (Profile/Group/All), dropdown selector, include passwords checkbox
-- Build import modal UI: File picker, duplicate resolution (Skip/Rename/Overwrite per conflict)
-- Implement duplicate detection logic (name + host + username + group_path)
-- Add conflict resolution UI with "Apply to All" option
-- Export file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
-- Test all export/import modes with conflicts and nested groups
+**Phase 4B (Backend - Individual Export/Import):** ✅ Completed
+- ✅ Implement export_profile command (includes metadata, tags, password)
+- ✅ Implement export_group command (recursive, includes sub-groups and all profiles)
+- ✅ Implement import_profile command (append mode, duplicate detection)
+- ✅ Implement import_group command (append mode, duplicate detection, parent selector)
+- ✅ Add database methods for metadata and tags (get_profile_metadata, get_profile_tags, etc.)
+- ✅ Create export structures (ProfileExportDetailed, GroupExportDetailed)
+- ✅ Implement duplicate detection logic (name + group_id only - allows same name in different groups)
+- ✅ Update frontend validation to match group-scoped uniqueness
+- ✅ Register all commands in invoke_handler (export_profile, export_group, import_profile, import_group)
+- ✅ Build verification successful (no errors)
+- ✅ Add import type detection function to frontend (detectImportType)
+
+**Backend Design Decisions:**
+- **Duplicate Detection:** Uses (name + group_id) as unique key
+  - Profile names unique within their group only (allows same name in different groups)
+  - Matches hierarchical group behavior (group names scoped to parent)
+  - Connection details (host, username) NOT part of duplicate detection
+- **Import Strategies:**
+  - Profiles: "skip", "rename", "overwrite"
+  - Groups: "skip", "rename", "merge"
+  - Default: "rename" for safest UX
+- **Tag Handling:** Tags matched by name; reuses existing tags with same name
+- **File Naming:** `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`, `sshpm-profiles-{date}.json`
+
+**Phase 4C (Frontend UI - Individual Export/Import):** Not started
+- Build export mode selector UI (Radio: Profile/Group/All)
+- Add dropdown to select which profile/group to export
+- Update exportProfiles() function to handle three modes and call correct backend command
+- Update importProfiles() function to detect type and route to import_profile/import_group/import_profiles
+- Build duplicate resolution UI with Skip/Rename/Overwrite/Merge options
+- Add "Apply to All" checkbox for batch conflict resolution
+- Implement proper file naming for single profile/group exports
+- Optional: Add context menu "Export Profile" / "Export Group" options
+- Test all export/import modes (see testing checklist below)
+
+**Phase 4C Testing Checklist:**
+*Export Tests:*
+- [ ] Export single profile (with/without password)
+- [ ] Export single profile with metadata (favorite, icon)
+- [ ] Export single profile with tags
+- [ ] Export group with no subgroups
+- [ ] Export group with 1 level of subgroups
+- [ ] Export group with 3 levels of subgroups (max depth)
+- [ ] Export group with mixed profiles (some with passwords, metadata, tags)
+- [ ] Export all profiles (existing behavior)
+
+*Import Tests:*
+- [ ] Import single profile to root (no group)
+- [ ] Import single profile to existing group
+- [ ] Import single profile with duplicate (skip)
+- [ ] Import single profile with duplicate (rename)
+- [ ] Import single profile with duplicate (overwrite)
+- [ ] Import group to root
+- [ ] Import group under existing parent group
+- [ ] Import group with duplicate name (skip)
+- [ ] Import group with duplicate name (rename)
+- [ ] Import group with duplicate name (merge)
+- [ ] Import nested group structure (3 levels)
+- [ ] Import all profiles (existing behavior)
+- [ ] Import v1.0 format file (backward compatibility)
+
+*Edge Cases:*
+- [ ] Export/import empty group
+- [ ] Import with missing metadata (should default gracefully)
+- [ ] Import with missing tags (should handle empty array)
+- [ ] Import group that exceeds max depth when combined with existing structure
+- [ ] Large export (100+ profiles in nested groups)
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned
