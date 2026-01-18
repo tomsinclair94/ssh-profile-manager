@@ -452,13 +452,37 @@ fn validate_group(group: &str) -> Result<(), String> {
     let normalized: String = group.nfc().collect();
     let group = normalized.as_str();
 
-    if group.len() > 64 {
-        return Err("Group name too long (max 64 characters).".to_string());
+    // v0.7.0+: group_path can be a hierarchical path like "Work/Production/Servers"
+    // Validate total path length (max 3 levels: 64+1+64+1+64 = 194 chars)
+    if group.len() > 194 {
+        return Err("Group path too long (max 194 characters).".to_string());
     }
-    // Same pattern as profile name but shorter
-    if !group.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']' | '#')) {
-        return Err("Group name contains invalid characters.".to_string());
+
+    // Split by path separator and validate each segment
+    let segments: Vec<&str> = group.split('/').collect();
+
+    for segment in segments {
+        // Each segment must be non-empty
+        if segment.is_empty() {
+            return Err("Group path contains empty segments.".to_string());
+        }
+
+        // Check for reserved name "Ungrouped" (case-insensitive)
+        if segment.to_lowercase() == "ungrouped" {
+            return Err("\"Ungrouped\" is a reserved name for profiles without a group.".to_string());
+        }
+
+        // Each segment has max length of 64 chars
+        if segment.len() > 64 {
+            return Err("Group name segment too long (max 64 characters per segment).".to_string());
+        }
+
+        // Same pattern as profile name: alphanumeric and specific special characters
+        if !segment.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '[' | ']' | '#')) {
+            return Err("Group name contains invalid characters.".to_string());
+        }
     }
+
     Ok(())
 }
 

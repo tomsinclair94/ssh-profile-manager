@@ -266,6 +266,10 @@ function validateGroupName(groupName) {
     if (groupName.length === 0) {
         return { valid: false, error: 'Group name is required' };
     }
+    // Check for reserved name "Ungrouped" (case-insensitive)
+    if (groupName.toLowerCase() === 'ungrouped') {
+        return { valid: false, error: '"Ungrouped" is a reserved name for profiles without a group' };
+    }
     if (groupName.length > MAX_GROUP_NAME_LENGTH) {
         return { valid: false, error: `Maximum ${MAX_GROUP_NAME_LENGTH} characters` };
     }
@@ -2665,7 +2669,14 @@ function renderProfiles(filter = '') {
     let html = '';
 
     // Render top-level groups (parent_id = null)
-    const topLevelGroups = groups.filter(g => !g.parent_id).sort((a, b) => a.name.localeCompare(b.name));
+    // Sort with "Ungrouped" always at the bottom
+    const topLevelGroups = groups.filter(g => !g.parent_id).sort((a, b) => {
+        const aIsUngrouped = a.name.toLowerCase() === 'ungrouped';
+        const bIsUngrouped = b.name.toLowerCase() === 'ungrouped';
+        if (aIsUngrouped) return 1;  // a goes to bottom
+        if (bIsUngrouped) return -1; // b goes to bottom
+        return a.name.localeCompare(b.name);
+    });
 
     topLevelGroups.forEach(group => {
         html += renderGroupNode(group, profilesByGroupPath, 0);
@@ -2726,13 +2737,19 @@ function renderGroupNode(group, profilesByGroupPath, depth) {
     // Count total profiles including descendants (for badge display)
     const totalProfileCount = countProfilesRecursive(group.path, profilesByGroupPath);
 
+    // Skip rendering "Ungrouped" group if it has no profiles
+    // (This handles the case where migration created an empty "Ungrouped" group)
+    if (group.name.toLowerCase() === 'ungrouped' && totalProfileCount === 0) {
+        return '';
+    }
+
     let html = `
         <div class="profile-group" data-group-id="${group.id}">
             <div class="profile-group-header ${depthClass}" data-group-id="${group.id}">
                 <span class="group-chevron">${chevron}</span>
                 <span class="group-name">${escapeHtml(group.name)}</span>
                 <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Group actions">
-                    <svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor">
+                    <svg width="20" height="20" viewBox="0 0 512 512" fill="currentColor">
                         <path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z"/>
                     </svg>
                 </button>
@@ -2767,7 +2784,7 @@ function renderUngroupedProfiles(ungroupedProfiles) {
 
     let html = `
         <div class="profile-group">
-            <div class="profile-group-header" data-group-id="ungrouped">
+            <div class="profile-group-header profile-group-header-ungrouped" data-group-id="ungrouped">
                 <span class="group-chevron">${chevron}</span>
                 <span class="group-name">Ungrouped</span>
                 <span class="badge group-count-badge">${ungroupedProfiles.length}</span>
@@ -2923,13 +2940,9 @@ function showGroupMenu(groupId, event) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
-    // Close any existing context menus first
-    const existingMenus = document.querySelectorAll('.group-context-menu');
-    existingMenus.forEach(existingMenu => {
-        if (document.body.contains(existingMenu)) {
-            document.body.removeChild(existingMenu);
-        }
-    });
+    // Close any existing menus first
+    closeAllGroupMenus();
+    closeAllProfileActionMenus();
 
     // Create a simple inline menu (temporary solution)
     const menu = document.createElement('div');
@@ -2940,7 +2953,7 @@ function showGroupMenu(groupId, event) {
         <button class="group-menu-item" data-action="rename">Rename Group</button>
         <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
         <button class="group-menu-item" data-action="export">Export Group</button>
-        <button class="group-menu-item" data-action="delete">Delete Group</button>
+        <button class="group-menu-item group-menu-delete" data-action="delete">Delete Group</button>
     `;
 
     document.body.appendChild(menu);
@@ -3005,18 +3018,34 @@ function showGroupMenu(groupId, event) {
     }, 0);
 }
 
-// Show profile action menu (positioned below button)
-function showProfileActionMenu(profileId, buttonElement) {
-    const profile = profiles.find(p => p.id === profileId);
-    if (!profile) return;
+// Helper function to close all group context menus
+function closeAllGroupMenus() {
+    const existingMenus = document.querySelectorAll('.group-context-menu');
+    existingMenus.forEach(existingMenu => {
+        if (document.body.contains(existingMenu)) {
+            document.body.removeChild(existingMenu);
+        }
+    });
+}
 
-    // Close any existing profile action menus first
+// Helper function to close all profile action menus
+function closeAllProfileActionMenus() {
     const existingMenus = document.querySelectorAll('.profile-action-menu');
     existingMenus.forEach(existingMenu => {
         if (document.body.contains(existingMenu)) {
             document.body.removeChild(existingMenu);
         }
     });
+}
+
+// Show profile action menu (positioned below button)
+function showProfileActionMenu(profileId, buttonElement) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+
+    // Close any existing menus first
+    closeAllProfileActionMenus();
+    closeAllGroupMenus();
 
     // Create menu
     const menu = document.createElement('div');
@@ -3024,9 +3053,9 @@ function showProfileActionMenu(profileId, buttonElement) {
     menu.style.position = 'absolute';
 
     menu.innerHTML = `
-        <button class="profile-menu-item" data-action="duplicate">Duplicate</button>
-        <button class="profile-menu-item" data-action="export">Export</button>
-        <button class="profile-menu-item profile-menu-delete" data-action="delete">Delete</button>
+        <button class="profile-menu-item" data-action="duplicate">Duplicate Profile</button>
+        <button class="profile-menu-item" data-action="export">Export Profile</button>
+        <button class="profile-menu-item profile-menu-delete" data-action="delete">Delete Profile</button>
     `;
 
     document.body.appendChild(menu);
@@ -3111,7 +3140,7 @@ async function deleteGroup(groupId) {
     if (!group) return;
 
     // Count profiles and subgroups
-    const profileCount = profiles.filter(p => p.group_id === groupId).length;
+    const profileCount = profiles.filter(p => isProfileInGroupOrDescendants(p, groupId)).length;
     const subgroupCount = groups.filter(g => g.parent_id === groupId).length;
 
     // If group is empty (no profiles or subgroups), just delete it
@@ -4039,65 +4068,6 @@ function customConfirmWithButtons(message, options = {}) {
     });
 }
 
-// Show group selector dialog for imports
-async function showGroupSelectorDialog(title, message, allowTopLevel = false) {
-    // Build message with dropdown
-    const container = document.createElement('div');
-
-    // Add message text
-    const messageText = document.createTextNode(message);
-    container.appendChild(messageText);
-
-    // Add line break
-    container.appendChild(document.createElement('br'));
-    container.appendChild(document.createElement('br'));
-
-    // Create select dropdown
-    const select = document.createElement('select');
-    select.className = 'form-input';
-    select.style.width = '100%';
-    select.id = 'group-selector-dropdown';
-
-    // Add top-level option if allowed
-    if (allowTopLevel) {
-        const topLevelOption = document.createElement('option');
-        topLevelOption.value = '';
-        topLevelOption.textContent = '-- Top Level --';
-        select.appendChild(topLevelOption);
-    }
-
-    // Add group options (sorted hierarchically)
-    const sortedGroups = [...groups].sort((a, b) => {
-        const pathA = a.path || a.name;
-        const pathB = b.path || b.name;
-        return pathA.localeCompare(pathB);
-    });
-
-    sortedGroups.forEach(group => {
-        const option = document.createElement('option');
-        option.value = group.path || group.name;
-        option.textContent = group.path || group.name;
-        select.appendChild(option);
-    });
-
-    container.appendChild(select);
-
-    // Show confirm dialog
-    const confirmed = await customConfirm(container, {
-        title,
-        okText: 'Continue',
-        cancelText: 'Cancel',
-        okClass: 'btn-primary'
-    });
-
-    if (!confirmed) {
-        return null;
-    }
-
-    const selectedValue = select.value;
-    return selectedValue || null; // Return null for top-level (empty string becomes null)
-}
-
 // Show profile conflict dialog
 async function showProfileConflictDialog(profileName, groupName) {
     const message = `A profile named '${profileName}' already exists in '${groupName || 'Top Level'}'.`;
@@ -4208,6 +4178,9 @@ function checkSettingsChanged() {
 const debouncedCheckSettingsChanged = debounce(checkSettingsChanged, 50);
 
 function openSettings() {
+    // Close any open profile action menus
+    closeAllProfileActionMenus();
+
     settingsModal.classList.remove('hidden');
     pushModal('settings');
 
@@ -4588,9 +4561,10 @@ function getTopLevelGroups() {
         }
     });
 
-    // Add ungrouped if there are ungrouped profiles
+    // Add ungrouped if there are ungrouped profiles AND no "Ungrouped" group already exists
     const hasUngrouped = profiles.some(p => !p.group_path);
-    if (hasUngrouped) {
+    const hasUngroupedGroup = groups.some(g => !g.parent_id && g.name.toLowerCase() === 'ungrouped');
+    if (hasUngrouped && !hasUngroupedGroup) {
         topLevelGroupIds.push('ungrouped');
     }
 
@@ -4638,9 +4612,10 @@ function buildFilterGroupsList() {
     // This simplifies the filter UI and prevents bloat
     const topLevelGroups = groups.filter(g => !g.parent_id);
 
-    // Add ungrouped if there are ungrouped profiles
-    const hasUngrouped = profiles.some(p => !p.group_id);
-    if (hasUngrouped) {
+    // Add ungrouped if there are ungrouped profiles AND no "Ungrouped" group already exists
+    const hasUngrouped = profiles.some(p => !p.group_path);
+    const hasUngroupedGroup = topLevelGroups.some(g => g.name.toLowerCase() === 'ungrouped');
+    if (hasUngrouped && !hasUngroupedGroup) {
         topLevelGroups.push({ id: 'ungrouped', name: 'Ungrouped', path: 'Ungrouped' });
     }
 
@@ -4649,8 +4624,14 @@ function buildFilterGroupsList() {
         return;
     }
 
-    // Sort by name
-    topLevelGroups.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    // Sort by name with "Ungrouped" always at the bottom
+    topLevelGroups.sort((a, b) => {
+        const aIsUngrouped = (a.name || '').toLowerCase() === 'ungrouped';
+        const bIsUngrouped = (b.name || '').toLowerCase() === 'ungrouped';
+        if (aIsUngrouped) return 1;  // a goes to bottom
+        if (bIsUngrouped) return -1; // b goes to bottom
+        return (a.name || '').localeCompare(b.name || '');
+    });
 
     let html = '';
     topLevelGroups.forEach(group => {
@@ -4658,8 +4639,8 @@ function buildFilterGroupsList() {
 
         // Count profiles in this group AND all its descendants
         const groupProfiles = profiles.filter(p => {
-            if (group.id === 'ungrouped') {
-                return !p.group_id;
+            if (group.id === 'ungrouped' || (group.name && group.name.toLowerCase() === 'ungrouped')) {
+                return !p.group_path;
             }
             // Check if profile is in this group or any descendant
             return isProfileInGroupOrDescendants(p, group.id);
@@ -4705,6 +4686,9 @@ function buildFilterGroupsList() {
 }
 
 function toggleFilterPopup() {
+    // Close any open profile action menus
+    closeAllProfileActionMenus();
+
     const isHidden = filterPopup.classList.contains('hidden');
 
     if (isHidden) {
@@ -5103,8 +5087,8 @@ async function exportSingleProfile(profileId) {
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
         const data = await invoke('export_profile', {
-            profileId,
-            includePasswords
+            profileId: profileId,
+            includePassword: includePasswords
         });
 
         const sanitizedName = sanitizeFilename(profile.name);
@@ -5146,8 +5130,8 @@ async function exportSingleGroup(groupId) {
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
         const data = await invoke('export_group', {
-            groupId,
-            includePasswords
+            groupId: groupId,
+            includePasswords: includePasswords
         });
 
         const sanitizedGroupName = sanitizeFilename(group.name);
@@ -5467,9 +5451,9 @@ async function importAllProfiles(data) {
                     { prefix: 'You have ', highlight: `${existingCount} ${existingText}`, suffix: '.' }
                 ],
                 warnings: [
-                    `Importing will add ${importCount} ${importText} and override all existing profiles.`
+                    `Importing will add ${importCount} ${importText} and override all existing profiles and groups.`
                 ],
-                question: 'Are you sure you want to import these profiles?'
+                question: 'Are you sure you want to import?'
             });
 
             const confirmImport = await customConfirm(confirmMessage, {
@@ -5539,25 +5523,15 @@ async function importSingleProfile(data) {
         // Close settings modal
         closeSettings();
 
-        // Show group selector dialog
-        const targetGroupPath = await showGroupSelectorDialog(
-            'Select Group',
-            'Choose a group for the imported profile:',
-            true // Allow top-level
-        );
-
-        if (targetGroupPath === null && targetGroupPath !== '') {
-            // User cancelled (null returned from cancel, but we also accept empty string for top-level)
-            debug.log('User cancelled group selection');
-            return;
-        }
+        // Use group_path from export data (preserve original location)
+        const targetGroupPath = data.profile.group_path || null;
 
         // Try import with "skip" to detect conflicts
         showToast('Checking for conflicts...', TOAST_DURATION_LOADING);
 
         let result = await invoke('import_profile', {
             data: JSON.stringify(data),
-            targetGroupPath: targetGroupPath || null,
+            targetGroupPath: targetGroupPath,
             duplicateAction: 'skip'
         });
 
@@ -5579,7 +5553,7 @@ async function importSingleProfile(data) {
             showToast('Importing profile...', TOAST_DURATION_LOADING);
             result = await invoke('import_profile', {
                 data: JSON.stringify(data),
-                targetGroupPath: targetGroupPath || null,
+                targetGroupPath: targetGroupPath,
                 duplicateAction: action
             });
         }
@@ -5628,25 +5602,15 @@ async function importSingleGroup(data) {
         // Close settings modal
         closeSettings();
 
-        // Show parent selector dialog
-        const parentGroupPath = await showGroupSelectorDialog(
-            'Select Parent Group',
-            'Choose a parent group for the imported group:',
-            true // Allow top-level
-        );
-
-        if (parentGroupPath === null && parentGroupPath !== '') {
-            // User cancelled
-            debug.log('User cancelled parent group selection');
-            return;
-        }
+        // Use parent_path from export data (preserve original structure)
+        const parentGroupPath = data.group.parent_path || null;
 
         // Try import with "skip" to detect conflicts
         showToast('Checking for conflicts...', TOAST_DURATION_LOADING);
 
         let result = await invoke('import_group', {
             data: JSON.stringify(data),
-            parentGroupPath: parentGroupPath || null,
+            parentGroupPath: parentGroupPath,
             duplicateAction: 'skip'
         });
 
@@ -5668,7 +5632,7 @@ async function importSingleGroup(data) {
             showToast('Importing group...', TOAST_DURATION_LOADING);
             result = await invoke('import_group', {
                 data: JSON.stringify(data),
-                parentGroupPath: parentGroupPath || null,
+                parentGroupPath: parentGroupPath,
                 duplicateAction: action
             });
         }
@@ -5730,14 +5694,29 @@ async function deleteAllProfiles() {
             await invoke('delete_profile', { id: profile.id });
         }
 
-        // Delete all groups
-        for (const group of groups) {
-            await invoke('delete_group', {
-                input: {
-                    id: group.id,
-                    delete_profiles: false // Profiles already deleted above
+        // Delete all groups - sort by depth (deepest first) to avoid parent-child issues
+        // Calculate depth based on path slashes
+        const sortedGroups = [...groups].sort((a, b) => {
+            const depthA = (a.path || '').split('/').length;
+            const depthB = (b.path || '').split('/').length;
+            return depthB - depthA; // Deepest first
+        });
+
+        // Delete groups in order, catching errors for robustness
+        for (const group of sortedGroups) {
+            try {
+                await invoke('delete_group', {
+                    input: {
+                        id: group.id,
+                        delete_profiles: false // Profiles already deleted above
+                    }
+                });
+            } catch (error) {
+                // Continue if group not found (may have been cascade deleted)
+                if (!error.toString().includes('Group not found')) {
+                    throw error; // Re-throw other errors
                 }
-            });
+            }
         }
 
         await loadProfiles();
@@ -6232,6 +6211,9 @@ async function openModal(profile = null) {
     debug.log('openModal called with profile:', profile);
     editingProfileId = profile ? profile.id : null;
 
+    // Close any open profile action menus
+    closeAllProfileActionMenus();
+
     // Clear any validation errors from previous modal sessions
     clearAllValidationErrors();
 
@@ -6577,7 +6559,7 @@ function duplicateProfile(id) {
     document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'none';
     document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
     document.getElementById('profile-password').value = ''; // Don't copy password for security
-    document.getElementById('profile-group').value = duplicatedProfile.group_id || '';
+    document.getElementById('profile-group').value = duplicatedProfile.group_path || '';
 
     updateAuthMethodVisibility();
 
@@ -6649,6 +6631,9 @@ async function deleteProfile(id) {
 async function openGroupModal(group = null, preselectedParentId = null) {
     debug.log('openGroupModal called with group:', group, 'preselectedParentId:', preselectedParentId);
     editingGroupId = group ? group.id : null;
+
+    // Close any open profile action menus
+    closeAllProfileActionMenus();
 
     // Populate parent group dropdown FIRST
     populateParentGroupSelect(editingGroupId);

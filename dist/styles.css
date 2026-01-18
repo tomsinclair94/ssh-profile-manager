@@ -408,6 +408,7 @@ body {
     align-items: center;
     gap: 8px;
     padding: 6px 16px;
+    height: 40px;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
@@ -451,7 +452,7 @@ body {
 
 /* Group menu button */
 .group-menu-btn {
-    padding: 8px;
+    padding: 4px;
     line-height: 1;
     opacity: 1; /* Always visible */
     transition: all 0.2s ease;
@@ -503,6 +504,14 @@ body {
 
 .group-menu-item:hover {
     background-color: var(--surface-hover);
+}
+
+.group-menu-delete {
+    color: var(--danger-color);
+}
+
+.group-menu-delete:hover {
+    background-color: rgba(255, 59, 48, 0.1);
 }
 
 /* Profile action menu */
@@ -866,10 +875,11 @@ button.keyboard-selected {
 
 .confirm-modal-content {
     max-width: 400px;
+    padding-bottom: 0;
 }
 
 .confirm-body {
-    padding: 20px 24px;
+    padding: 20px 24px 12px 24px;
     font-size: 14px;
     line-height: 1.6;
     color: var(--text-color);
@@ -903,8 +913,7 @@ button.keyboard-selected {
 }
 
 .confirm-modal-content .form-actions {
-    padding-top: 16px;
-    padding-bottom: 20px;
+    padding: 12px 0 12px 0;
     margin-top: 0;
     justify-content: center;
 }
