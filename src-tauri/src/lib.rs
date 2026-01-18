@@ -2216,6 +2216,59 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
         let _ = delete_password(&profile.id);
     }
 
+    // Extract unique group paths from profiles and create groups
+    // This is needed for v1.0 imports where groups are inferred from profile group_path
+    let mut unique_group_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for profile_export in &import_data.profiles {
+        if let Some(ref group_path) = profile_export.profile.group_path {
+            println!("Found profile with group_path: {}", group_path);
+            unique_group_paths.insert(group_path.clone());
+        }
+    }
+
+    // Create groups in sorted order (parent before child)
+    let mut sorted_paths: Vec<String> = unique_group_paths.into_iter().collect();
+    sorted_paths.sort();
+    println!("Creating {} groups from import", sorted_paths.len());
+
+    for group_path in sorted_paths {
+        // Check if group already exists
+        let existing_groups = db.get_all_groups()
+            .map_err(|e| format!("Failed to get groups: {}", e))?;
+
+        if !existing_groups.iter().any(|g| g.path == group_path) {
+            // Extract name from path (last component)
+            let name = group_path.split('/').last().unwrap_or(&group_path).to_string();
+
+            // Determine parent_id by finding parent path
+            let parent_id = if group_path.contains('/') {
+                let parent_path = group_path.rsplitn(2, '/').nth(1).unwrap();
+                existing_groups.iter().find(|g| g.path == parent_path).map(|g| g.id.clone())
+            } else {
+                None
+            };
+
+            // Create the group
+            let group = Group {
+                id: Uuid::new_v4().to_string(),
+                name,
+                parent_id,
+                path: group_path,
+                icon: None,
+                is_favorite: false,
+                display_order: 0,
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            };
+
+            db.create_group(&group)
+                .map_err(|e| format!("Failed to create group '{}': {}", group.path, e))?;
+            println!("Created group: {} (id: {})", group.path, group.id);
+        } else {
+            println!("Group already exists: {}", group_path);
+        }
+    }
+
     // Now import the new profiles
     for profile_export in import_data.profiles {
         let mut profile = profile_export.profile;

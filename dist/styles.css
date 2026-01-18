@@ -505,6 +505,43 @@ body {
     background-color: var(--surface-hover);
 }
 
+/* Profile action menu */
+.profile-action-menu {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 4px 0;
+    min-width: 150px;
+    position: absolute;
+}
+
+.profile-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.profile-menu-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.profile-menu-delete {
+    color: var(--danger-color);
+}
+
+.profile-menu-delete:hover {
+    background-color: rgba(255, 59, 48, 0.1);
+}
+
 .profile-group-content {
     display: flex;
     flex-direction: column;
@@ -885,6 +922,33 @@ button.keyboard-selected {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Conflict resolution buttons (horizontal layout) */
+.conflict-buttons-horizontal {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.conflict-buttons-horizontal .btn {
+    flex: 1;
+    min-width: 80px;
+    max-width: 150px;
+}
+
+.btn-warning {
+    background-color: #ff9500;
+    color: white;
+}
+
+.btn-warning:hover {
+    background-color: #e68600;
+}
+
+.btn-warning:active {
+    background-color: #cc7a00;
 }
 
 .modal-header {

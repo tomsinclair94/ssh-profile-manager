@@ -796,29 +796,33 @@ async function handleModalShortcuts(e) {
 
         switch (topmostModal) {
             case 'confirm': {
-                const focusedElement = document.activeElement;
+                // Get all visible buttons (default or custom)
+                const tabbableButtons = Array.from(confirmModal.querySelectorAll('button:not(.hidden)'))
+                    .filter(btn => btn.offsetParent !== null);
 
-                // If nothing is focused (mouse mode), focus cancel button as default
-                if (focusedElement !== confirmOkBtn && focusedElement !== confirmCancelBtn) {
-                    confirmCancelBtn.focus();
+                if (tabbableButtons.length === 0) return;
+
+                const focusedElement = document.activeElement;
+                const currentIndex = tabbableButtons.indexOf(focusedElement);
+
+                // If nothing is focused or focused element is not in the list
+                if (currentIndex === -1) {
+                    // Focus first button
+                    tabbableButtons[0].focus();
                     return;
                 }
 
+                // Calculate next index
+                let nextIndex;
                 if (e.shiftKey) {
-                    // Shift+Tab - Cycle backwards
-                    if (focusedElement === confirmCancelBtn) {
-                        confirmOkBtn.focus();
-                    } else {
-                        confirmCancelBtn.focus();
-                    }
+                    // Shift+Tab - backwards
+                    nextIndex = currentIndex <= 0 ? tabbableButtons.length - 1 : currentIndex - 1;
                 } else {
-                    // Tab - Cycle forwards
-                    if (focusedElement === confirmOkBtn) {
-                        confirmCancelBtn.focus();
-                    } else {
-                        confirmOkBtn.focus();
-                    }
+                    // Tab - forwards
+                    nextIndex = currentIndex >= tabbableButtons.length - 1 ? 0 : currentIndex + 1;
                 }
+
+                tabbableButtons[nextIndex].focus();
                 return;
             }
 
@@ -2588,13 +2592,17 @@ function renderProfiles(filter = '') {
     // Filter profiles
     const filteredProfiles = profiles.filter(profile => {
         // First check if profile's group or any ancestor is filtered out
-        const groupId = profile.group_id;
-        if (groupId && isGroupOrAncestorFiltered(groupId)) {
-            return false; // Hide this profile because its group or an ancestor is filtered
+        const groupPath = profile.group_path;
+        if (groupPath) {
+            // Find the group by path
+            const group = groups.find(g => g.path === groupPath);
+            if (group && isGroupOrAncestorFiltered(group.id)) {
+                return false; // Hide this profile because its group or an ancestor is filtered
+            }
         }
 
         // Also check for ungrouped if "ungrouped" is filtered
-        if (!groupId && filteredGroups.has('ungrouped')) {
+        if (!groupPath && filteredGroups.has('ungrouped')) {
             return false;
         }
 
@@ -2645,12 +2653,12 @@ function renderProfiles(filter = '') {
         return;
     }
 
-    // Group profiles by group_id (null = ungrouped)
-    const profilesByGroupId = {};
+    // Group profiles by group_path (null = ungrouped)
+    const profilesByGroupPath = {};
     filteredProfiles.forEach(profile => {
-        const groupId = profile.group_id || null;
-        if (!profilesByGroupId[groupId]) profilesByGroupId[groupId] = [];
-        profilesByGroupId[groupId].push(profile);
+        const groupPath = profile.group_path || null;
+        if (!profilesByGroupPath[groupPath]) profilesByGroupPath[groupPath] = [];
+        profilesByGroupPath[groupPath].push(profile);
     });
 
     // Build HTML using hierarchical structure
@@ -2660,12 +2668,12 @@ function renderProfiles(filter = '') {
     const topLevelGroups = groups.filter(g => !g.parent_id).sort((a, b) => a.name.localeCompare(b.name));
 
     topLevelGroups.forEach(group => {
-        html += renderGroupNode(group, profilesByGroupId, 0);
+        html += renderGroupNode(group, profilesByGroupPath, 0);
     });
 
     // Render ungrouped profiles
-    if (profilesByGroupId[null] && profilesByGroupId[null].length > 0) {
-        html += renderUngroupedProfiles(profilesByGroupId[null]);
+    if (profilesByGroupPath[null] && profilesByGroupPath[null].length > 0) {
+        html += renderUngroupedProfiles(profilesByGroupPath[null]);
     }
 
     profilesList.innerHTML = html;
@@ -2680,24 +2688,28 @@ function renderProfiles(filter = '') {
 }
 
 // Recursively count profiles in a group and all its descendants
-function countProfilesRecursive(groupId, profilesByGroupId) {
+function countProfilesRecursive(groupPath, profilesByGroupPath) {
     let count = 0;
 
     // Count profiles in this group
-    const groupProfiles = profilesByGroupId[groupId] || [];
+    const groupProfiles = profilesByGroupPath[groupPath] || [];
     count += groupProfiles.length;
 
     // Count profiles in child groups recursively
-    const childGroups = groups.filter(g => g.parent_id === groupId);
-    childGroups.forEach(childGroup => {
-        count += countProfilesRecursive(childGroup.id, profilesByGroupId);
-    });
+    // Find the group by path to get its ID for finding children
+    const group = groups.find(g => g.path === groupPath);
+    if (group) {
+        const childGroups = groups.filter(g => g.parent_id === group.id);
+        childGroups.forEach(childGroup => {
+            count += countProfilesRecursive(childGroup.path, profilesByGroupPath);
+        });
+    }
 
     return count;
 }
 
 // Recursively render a group node and its children
-function renderGroupNode(group, profilesByGroupId, depth) {
+function renderGroupNode(group, profilesByGroupPath, depth) {
     // Skip rendering if this group is filtered out
     if (isGroupOrAncestorFiltered(group.id)) {
         return ''; // Don't render this group or its children
@@ -2709,10 +2721,10 @@ function renderGroupNode(group, profilesByGroupId, depth) {
     const depthClass = depth > 0 ? `depth-${depth}` : '';
 
     // Count profiles in this group (direct only, for rendering)
-    const groupProfiles = profilesByGroupId[group.id] || [];
+    const groupProfiles = profilesByGroupPath[group.path] || [];
 
     // Count total profiles including descendants (for badge display)
-    const totalProfileCount = countProfilesRecursive(group.id, profilesByGroupId);
+    const totalProfileCount = countProfilesRecursive(group.path, profilesByGroupPath);
 
     let html = `
         <div class="profile-group" data-group-id="${group.id}">
@@ -2737,7 +2749,7 @@ function renderGroupNode(group, profilesByGroupId, depth) {
     // Render child groups
     const childGroups = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.name.localeCompare(b.name));
     childGroups.forEach(childGroup => {
-        html += renderGroupNode(childGroup, profilesByGroupId, depth + 1);
+        html += renderGroupNode(childGroup, profilesByGroupPath, depth + 1);
     });
 
     html += `
@@ -2798,8 +2810,7 @@ function renderProfileCard(profile, depth) {
             <div class="profile-card-actions">
                 <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
                 <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
-                <button class="btn btn-secondary btn-small duplicate-btn" data-id="${profile.id}">Duplicate</button>
-                <button class="btn btn-danger btn-small delete-btn" data-id="${profile.id}">Delete</button>
+                <button class="btn btn-secondary btn-small actions-btn" data-id="${profile.id}">Actions</button>
             </div>
         </div>
     `;
@@ -2928,6 +2939,7 @@ function showGroupMenu(groupId, event) {
     menu.innerHTML = `
         <button class="group-menu-item" data-action="rename">Rename Group</button>
         <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
+        <button class="group-menu-item" data-action="export">Export Group</button>
         <button class="group-menu-item" data-action="delete">Delete Group</button>
     `;
 
@@ -2971,6 +2983,8 @@ function showGroupMenu(groupId, event) {
                 await renameGroup(groupId);
             } else if (action === 'add-subgroup') {
                 openGroupModal(null, groupId); // Create new group with this as parent
+            } else if (action === 'export') {
+                await exportSingleGroup(groupId);
             } else if (action === 'delete') {
                 await deleteGroup(groupId);
             }
@@ -2989,6 +3003,98 @@ function showGroupMenu(groupId, event) {
         };
         document.addEventListener('click', closeMenu);
     }, 0);
+}
+
+// Show profile action menu (positioned below button)
+function showProfileActionMenu(profileId, buttonElement) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+
+    // Close any existing profile action menus first
+    const existingMenus = document.querySelectorAll('.profile-action-menu');
+    existingMenus.forEach(existingMenu => {
+        if (document.body.contains(existingMenu)) {
+            document.body.removeChild(existingMenu);
+        }
+    });
+
+    // Create menu
+    const menu = document.createElement('div');
+    menu.className = 'profile-action-menu';
+    menu.style.position = 'absolute';
+
+    menu.innerHTML = `
+        <button class="profile-menu-item" data-action="duplicate">Duplicate</button>
+        <button class="profile-menu-item" data-action="export">Export</button>
+        <button class="profile-menu-item profile-menu-delete" data-action="delete">Delete</button>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Get button position
+    const buttonRect = buttonElement.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const menuWidth = menuRect.width;
+    const menuHeight = menuRect.height;
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+
+    // Position below button by default
+    let left = buttonRect.left;
+    let top = buttonRect.bottom + 4; // 4px gap below button
+
+    // Check right edge
+    if (left + menuWidth > windowWidth) {
+        left = windowWidth - menuWidth - 10; // 10px margin from edge
+    }
+
+    // Check bottom edge - if menu goes off screen, position above button instead
+    if (top + menuHeight > windowHeight) {
+        top = buttonRect.top - menuHeight - 4; // 4px gap above button
+    }
+
+    // Ensure menu doesn't go off left edge
+    if (left < 10) left = 10;
+
+    // Ensure menu doesn't go off top edge
+    if (top < 10) top = 10;
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+
+    // Handle menu item clicks
+    menu.querySelectorAll('.profile-menu-item').forEach(item => {
+        item.addEventListener('click', async (e) => {
+            const action = item.dataset.action;
+            document.body.removeChild(menu);
+
+            if (action === 'duplicate') {
+                duplicateProfile(profileId);
+            } else if (action === 'export') {
+                await exportSingleProfile(profileId);
+            } else if (action === 'delete') {
+                await confirmDeleteProfile(profileId);
+            }
+        });
+    });
+
+    // Close menu when clicking outside
+    setTimeout(() => {
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                }
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        document.addEventListener('click', closeMenu);
+    }, 0);
+}
+
+// Wrapper for deleteProfile with confirmation (called from action menu)
+async function confirmDeleteProfile(profileId) {
+    await deleteProfile(profileId);
 }
 
 // Rename a group
@@ -3189,13 +3295,9 @@ function setupEventListeners() {
         } else if (target.classList.contains('edit-btn')) {
             e.stopPropagation();
             editProfile(target.dataset.id);
-        } else if (target.classList.contains('duplicate-btn')) {
+        } else if (target.classList.contains('actions-btn')) {
             e.stopPropagation();
-            duplicateProfile(target.dataset.id);
-        } else if (target.classList.contains('delete-btn')) {
-            e.stopPropagation();
-            debug.log('Delete button clicked on card, id:', target.dataset.id);
-            await deleteProfile(target.dataset.id);
+            showProfileActionMenu(target.dataset.id, target);
         }
     });
 
@@ -3861,6 +3963,173 @@ function customConfirm(message, options = {}) {
     });
 }
 
+// Custom confirm with custom buttons
+function customConfirmWithButtons(message, options = {}) {
+    return new Promise((resolve) => {
+        const title = options.title || 'Confirm';
+        const buttons = options.buttons || [];
+
+        confirmTitle.textContent = title;
+
+        // Clear previous content
+        confirmMessage.innerHTML = '';
+
+        // Support both DOM elements and strings
+        if (message instanceof Node) {
+            confirmMessage.appendChild(message);
+        } else if (typeof message === 'string') {
+            const textNode = document.createTextNode(message);
+            confirmMessage.appendChild(textNode);
+        }
+
+        // Hide default buttons
+        confirmOkBtn.classList.add('hidden');
+        confirmCancelBtn.classList.add('hidden');
+
+        // Create custom button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'conflict-buttons-horizontal';
+
+        let defaultButton = null;
+
+        // Create custom buttons
+        buttons.forEach(buttonConfig => {
+            const button = document.createElement('button');
+            button.className = `btn ${buttonConfig.class || 'btn-secondary'}`;
+            button.textContent = buttonConfig.text;
+            button.addEventListener('click', () => {
+                // Clean up
+                buttonContainer.remove();
+                confirmOkBtn.classList.remove('hidden');
+                confirmCancelBtn.classList.remove('hidden');
+                confirmModal.classList.add('hidden');
+                popModal('confirm');
+                resolve(buttonConfig.value);
+            });
+
+            if (buttonConfig.default) {
+                defaultButton = button;
+            }
+
+            buttonContainer.appendChild(button);
+        });
+
+        confirmMessage.appendChild(buttonContainer);
+
+        confirmModal.classList.remove('hidden');
+        pushModal('confirm');
+
+        // Focus default button
+        setTimeout(() => {
+            if (defaultButton) {
+                defaultButton.focus();
+            } else {
+                buttonContainer.firstElementChild?.focus();
+            }
+        }, 100);
+
+        // Store resolver for keyboard navigation
+        confirmResolver = (value) => {
+            // Clean up
+            buttonContainer.remove();
+            confirmOkBtn.classList.remove('hidden');
+            confirmCancelBtn.classList.remove('hidden');
+            resolve(value);
+        };
+    });
+}
+
+// Show group selector dialog for imports
+async function showGroupSelectorDialog(title, message, allowTopLevel = false) {
+    // Build message with dropdown
+    const container = document.createElement('div');
+
+    // Add message text
+    const messageText = document.createTextNode(message);
+    container.appendChild(messageText);
+
+    // Add line break
+    container.appendChild(document.createElement('br'));
+    container.appendChild(document.createElement('br'));
+
+    // Create select dropdown
+    const select = document.createElement('select');
+    select.className = 'form-input';
+    select.style.width = '100%';
+    select.id = 'group-selector-dropdown';
+
+    // Add top-level option if allowed
+    if (allowTopLevel) {
+        const topLevelOption = document.createElement('option');
+        topLevelOption.value = '';
+        topLevelOption.textContent = '-- Top Level --';
+        select.appendChild(topLevelOption);
+    }
+
+    // Add group options (sorted hierarchically)
+    const sortedGroups = [...groups].sort((a, b) => {
+        const pathA = a.path || a.name;
+        const pathB = b.path || b.name;
+        return pathA.localeCompare(pathB);
+    });
+
+    sortedGroups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.path || group.name;
+        option.textContent = group.path || group.name;
+        select.appendChild(option);
+    });
+
+    container.appendChild(select);
+
+    // Show confirm dialog
+    const confirmed = await customConfirm(container, {
+        title,
+        okText: 'Continue',
+        cancelText: 'Cancel',
+        okClass: 'btn-primary'
+    });
+
+    if (!confirmed) {
+        return null;
+    }
+
+    const selectedValue = select.value;
+    return selectedValue || null; // Return null for top-level (empty string becomes null)
+}
+
+// Show profile conflict dialog
+async function showProfileConflictDialog(profileName, groupName) {
+    const message = `A profile named '${profileName}' already exists in '${groupName || 'Top Level'}'.`;
+
+    const result = await customConfirmWithButtons(message, {
+        title: 'Duplicate Profile Found',
+        buttons: [
+            { text: 'Skip', value: null, class: 'btn-secondary' },
+            { text: 'Rename', value: 'rename', class: 'btn-primary', default: true },
+            { text: 'Overwrite', value: 'overwrite', class: 'btn-danger' }
+        ]
+    });
+
+    return result; // 'rename', 'overwrite', or null
+}
+
+// Show group conflict dialog
+async function showGroupConflictDialog(groupName, parentName) {
+    const message = `A group named '${groupName}' already exists under '${parentName || 'Top Level'}'.`;
+
+    const result = await customConfirmWithButtons(message, {
+        title: 'Duplicate Group Found',
+        buttons: [
+            { text: 'Skip', value: null, class: 'btn-secondary' },
+            { text: 'Rename', value: 'rename', class: 'btn-primary', default: true },
+            { text: 'Merge', value: 'merge', class: 'btn-warning' }
+        ]
+    });
+
+    return result; // 'rename', 'merge', or null
+}
+
 // Toast notification
 function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
     // Clear previous content
@@ -4300,7 +4569,7 @@ function getAllGroups() {
     });
 
     // Add ungrouped if there are ungrouped profiles
-    const hasUngroupedProfiles = profiles.some(profile => !profile.group_id);
+    const hasUngroupedProfiles = profiles.some(profile => !profile.group_path);
     if (hasUngroupedProfiles) {
         allGroupIds.add('ungrouped');
     }
@@ -4320,7 +4589,7 @@ function getTopLevelGroups() {
     });
 
     // Add ungrouped if there are ungrouped profiles
-    const hasUngrouped = profiles.some(p => !p.group_id);
+    const hasUngrouped = profiles.some(p => !p.group_path);
     if (hasUngrouped) {
         topLevelGroupIds.push('ungrouped');
     }
@@ -4330,14 +4599,14 @@ function getTopLevelGroups() {
 
 // Check if a profile belongs to a group or any of its descendants
 function isProfileInGroupOrDescendants(profile, groupId) {
-    if (!profile.group_id) return false;
+    if (!profile.group_path) return false;
+
+    // Find the profile's group by path
+    const profileGroup = groups.find(g => g.path === profile.group_path);
+    if (!profileGroup) return false;
 
     // Check if profile's group matches
-    if (profile.group_id === groupId) return true;
-
-    // Check if profile's group is a descendant
-    const profileGroup = groups.find(g => g.id === profile.group_id);
-    if (!profileGroup) return false;
+    if (profileGroup.id === groupId) return true;
 
     // Walk up the parent chain to see if we find the target group
     let currentGroup = profileGroup;
@@ -4801,6 +5070,110 @@ async function browseTerminalApp() {
 }
 
 // Export profiles to JSON
+// Sanitize filename for export
+function sanitizeFilename(name) {
+    if (!name || typeof name !== 'string') return 'unnamed';
+
+    // Remove special chars that are invalid in filenames
+    let sanitized = name.replace(/[/\\?%*:|"<>.]/g, '');
+
+    // Replace spaces with hyphens
+    sanitized = sanitized.replace(/\s+/g, '-');
+
+    // Limit to 50 chars
+    sanitized = sanitized.substring(0, 50);
+
+    // Return 'unnamed' if empty after sanitization
+    return sanitized || 'unnamed';
+}
+
+// Export single profile
+async function exportSingleProfile(profileId) {
+    try {
+        const profile = profiles.find(p => p.id === profileId);
+        if (!profile) {
+            showToast('Profile not found', TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Show loading feedback
+        showToast('Exporting profile...', TOAST_DURATION_LOADING);
+
+        // Check if passwords should be included (read from localStorage)
+        const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+
+        const data = await invoke('export_profile', {
+            profileId,
+            includePasswords
+        });
+
+        const sanitizedName = sanitizeFilename(profile.name);
+        const defaultFilename = `sshpm-profile-${sanitizedName}-${new Date().toISOString().split('T')[0]}.json`;
+
+        // Call Tauri backend to show save dialog and write file
+        const success = await invoke('save_profiles_to_file', {
+            data: data,
+            defaultFilename: defaultFilename
+        });
+
+        if (success) {
+            showToast('Profile exported successfully!');
+            debug.log('Profile exported successfully');
+        } else {
+            // Hide the loading toast
+            toastElement.classList.add('hidden');
+            debug.log('User cancelled save dialog');
+        }
+    } catch (error) {
+        console.error('Failed to export profile:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Export single group
+async function exportSingleGroup(groupId) {
+    try {
+        const group = groups.find(g => g.id === groupId);
+        if (!group) {
+            showToast('Group not found', TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Show loading feedback
+        showToast('Exporting group...', TOAST_DURATION_LOADING);
+
+        // Check if passwords should be included (read from localStorage)
+        const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+
+        const data = await invoke('export_group', {
+            groupId,
+            includePasswords
+        });
+
+        const sanitizedGroupName = sanitizeFilename(group.name);
+        const defaultFilename = `sshpm-group-${sanitizedGroupName}-${new Date().toISOString().split('T')[0]}.json`;
+
+        // Call Tauri backend to show save dialog and write file
+        const success = await invoke('save_profiles_to_file', {
+            data: data,
+            defaultFilename: defaultFilename
+        });
+
+        if (success) {
+            showToast('Group exported successfully!');
+            debug.log('Group exported successfully');
+        } else {
+            // Hide the loading toast
+            toastElement.classList.add('hidden');
+            debug.log('User cancelled save dialog');
+        }
+    } catch (error) {
+        console.error('Failed to export group:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Export all profiles
 async function exportProfiles() {
     try {
         // Show loading feedback
@@ -4810,7 +5183,7 @@ async function exportProfiles() {
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
         const data = await invoke('export_profiles', { includePasswords });
-        const defaultFilename = `sshpm-profiles-${new Date().toISOString().split('T')[0]}.json`;
+        const defaultFilename = `sshpm-profile-all-${new Date().toISOString().split('T')[0]}.json`;
 
         // Call Tauri backend to show save dialog and write file
         const success = await invoke('save_profiles_to_file', {
@@ -4899,15 +5272,23 @@ function migrateExportFormat_1_0_to_2_0(data) {
 
     // Migrate each profile
     const migratedProfiles = data.profiles.map(profile => {
-        return {
+        const migrated = {
             ...profile,
-            // Keep group_name for backward compatibility (will be resolved to group_id during import)
-            // The import process will handle creating/finding the appropriate group
-            group_id: null,  // Will be resolved during import based on group_name or path
             // Add v0.7.0 fields with defaults
             metadata: null,
             tags: []
         };
+
+        // Rename 'group' field to 'group_path' (v1.0 → v2.0)
+        // In v1.0, profiles had a 'group' field with just the group name (flat groups)
+        // In v2.0, profiles have a 'group_path' field with hierarchical path
+        // Since v1.0 groups were flat, the group name IS the path
+        if (profile.group) {
+            migrated.group_path = profile.group;
+            delete migrated.group; // Remove old field name
+        }
+
+        return migrated;
     });
 
     // Return migrated data with updated format version
@@ -4995,15 +5376,14 @@ function validateProfileImportData(data) {
 }
 
 // Import profiles from JSON
+// Import router - auto-detects and routes to appropriate import handler
 async function importProfiles(file) {
     try {
         // Show loading feedback
         showToast('Reading import file...', TOAST_DURATION_LOADING);
 
-        // Note: file.text() is a modern File API method (not supported in older browsers)
-        // This is fine for Tauri apps as they use a modern WebView (WKWebView on macOS, WebView2 on Windows)
+        // Read and parse file
         const text = await file.text();
-
         let data;
         try {
             data = JSON.parse(text);
@@ -5012,6 +5392,27 @@ async function importProfiles(file) {
             return;
         }
 
+        // Detect import type
+        const importType = detectImportType(data);
+
+        if (importType === 'profile') {
+            await importSingleProfile(data);
+        } else if (importType === 'group') {
+            await importSingleGroup(data);
+        } else if (importType === 'all') {
+            await importAllProfiles(data);
+        } else {
+            showToast('Unknown import file format', TOAST_DURATION_LONG, 'error');
+        }
+    } catch (error) {
+        console.error('Failed to import:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Import all profiles (full replacement)
+async function importAllProfiles(data) {
+    try {
         // Check export format compatibility
         const compatibility = checkExportCompatibility(data);
         if (!compatibility.compatible) {
@@ -5087,11 +5488,12 @@ async function importProfiles(file) {
         // Show importing feedback
         showToast('Importing profiles...', TOAST_DURATION_LOADING);
 
-        // Import profiles via backend
-        await invoke('import_profiles', { data: text });
+        // Import profiles via backend (fixed bug: use JSON.stringify on data, not text)
+        await invoke('import_profiles', { data: JSON.stringify(data) });
 
-        // Reload profiles
+        // Reload profiles and groups
         await loadProfiles();
+        await loadGroups();
 
         const count = data.profiles?.length || 0;
         const message = count === 1
@@ -5101,6 +5503,184 @@ async function importProfiles(file) {
         debug.log('Profiles imported successfully');
     } catch (error) {
         console.error('Failed to import profiles:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Import single profile with conflict resolution
+async function importSingleProfile(data) {
+    try {
+        // Check compatibility and migrate if needed
+        const compatibility = checkExportCompatibility(data);
+        if (!compatibility.compatible) {
+            showToast(`Incompatible export format:\n\n${compatibility.message}`, TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Perform migration if needed
+        if (compatibility.requiresMigration) {
+            const exportFormatVersion = data.export_format_version || data.exportFormatVersion || '1.0';
+            if (compatibility.message) {
+                showToast(compatibility.message, TOAST_DURATION_LONG);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            if (exportFormatVersion === '1.0') {
+                data = migrateExportFormat_1_0_to_2_0(data);
+                showToast('Migration complete. Proceeding with import...', TOAST_DURATION_SHORT);
+            }
+        }
+
+        // Validate structure
+        if (!data.profile || typeof data.profile !== 'object') {
+            showToast('Invalid profile file: Missing profile data', TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Close settings modal
+        closeSettings();
+
+        // Show group selector dialog
+        const targetGroupPath = await showGroupSelectorDialog(
+            'Select Group',
+            'Choose a group for the imported profile:',
+            true // Allow top-level
+        );
+
+        if (targetGroupPath === null && targetGroupPath !== '') {
+            // User cancelled (null returned from cancel, but we also accept empty string for top-level)
+            debug.log('User cancelled group selection');
+            return;
+        }
+
+        // Try import with "skip" to detect conflicts
+        showToast('Checking for conflicts...', TOAST_DURATION_LOADING);
+
+        let result = await invoke('import_profile', {
+            data: JSON.stringify(data),
+            targetGroupPath: targetGroupPath || null,
+            duplicateAction: 'skip'
+        });
+
+        // Handle conflict
+        if (result === 'skipped') {
+            toastElement.classList.add('hidden');
+
+            const profileName = data.profile.name;
+            const groupName = targetGroupPath || 'Top Level';
+
+            const action = await showProfileConflictDialog(profileName, groupName);
+
+            if (!action) {
+                debug.log('User chose to skip duplicate profile');
+                return;
+            }
+
+            // Retry with chosen action
+            showToast('Importing profile...', TOAST_DURATION_LOADING);
+            result = await invoke('import_profile', {
+                data: JSON.stringify(data),
+                targetGroupPath: targetGroupPath || null,
+                duplicateAction: action
+            });
+        }
+
+        // Reload profiles and groups
+        await loadProfiles();
+        await loadGroups();
+
+        showToast('Profile imported successfully!');
+        debug.log('Profile imported successfully');
+    } catch (error) {
+        console.error('Failed to import profile:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Import single group with conflict resolution
+async function importSingleGroup(data) {
+    try {
+        // Check compatibility and migrate if needed
+        const compatibility = checkExportCompatibility(data);
+        if (!compatibility.compatible) {
+            showToast(`Incompatible export format:\n\n${compatibility.message}`, TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Perform migration if needed
+        if (compatibility.requiresMigration) {
+            const exportFormatVersion = data.export_format_version || data.exportFormatVersion || '1.0';
+            if (compatibility.message) {
+                showToast(compatibility.message, TOAST_DURATION_LONG);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            if (exportFormatVersion === '1.0') {
+                data = migrateExportFormat_1_0_to_2_0(data);
+                showToast('Migration complete. Proceeding with import...', TOAST_DURATION_SHORT);
+            }
+        }
+
+        // Validate structure
+        if (!data.group || typeof data.group !== 'object') {
+            showToast('Invalid group file: Missing group data', TOAST_DURATION_LONG, 'error');
+            return;
+        }
+
+        // Close settings modal
+        closeSettings();
+
+        // Show parent selector dialog
+        const parentGroupPath = await showGroupSelectorDialog(
+            'Select Parent Group',
+            'Choose a parent group for the imported group:',
+            true // Allow top-level
+        );
+
+        if (parentGroupPath === null && parentGroupPath !== '') {
+            // User cancelled
+            debug.log('User cancelled parent group selection');
+            return;
+        }
+
+        // Try import with "skip" to detect conflicts
+        showToast('Checking for conflicts...', TOAST_DURATION_LOADING);
+
+        let result = await invoke('import_group', {
+            data: JSON.stringify(data),
+            parentGroupPath: parentGroupPath || null,
+            duplicateAction: 'skip'
+        });
+
+        // Handle conflict
+        if (result === 'skipped') {
+            toastElement.classList.add('hidden');
+
+            const groupName = data.group.name;
+            const parentName = parentGroupPath || 'Top Level';
+
+            const action = await showGroupConflictDialog(groupName, parentName);
+
+            if (!action) {
+                debug.log('User chose to skip duplicate group');
+                return;
+            }
+
+            // Retry with chosen action
+            showToast('Importing group...', TOAST_DURATION_LOADING);
+            result = await invoke('import_group', {
+                data: JSON.stringify(data),
+                parentGroupPath: parentGroupPath || null,
+                duplicateAction: action
+            });
+        }
+
+        // Reload profiles and groups
+        await loadProfiles();
+        await loadGroups();
+
+        showToast('Group imported successfully!');
+        debug.log('Group imported successfully');
+    } catch (error) {
+        console.error('Failed to import group:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
@@ -5115,19 +5695,22 @@ async function deleteAllProfiles() {
     const count = profiles.length;
     const profileText = count === 1 ? 'profile' : 'profiles';
 
+    const groupCount = groups.length;
+    const groupText = groupCount === 1 ? 'group' : 'groups';
+
     const confirmMessage = buildConfirmMessage({
         lines: [
-            { prefix: 'You currently have ', highlight: `${count} ${profileText}`, suffix: '.' }
+            { prefix: 'You currently have ', highlight: `${count} ${profileText}`, suffix: groupCount > 0 ? ` and ${groupCount} ${groupText}.` : '.' }
         ],
         warnings: [
-            'This will permanently delete all profiles and their stored passwords.',
+            'This will permanently delete all profiles, groups, and stored passwords.',
             'This action cannot be undone.'
         ],
-        question: 'Are you sure you want to delete all profiles?'
+        question: 'Are you sure you want to delete everything?'
     });
 
     const confirmed = await customConfirm(confirmMessage, {
-        title: 'Delete All Profiles',
+        title: 'Delete All Profiles & Groups',
         okText: 'Delete All',
         cancelText: 'Cancel',
         okClass: 'btn-danger'
@@ -5147,11 +5730,22 @@ async function deleteAllProfiles() {
             await invoke('delete_profile', { id: profile.id });
         }
 
+        // Delete all groups
+        for (const group of groups) {
+            await invoke('delete_group', {
+                input: {
+                    id: group.id,
+                    delete_profiles: false // Profiles already deleted above
+                }
+            });
+        }
+
         await loadProfiles();
-        showToast('All profiles deleted successfully!');
-        debug.log('All profiles deleted');
+        await loadGroups();
+        showToast('All profiles and groups deleted successfully!');
+        debug.log('All profiles and groups deleted');
     } catch (error) {
-        console.error('Failed to delete all profiles:', error);
+        console.error('Failed to delete all profiles and groups:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }
@@ -5654,11 +6248,16 @@ async function openModal(profile = null) {
         document.getElementById('profile-auth-method').value = profile.auth_method || 'none';
         document.getElementById('profile-key-path').value = profile.key_path || '';
 
-        // Set group display and ID fields
-        const group = groups.find(g => g.id === profile.group_id);
-        if (group) {
-            document.getElementById('profile-group').value = group.path;
-            document.getElementById('profile-group-id').value = group.id;
+        // Set group display and path fields
+        if (profile.group_path) {
+            const group = groups.find(g => g.path === profile.group_path);
+            if (group) {
+                document.getElementById('profile-group').value = group.path;
+                document.getElementById('profile-group-id').value = group.id;
+            } else {
+                document.getElementById('profile-group').value = '';
+                document.getElementById('profile-group-id').value = '';
+            }
         } else {
             document.getElementById('profile-group').value = '';
             document.getElementById('profile-group-id').value = '';
@@ -5892,15 +6491,15 @@ async function saveProfile() {
 
     // Check for duplicate names within the same group (case-insensitive)
     // Profile names must be unique within their group (allows same name in different groups)
-    const selectedGroupId = document.getElementById('profile-group-id').value || null;
+    const selectedGroupPath = document.getElementById('profile-group').value || null;
     const duplicateProfile = profiles.find(p =>
         p.name.toLowerCase() === profileName.toLowerCase() &&
-        p.group_id === selectedGroupId &&
+        p.group_path === selectedGroupPath &&
         p.id !== editingProfileId
     );
 
     if (duplicateProfile) {
-        const groupContext = selectedGroupId
+        const groupContext = selectedGroupPath
             ? `in this group`
             : `at the root level`;
         showToast(`A profile named "${profileName}" already exists ${groupContext}. Please choose a different name.`, TOAST_DURATION_LONG, 'error');
@@ -5917,7 +6516,7 @@ async function saveProfile() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value || null,
         password: document.getElementById('profile-password').value || null,
-        group_id: document.getElementById('profile-group-id').value || null // Use hidden field
+        group_path: document.getElementById('profile-group').value || null // Use visible field with path
     };
 
     try {
