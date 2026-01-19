@@ -2609,13 +2609,6 @@ fn import_group(
     ) -> Result<String, String> {
         let mut group_portable = group_export.group;
 
-        // Calculate new path based on parent
-        let new_path = if let Some(pp) = &parent_path {
-            format!("{}/{}", pp, group_portable.name)
-        } else {
-            group_portable.name.clone()
-        };
-
         // Check for duplicate group (same name under same parent) using semantic paths
         let existing_groups = db.get_all_groups()
             .map_err(|e| format!("Failed to get existing groups: {}", e))?;
@@ -2630,13 +2623,13 @@ fn import_group(
             existing_parent_path == parent_path
         });
 
-        let group_id = match (duplicate, duplicate_action) {
+        let (group_id, actual_path) = match (duplicate, duplicate_action) {
             (Some(_), "skip") => {
                 return Ok("skipped".to_string());
             }
             (Some(dup), "merge") => {
-                // Use existing group ID
-                dup.id.clone()
+                // Use existing group ID and path
+                (dup.id.clone(), dup.path.clone())
             }
             (Some(_), "rename") | (None, _) => {
                 // Create new group
@@ -2662,6 +2655,7 @@ fn import_group(
                 };
 
                 let new_id = group.id.clone();
+                let new_path = group.path.clone(); // Capture the actual path with renamed group name
 
                 db.create_group(&group)
                     .map_err(|e| format!("Failed to create group '{}': {}", group.name, e))?;
@@ -2692,7 +2686,7 @@ fn import_group(
                     ).map_err(|e| format!("Failed to link tag to group: {}", e))?;
                 }
 
-                new_id
+                (new_id, new_path)
             }
             _ => return Err(format!("Invalid duplicate_action: {}", duplicate_action)),
         };
@@ -2701,9 +2695,38 @@ fn import_group(
         for profile_export in group_export.profiles {
             let mut profile = profile_export.profile;
 
-            // Generate new ID and set group_path
-            profile.id = Uuid::new_v4().to_string();
-            profile.group_path = Some(new_path.clone());
+            // Set group_path
+            profile.group_path = Some(actual_path.clone());
+
+            // Check for duplicate profile when merging
+            let profile_id = if duplicate_action == "merge" {
+                // Get existing profiles to check for duplicates
+                let existing_profiles = db.get_all_profiles()
+                    .map_err(|e| format!("Failed to get existing profiles: {}", e))?;
+
+                let existing = existing_profiles.iter().find(|p| {
+                    p.name == profile.name && p.group_path.as_ref() == Some(&actual_path)
+                });
+
+                if let Some(existing_profile) = existing {
+                    // Overwrite existing profile - delete and recreate with same ID
+                    let reused_id = existing_profile.id.clone();
+                    db.delete_profile(&reused_id)
+                        .map_err(|e| format!("Failed to delete existing profile: {}", e))?;
+                    profile.id = reused_id.clone();
+                    reused_id
+                } else {
+                    // New profile
+                    let new_id = Uuid::new_v4().to_string();
+                    profile.id = new_id.clone();
+                    new_id
+                }
+            } else {
+                // For rename/skip actions, always create new profile
+                let new_id = Uuid::new_v4().to_string();
+                profile.id = new_id.clone();
+                new_id
+            };
 
             db.create_profile(&profile)
                 .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
@@ -2711,17 +2734,17 @@ fn import_group(
             // Store password
             if let Some(password) = profile_export.password {
                 if !password.is_empty() {
-                    store_password(&profile.id, &password)?;
+                    store_password(&profile_id, &password)?;
                 }
             }
 
             // Import metadata and tags
-            import_profile_metadata_and_tags(db, &profile.id, profile_export.metadata, profile_export.tags)?;
+            import_profile_metadata_and_tags(db, &profile_id, profile_export.metadata, profile_export.tags)?;
         }
 
         // Import subgroups recursively
         for subgroup in group_export.subgroups {
-            import_group_recursive(db, subgroup, Some(group_id.clone()), Some(new_path.clone()), duplicate_action)?;
+            import_group_recursive(db, subgroup, Some(group_id.clone()), Some(actual_path.clone()), duplicate_action)?;
         }
 
         Ok(group_id)

@@ -1056,60 +1056,79 @@ function getAllTabbableItems() {
         items.push({ type: 'button', element: newProfileBtn, id: 'new-profile-btn' });
     }
 
-    // 2. Settings button
+    // 2. Add Group button
+    const addGroupBtn = document.getElementById('add-group-btn');
+    if (addGroupBtn) {
+        items.push({ type: 'button', element: addGroupBtn, id: 'add-group-btn' });
+    }
+
+    // 3. Settings button
     const settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) {
         items.push({ type: 'button', element: settingsBtn, id: 'settings-btn' });
     }
 
-    // 3. Search bar
+    // 4. Search bar
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         items.push({ type: 'input', element: searchInput, id: 'search-input' });
     }
 
-    // 4. Expand/Collapse groups button (comes before filter in DOM)
+    // 5. Expand/Collapse groups button (comes before filter in DOM)
     const expandCollapseBtn = document.getElementById('expand-collapse-btn');
     if (expandCollapseBtn) {
         items.push({ type: 'button', element: expandCollapseBtn, id: 'expand-collapse-btn' });
     }
 
-    // 5. Filter button
+    // 6. Filter button
     const filterBtn = document.getElementById('filter-btn');
     if (filterBtn) {
         items.push({ type: 'button', element: filterBtn, id: 'filter-btn' });
     }
 
-    // 6. All group headers (from profiles list - now comes before recent connections)
+    // 7. All top-level group headers only (no subgroups)
     const groupHeaders = document.querySelectorAll('.profile-group-header');
     groupHeaders.forEach(header => {
-        items.push({
-            type: 'group',
-            element: header,
-            name: header.dataset.group
-        });
+        const groupContent = header.closest('.profile-group-content');
+        // Only include top-level groups (no parent group-content)
+        if (!groupContent) {
+            items.push({
+                type: 'group',
+                element: header,
+                id: header.dataset.groupId
+            });
+        }
     });
 
-    // 7. Toggle recent button
-    const toggleBtn = document.getElementById('toggle-recent-btn');
-    if (toggleBtn) {
-        items.push({ type: 'button', element: toggleBtn, id: 'toggle-recent-btn' });
-    }
+    // 8-10. Recent Connections section (conditional based on settings and state)
+    const recentLimit = getRecentConnectionsLimit();
 
-    // 8. Clear button
-    const clearBtn = document.getElementById('clear-recent-btn');
-    if (clearBtn) {
-        items.push({ type: 'button', element: clearBtn, id: 'clear-recent-btn' });
-    }
+    // Only include Recent Connections in Tab cycle if enabled (limit > 0)
+    if (recentLimit > 0) {
+        const recentList = document.getElementById('recent-connections-list');
+        const isCollapsed = recentList && recentList.classList.contains('collapsed');
+        const recentConnections = getVisibleRecentConnections();
 
-    // 9. Recent connections (first one)
-    const recentConnections = getVisibleRecentConnections();
-    if (recentConnections.length > 0) {
-        items.push({
-            type: 'recent',
-            element: recentConnections[0],
-            profileId: recentConnections[0].dataset.profileId
-        });
+        // If expanded and has profiles, include the first recent connection
+        if (!isCollapsed && recentConnections.length > 0) {
+            items.push({
+                type: 'recent',
+                element: recentConnections[0],
+                profileId: recentConnections[0].dataset.profileId
+            });
+        }
+
+        // Always include Toggle button if Recent Connections are enabled
+        const toggleBtn = document.getElementById('toggle-recent-btn');
+        if (toggleBtn) {
+            items.push({ type: 'button', element: toggleBtn, id: 'toggle-recent-btn' });
+        }
+
+        // Always include Clear button if Recent Connections are enabled
+        const clearBtn = document.getElementById('clear-recent-btn');
+        if (clearBtn) {
+            items.push({ type: 'button', element: clearBtn, id: 'clear-recent-btn' });
+        }
     }
 
     return items;
@@ -1125,6 +1144,7 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
 
     // Check if any focusable element is currently focused
     const newProfileBtn = document.getElementById('new-profile-btn');
+    const addGroupBtn = document.getElementById('add-group-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const searchInput = document.getElementById('search-input');
     const filterBtn = document.getElementById('filter-btn');
@@ -1134,6 +1154,8 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
 
     if (activeElement === newProfileBtn) {
         currentIndex = items.findIndex(item => item.id === 'new-profile-btn');
+    } else if (activeElement === addGroupBtn) {
+        currentIndex = items.findIndex(item => item.id === 'add-group-btn');
     } else if (activeElement === settingsBtn) {
         currentIndex = items.findIndex(item => item.id === 'settings-btn');
     } else if (activeElement === searchInput) {
@@ -1149,14 +1171,14 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
     } else if (selectedRecentConnectionId) {
         currentIndex = items.findIndex(item => item.type === 'recent');
     } else if (selectedGroupName) {
-        currentIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
+        currentIndex = items.findIndex(item => item.type === 'group' && item.id === selectedGroupName);
     } else if (selectedProfileId) {
         // Find the group this profile belongs to
         const profileCard = document.querySelector(`.profile-card[data-id="${selectedProfileId}"]`);
         if (profileCard) {
             const groupHeader = profileCard.closest('.profile-group').querySelector('.profile-group-header');
             if (groupHeader) {
-                currentIndex = items.findIndex(item => item.type === 'group' && item.name === groupHeader.dataset.group);
+                currentIndex = items.findIndex(item => item.type === 'group' && item.id === groupHeader.dataset.groupId);
             }
         }
     }
@@ -1199,7 +1221,7 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
             document.activeElement.blur();
         }
         activeNavigationSection = 'profiles';
-        selectGroup(nextItem.name);
+        selectGroup(nextItem.id);
         nextItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }
@@ -1215,7 +1237,7 @@ function clearAllSelections() {
 
     // Clear group selection
     if (selectedGroupName) {
-        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        const prevGroup = document.querySelector(`.profile-group-header[data-group-id="${selectedGroupName}"]`);
         if (prevGroup) prevGroup.classList.remove('selected');
         selectedGroupName = null;
     }
@@ -1296,140 +1318,121 @@ function handleRecentConnectionsNavigation(e, visibleRecentConnections) {
 }
 
 function handleProfilesNavigation(e, visibleProfiles) {
-    const visibleGroups = getVisibleGroupHeaders();
-    if (visibleProfiles.length === 0 && visibleGroups.length === 0) return;
+    const items = getNavigableItems();
+    if (items.length === 0) return;
 
-    // If we're on a group header, handle group-specific keys
+    // Find current selection
+    let currentIndex = -1;
     if (selectedGroupName) {
-        // Enter - Toggle group collapse/expand
-        if (e.key === 'Enter') {
-            e.preventDefault();
+        currentIndex = items.findIndex(item => item.type === 'group' && item.id === selectedGroupName);
+    } else if (selectedProfileId) {
+        currentIndex = items.findIndex(item => item.type === 'profile' && item.id === selectedProfileId);
+    }
+
+    // Arrow Down - Navigate to next item (linear navigation through everything)
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+
+        if (currentIndex === -1 || currentIndex >= items.length - 1) {
+            // Start from beginning or wrap around
+            currentIndex = 0;
+        } else {
+            currentIndex++;
+        }
+
+        const nextItem = items[currentIndex];
+        if (nextItem.type === 'profile') {
+            selectProfile(nextItem.id);
+        } else if (nextItem.type === 'group') {
+            selectGroup(nextItem.id);
+        }
+        nextItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+    }
+
+    // Arrow Up - Navigate to previous item (linear navigation through everything)
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+
+        if (currentIndex <= 0) {
+            // Wrap to end
+            currentIndex = items.length - 1;
+        } else {
+            currentIndex--;
+        }
+
+        const prevItem = items[currentIndex];
+        if (prevItem.type === 'profile') {
+            selectProfile(prevItem.id);
+        } else if (prevItem.type === 'group') {
+            selectGroup(prevItem.id);
+        }
+        prevItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+    }
+
+    // Left Arrow - Collapse group (only works if on a group)
+    if (e.key === 'ArrowLeft' && selectedGroupName) {
+        e.preventDefault();
+        if (!collapsedGroups.has(selectedGroupName)) {
             toggleGroupByName(selectedGroupName);
-            return;
         }
+        return;
+    }
 
-        // Left Arrow - Collapse group
-        if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            if (!collapsedGroups.has(selectedGroupName)) {
-                toggleGroupByName(selectedGroupName);
-            }
-            return;
+    // Right Arrow - Expand group (only works if on a group)
+    if (e.key === 'ArrowRight' && selectedGroupName) {
+        e.preventDefault();
+        if (collapsedGroups.has(selectedGroupName)) {
+            toggleGroupByName(selectedGroupName);
         }
+        return;
+    }
 
-        // Right Arrow - Expand group
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            if (collapsedGroups.has(selectedGroupName)) {
-                toggleGroupByName(selectedGroupName);
-            }
-            return;
-        }
-
-        // Arrow Down - Navigate to first profile in this group
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            // Find the first profile in the currently selected group
-            const groupHeader = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
-            if (groupHeader) {
-                const group = groupHeader.closest('.profile-group');
-                const groupContent = group.querySelector('.profile-group-content');
-
-                // Only navigate into group if it's expanded
-                if (!groupContent.classList.contains('collapsed')) {
-                    const firstProfile = group.querySelector('.profile-card');
-                    if (firstProfile) {
-                        // Clear group selection
-                        selectedGroupName = null;
-                        groupHeader.classList.remove('selected');
-                        // Select first profile in group
-                        selectProfile(firstProfile.dataset.id);
-                        firstProfile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        return;
-                    }
-                }
-            }
-            // If group is collapsed or no profiles, just clear group selection and navigate
-            selectedGroupName = null;
-            const prevHeader = document.querySelector('.profile-group-header.selected');
-            if (prevHeader) {
-                prevHeader.classList.remove('selected');
-            }
-            selectNextItem(visibleGroups, visibleProfiles);
-            return;
-        }
-
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            // Navigate to last profile in previous group
-            const items = getNavigableItems();
-            const currentGroupIndex = items.findIndex(item => item.type === 'group' && item.name === selectedGroupName);
-
-            if (currentGroupIndex > 0) {
-                // Find previous profiles (going backwards from current group)
-                for (let i = currentGroupIndex - 1; i >= 0; i--) {
-                    if (items[i].type === 'profile') {
-                        // Found a profile, select it
-                        selectedGroupName = null;
-                        const prevHeader = document.querySelector('.profile-group-header.selected');
-                        if (prevHeader) {
-                            prevHeader.classList.remove('selected');
-                        }
-                        selectProfile(items[i].id);
-                        items[i].element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        return;
-                    }
-                }
-            }
-
-            // If no profile found above, wrap to last profile overall
-            selectedGroupName = null;
-            const prevHeader = document.querySelector('.profile-group-header.selected');
-            if (prevHeader) {
-                prevHeader.classList.remove('selected');
-            }
-            selectPreviousItem(visibleGroups, visibleProfiles);
-            return;
-        }
-    } else {
-        // We're on a profile (or starting navigation), handle profile-specific keys
-        // Arrow Down - Select next profile
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            selectNextItem(visibleGroups, visibleProfiles);
-            return;
-        }
-
-        // Arrow Up - Select previous profile
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            selectPreviousItem(visibleGroups, visibleProfiles);
-            return;
-        }
-
-        // Enter - Connect to selected profile
-        if (e.key === 'Enter' && selectedProfileId) {
-            e.preventDefault();
+    // Enter - Toggle group OR connect to profile
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedGroupName) {
+            // On a group - toggle collapse/expand
+            toggleGroupByName(selectedGroupName);
+        } else if (selectedProfileId) {
+            // On a profile - connect
             connectToProfile(selectedProfileId);
-            return;
         }
+        return;
+    }
 
+    // Space - Toggle group OR connect to profile (same as Enter)
+    if (e.key === ' ') {
+        e.preventDefault();
+        if (selectedGroupName) {
+            // On a group - toggle collapse/expand
+            toggleGroupByName(selectedGroupName);
+        } else if (selectedProfileId) {
+            // On a profile - connect
+            connectToProfile(selectedProfileId);
+        }
+        return;
+    }
+
+    // Profile-specific shortcuts (only work when on a profile)
+    if (selectedProfileId) {
         // E - Edit selected profile
-        if ((e.key === 'e' || e.key === 'E') && selectedProfileId) {
+        if (e.key === 'e' || e.key === 'E') {
             e.preventDefault();
             editProfile(selectedProfileId);
             return;
         }
 
         // D - Duplicate selected profile
-        if ((e.key === 'd' || e.key === 'D') && selectedProfileId) {
+        if (e.key === 'd' || e.key === 'D') {
             e.preventDefault();
             duplicateProfile(selectedProfileId);
             return;
         }
 
         // Delete/Backspace - Delete selected profile
-        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedProfileId) {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
             deleteProfile(selectedProfileId);
             return;
@@ -1452,24 +1455,44 @@ function getVisibleGroupHeaders() {
 // Build ordered list of all navigable items (groups and their visible profiles)
 function getNavigableItems() {
     const items = [];
-    const groups = document.querySelectorAll('.profile-group');
 
-    groups.forEach(group => {
-        const header = group.querySelector('.profile-group-header');
-        const groupName = header.dataset.group;
+    // Helper function to recursively process a group and its children
+    function processGroup(groupElement) {
+        const header = groupElement.querySelector(':scope > .profile-group-header');
+        if (!header) return;
+
+        const groupId = header.dataset.groupId;
 
         // Add group header
-        items.push({ type: 'group', name: groupName, element: header });
+        items.push({ type: 'group', id: groupId, element: header });
 
-        // Add profiles if group is expanded
-        const content = group.querySelector('.profile-group-content');
-        if (!content.classList.contains('collapsed')) {
-            const profiles = Array.from(group.querySelectorAll('.profile-card'));
-            profiles.forEach(profile => {
-                items.push({ type: 'profile', id: profile.dataset.id, element: profile });
-            });
+        // Check if group is expanded
+        const content = groupElement.querySelector(':scope > .profile-group-content');
+        if (content && !content.classList.contains('collapsed')) {
+            // Process children in DOM order (profiles and subgroups mixed)
+            const children = content.children;
+            for (let child of children) {
+                if (child.classList.contains('profile-card')) {
+                    // It's a profile
+                    items.push({ type: 'profile', id: child.dataset.id, element: child });
+                } else if (child.classList.contains('profile-group')) {
+                    // It's a subgroup - recursively process it
+                    processGroup(child);
+                }
+            }
         }
-    });
+    }
+
+    // Start with all top-level groups (direct children of #profiles-list)
+    const profilesList = document.getElementById('profiles-list');
+    if (!profilesList) return items;
+
+    const children = profilesList.children;
+    for (let child of children) {
+        if (child.classList.contains('profile-group')) {
+            processGroup(child);
+        }
+    }
 
     return items;
 }
@@ -1518,7 +1541,7 @@ function selectPreviousItem(visibleGroups, visibleProfiles) {
     prevProfile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function selectGroup(groupName) {
+function selectGroup(groupId) {
     // Clear profile selection
     if (selectedProfileId) {
         const prevProfile = document.querySelector(`.profile-card[data-id="${selectedProfileId}"]`);
@@ -1539,22 +1562,22 @@ function selectGroup(groupName) {
 
     // Clear previous group selection
     if (selectedGroupName) {
-        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        const prevGroup = document.querySelector(`.profile-group-header[data-group-id="${selectedGroupName}"]`);
         if (prevGroup) {
             prevGroup.classList.remove('selected');
         }
     }
 
-    // Set new group selection
-    selectedGroupName = groupName;
-    const groupHeader = document.querySelector(`.profile-group-header[data-group="${groupName}"]`);
+    // Set new group selection (note: selectedGroupName now stores group ID for consistency with existing code)
+    selectedGroupName = groupId;
+    const groupHeader = document.querySelector(`.profile-group-header[data-group-id="${groupId}"]`);
     if (groupHeader) {
         groupHeader.classList.add('selected');
     }
 }
 
-function toggleGroupByName(groupName) {
-    const groupHeader = document.querySelector(`.profile-group-header[data-group="${groupName}"]`);
+function toggleGroupByName(groupId) {
+    const groupHeader = document.querySelector(`.profile-group-header[data-group-id="${groupId}"]`);
     if (groupHeader) {
         groupHeader.click(); // Trigger existing click handler
     }
@@ -1574,7 +1597,7 @@ function selectProfile(profileId) {
 
     // Clear group header selection
     if (selectedGroupName) {
-        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        const prevGroup = document.querySelector(`.profile-group-header[data-group-id="${selectedGroupName}"]`);
         if (prevGroup) {
             prevGroup.classList.remove('selected');
         }
@@ -1602,7 +1625,7 @@ function selectRecentConnection(profileId) {
 
     // Clear group header selection
     if (selectedGroupName) {
-        const prevGroup = document.querySelector(`.profile-group-header[data-group="${selectedGroupName}"]`);
+        const prevGroup = document.querySelector(`.profile-group-header[data-group-id="${selectedGroupName}"]`);
         if (prevGroup) {
             prevGroup.classList.remove('selected');
         }
@@ -2940,9 +2963,10 @@ function showGroupMenu(groupId, event) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
-    // Close any existing menus first
+    // Close any existing menus and popups first
     closeAllGroupMenus();
     closeAllProfileActionMenus();
+    closeFilterPopup();
 
     // Create a simple inline menu (temporary solution)
     const menu = document.createElement('div');
@@ -3004,7 +3028,7 @@ function showGroupMenu(groupId, event) {
         });
     });
 
-    // Close menu when clicking outside
+    // Close menu when clicking outside or scrolling
     setTimeout(() => {
         const closeMenu = (e) => {
             if (!menu.contains(e.target)) {
@@ -3012,9 +3036,20 @@ function showGroupMenu(groupId, event) {
                     document.body.removeChild(menu);
                 }
                 document.removeEventListener('click', closeMenu);
+                document.removeEventListener('scroll', onScroll, true);
             }
         };
+
+        const onScroll = () => {
+            if (document.body.contains(menu)) {
+                document.body.removeChild(menu);
+            }
+            document.removeEventListener('click', closeMenu);
+            document.removeEventListener('scroll', onScroll, true);
+        };
+
         document.addEventListener('click', closeMenu);
+        document.addEventListener('scroll', onScroll, true); // Use capture phase to catch all scroll events
     }, 0);
 }
 
@@ -3038,14 +3073,22 @@ function closeAllProfileActionMenus() {
     });
 }
 
+// Helper function to close filter popup
+function closeFilterPopup() {
+    if (filterPopup && !filterPopup.classList.contains('hidden')) {
+        filterPopup.classList.add('hidden');
+    }
+}
+
 // Show profile action menu (positioned below button)
 function showProfileActionMenu(profileId, buttonElement) {
     const profile = profiles.find(p => p.id === profileId);
     if (!profile) return;
 
-    // Close any existing menus first
+    // Close any existing menus and popups first
     closeAllProfileActionMenus();
     closeAllGroupMenus();
+    closeFilterPopup();
 
     // Create menu
     const menu = document.createElement('div');
@@ -3107,7 +3150,7 @@ function showProfileActionMenu(profileId, buttonElement) {
         });
     });
 
-    // Close menu when clicking outside
+    // Close menu when clicking outside or scrolling
     setTimeout(() => {
         const closeMenu = (e) => {
             if (!menu.contains(e.target)) {
@@ -3115,9 +3158,20 @@ function showProfileActionMenu(profileId, buttonElement) {
                     document.body.removeChild(menu);
                 }
                 document.removeEventListener('click', closeMenu);
+                document.removeEventListener('scroll', onScroll, true);
             }
         };
+
+        const onScroll = () => {
+            if (document.body.contains(menu)) {
+                document.body.removeChild(menu);
+            }
+            document.removeEventListener('click', closeMenu);
+            document.removeEventListener('scroll', onScroll, true);
+        };
+
         document.addEventListener('click', closeMenu);
+        document.addEventListener('scroll', onScroll, true); // Use capture phase to catch all scroll events
     }, 0);
 }
 
@@ -4015,6 +4069,9 @@ function customConfirmWithButtons(message, options = {}) {
         confirmOkBtn.classList.add('hidden');
         confirmCancelBtn.classList.add('hidden');
 
+        // Get the footer element
+        const footerRight = confirmModal.querySelector('.form-actions-right');
+
         // Create custom button container
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'conflict-buttons-horizontal';
@@ -4043,7 +4100,8 @@ function customConfirmWithButtons(message, options = {}) {
             buttonContainer.appendChild(button);
         });
 
-        confirmMessage.appendChild(buttonContainer);
+        // Append button container to footer instead of message area
+        footerRight.appendChild(buttonContainer);
 
         confirmModal.classList.remove('hidden');
         pushModal('confirm');
@@ -4178,16 +4236,19 @@ function checkSettingsChanged() {
 const debouncedCheckSettingsChanged = debounce(checkSettingsChanged, 50);
 
 function openSettings() {
-    // Close any open profile action menus
+    // Close any open menus and popups
     closeAllProfileActionMenus();
+    closeAllGroupMenus();
+    closeFilterPopup();
 
     settingsModal.classList.remove('hidden');
     pushModal('settings');
 
-    // Scroll to top of modal content
+    // Reset scroll position (both vertical and horizontal)
     const modalContent = settingsModal.querySelector('.modal-content');
     if (modalContent) {
         modalContent.scrollTop = 0;
+        modalContent.scrollLeft = 0;
     }
 
     // Load current settings values into form
@@ -4510,11 +4571,10 @@ function loadCollapsedState() {
             console.error('Failed to load collapsed state:', error);
             collapsedGroups = new Set();
 
-            // Clear corrupted data
+            // Clear corrupted data and reset silently
+            // This is expected during version migrations when group ID format changes
+            // No need to alarm users with an error toast for non-critical UI state
             localStorage.removeItem('collapsedGroups');
-
-            // Notify user
-            showToast('Collapsed groups state was reset due to corrupted data', TOAST_DURATION_LONG, 'error');
         }
     }
 }
@@ -4686,8 +4746,9 @@ function buildFilterGroupsList() {
 }
 
 function toggleFilterPopup() {
-    // Close any open profile action menus
+    // Close any open menus
     closeAllProfileActionMenus();
+    closeAllGroupMenus();
 
     const isHidden = filterPopup.classList.contains('hidden');
 
@@ -5446,9 +5507,12 @@ async function importAllProfiles(data) {
             const existingText = existingCount === 1 ? 'existing profile' : 'existing profiles';
             const importText = importCount === 1 ? 'new profile' : 'new profiles';
 
+            const groupCount = groups.length;
+            const groupText = groupCount === 1 ? 'group' : 'groups';
+
             const confirmMessage = buildConfirmMessage({
                 lines: [
-                    { prefix: 'You have ', highlight: `${existingCount} ${existingText}`, suffix: '.' }
+                    { prefix: 'You currently have ', highlight: `${existingCount} ${existingText}`, suffix: groupCount > 0 ? ` and ${groupCount} ${groupText}.` : '.' }
                 ],
                 warnings: [
                     `Importing will add ${importCount} ${importText} and override all existing profiles and groups.`
@@ -5689,34 +5753,23 @@ async function deleteAllProfiles() {
     closeSettings();
 
     try {
-        // Delete all profiles
+        showToast('Deleting...', TOAST_DURATION_LOADING);
+
+        // Delete all profiles first
         for (const profile of profiles) {
             await invoke('delete_profile', { id: profile.id });
         }
 
-        // Delete all groups - sort by depth (deepest first) to avoid parent-child issues
-        // Calculate depth based on path slashes
-        const sortedGroups = [...groups].sort((a, b) => {
-            const depthA = (a.path || '').split('/').length;
-            const depthB = (b.path || '').split('/').length;
-            return depthB - depthA; // Deepest first
-        });
+        // Delete only top-level groups (CASCADE will handle children)
+        const topLevelGroups = groups.filter(g => !g.parent_id);
 
-        // Delete groups in order, catching errors for robustness
-        for (const group of sortedGroups) {
-            try {
-                await invoke('delete_group', {
-                    input: {
-                        id: group.id,
-                        delete_profiles: false // Profiles already deleted above
-                    }
-                });
-            } catch (error) {
-                // Continue if group not found (may have been cascade deleted)
-                if (!error.toString().includes('Group not found')) {
-                    throw error; // Re-throw other errors
+        for (const group of topLevelGroups) {
+            await invoke('delete_group', {
+                input: {
+                    id: group.id,
+                    delete_profiles: false // Profiles already deleted above
                 }
-            }
+            });
         }
 
         await loadProfiles();
@@ -6211,8 +6264,10 @@ async function openModal(profile = null) {
     debug.log('openModal called with profile:', profile);
     editingProfileId = profile ? profile.id : null;
 
-    // Close any open profile action menus
+    // Close any open menus and popups
     closeAllProfileActionMenus();
+    closeAllGroupMenus();
+    closeFilterPopup();
 
     // Clear any validation errors from previous modal sessions
     clearAllValidationErrors();
@@ -6277,10 +6332,11 @@ async function openModal(profile = null) {
     profileModal.classList.remove('hidden');
     pushModal('profile');
 
-    // Scroll to top of modal content
+    // Reset scroll position (both vertical and horizontal)
     const modalContent = profileModal.querySelector('.modal-content');
     if (modalContent) {
         modalContent.scrollTop = 0;
+        modalContent.scrollLeft = 0;
     }
 
     // Initialize character counters based on current field values
@@ -6574,6 +6630,13 @@ function duplicateProfile(id) {
 
     profileModal.classList.remove('hidden');
     pushModal('profile');
+
+    // Reset scroll position (both vertical and horizontal)
+    const modalContent = profileModal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+        modalContent.scrollLeft = 0;
+    }
 }
 
 // Delete profile
@@ -6632,8 +6695,10 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     debug.log('openGroupModal called with group:', group, 'preselectedParentId:', preselectedParentId);
     editingGroupId = group ? group.id : null;
 
-    // Close any open profile action menus
+    // Close any open menus and popups
     closeAllProfileActionMenus();
+    closeAllGroupMenus();
+    closeFilterPopup();
 
     // Populate parent group dropdown FIRST
     populateParentGroupSelect(editingGroupId);
@@ -6651,6 +6716,13 @@ async function openGroupModal(group = null, preselectedParentId = null) {
 
     groupModal.classList.remove('hidden');
     pushModal('group');
+
+    // Reset scroll position (both vertical and horizontal)
+    const modalContent = groupModal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+        modalContent.scrollLeft = 0;
+    }
 
     // Clear any previous validation errors
     groupNameInput.classList.remove('validation-error');
