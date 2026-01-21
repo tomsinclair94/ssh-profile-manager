@@ -78,7 +78,7 @@ body {
 
 .version {
     font-size: 14px;
-    font-weight: 400;
+    font-weight: 600;
     color: var(--text-secondary);
     opacity: 0.7;
     white-space: nowrap;
@@ -180,7 +180,7 @@ body {
 
 .version {
     font-size: 14px;
-    font-weight: 400;
+    font-weight: 600;
     color: var(--text-secondary);
     opacity: 0.7;
 }
@@ -509,11 +509,26 @@ body {
     background-color: var(--surface-hover);
 }
 
+.group-menu-item:focus {
+    outline: none;
+    background-color: var(--surface-hover);
+}
+
+.group-menu-edit {
+    color: var(--primary-color);
+}
+
+.group-menu-edit:hover,
+.group-menu-edit:focus {
+    background-color: rgba(0, 120, 212, 0.1);
+}
+
 .group-menu-delete {
     color: var(--danger-color);
 }
 
-.group-menu-delete:hover {
+.group-menu-delete:hover,
+.group-menu-delete:focus {
     background-color: rgba(255, 59, 48, 0.1);
 }
 
@@ -546,11 +561,26 @@ body {
     background-color: var(--surface-hover);
 }
 
+.profile-menu-item:focus {
+    outline: none;
+    background-color: var(--surface-hover);
+}
+
+.profile-menu-edit {
+    color: var(--primary-color);
+}
+
+.profile-menu-edit:hover,
+.profile-menu-edit:focus {
+    background-color: rgba(0, 120, 212, 0.1);
+}
+
 .profile-menu-delete {
     color: var(--danger-color);
 }
 
-.profile-menu-delete:hover {
+.profile-menu-delete:hover,
+.profile-menu-delete:focus {
     background-color: rgba(255, 59, 48, 0.1);
 }
 
@@ -726,6 +756,12 @@ button.keyboard-selected {
     margin-top: 4px;
 }
 
+.profile-card-actions .btn {
+    flex: 0 0 auto;
+    width: 80px;
+    text-align: center;
+}
+
 /* Wide screens: buttons move to right side */
 @media (min-width: 800px) {
     .profile-card {
@@ -873,12 +909,33 @@ button.keyboard-selected {
     max-height: 90vh;
     overflow-y: auto;
     overflow-x: clip; /* Stricter than hidden - prevents programmatic scrolling */
-    padding-bottom: 20px;
+    padding-bottom: 12px;
     position: relative; /* Ensure positioning context */
+}
+
+/* Profile, Settings, and Group modals use flex layout for proper scrolling */
+#profile-modal .modal-content,
+#settings-modal .modal-content,
+#group-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
+}
+
+/* Group modal should be smaller and fit its content */
+#group-modal .modal-content {
+    max-height: fit-content;
+    overflow-y: auto;
 }
 
 .confirm-modal-content {
     max-width: 400px;
+    padding-bottom: 0;
+}
+
+.delete-group-modal-content {
+    max-width: 460px;
     padding-bottom: 0;
 }
 
@@ -952,6 +1009,34 @@ button.keyboard-selected {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
+/* Delete group modal with three buttons centered together */
+.delete-group-modal-content .form-actions {
+    padding: 12px 0 12px 0;
+    margin-top: 0;
+    justify-content: center;
+    gap: 12px;
+}
+
+.delete-group-modal-content .form-actions-left {
+    display: flex;
+}
+
+.delete-group-modal-content .form-actions-right {
+    display: flex;
+    gap: 12px;
+}
+
+/* Colored action labels in delete group modal */
+.delete-group-modal-content .action-delete-all {
+    color: #e81123;
+    font-weight: 700;
+}
+
+.delete-group-modal-content .action-move-to-parent {
+    color: #0078d4;
+    font-weight: 700;
+}
+
 /* Conflict resolution buttons (horizontal layout) */
 .conflict-buttons-horizontal {
     display: flex;
@@ -1013,13 +1098,37 @@ button.keyboard-selected {
     overflow-x: clip; /* Prevent horizontal overflow in header */
 }
 
-/* Sticky header for settings and profile modals */
+/* Fixed header for settings, profile, and group modals */
 #settings-modal .modal-header,
-#profile-modal .modal-header {
-    position: sticky;
-    top: 0;
+#profile-modal .modal-header,
+#group-modal .modal-header {
+    flex-shrink: 0;
     background-color: var(--surface-color);
     z-index: 10;
+}
+
+/* Scrollable body for profile modal form */
+#profile-modal form {
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    padding-bottom: 24px;
+}
+
+/* Group modal form - sizes to content, no scrollbar unless dropdown extends */
+#group-modal form {
+    overflow-y: hidden;
+    overflow-x: hidden;
+    flex: 0 1 auto;
+    padding-bottom: 24px;
+}
+
+/* Scrollable body for settings modal content */
+.settings-content {
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    padding-bottom: 12px;
 }
 
 .modal-header h2 {

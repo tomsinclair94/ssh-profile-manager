@@ -23,9 +23,9 @@
                 </div>
             </div>
             <div class="header-buttons">
-                <button id="new-profile-btn" class="btn btn-primary">+ New Profile</button>
-                <button id="add-group-btn" class="btn btn-secondary-header">+ New Group</button>
-                <button id="settings-btn" class="btn btn-settings" title="Settings">
+                <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile">+ New Profile</button>
+                <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles">+ New Group</button>
+                <button id="settings-btn" class="btn btn-settings" title="Open application settings">
                     <svg viewBox="0 0 512 512" fill="currentColor">
                         <path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z"/>
                     </svg>
@@ -49,8 +49,8 @@
                         </div>
                     </div>
                 </div>
-                <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
-                <button id="filter-btn" class="btn btn-secondary">
+                <button id="expand-collapse-btn" class="btn btn-secondary" title="Expand or collapse all groups">Expand Groups</button>
+                <button id="filter-btn" class="btn btn-secondary" title="Filter profiles by group">
                     Filter Groups
                     <span id="filter-badge" class="badge filter-badge">0/0</span>
                 </button>
@@ -83,7 +83,7 @@
                 <h3>Recent Connections</h3>
                 <div class="recent-connections-buttons">
                     <button id="toggle-recent-btn" class="btn btn-secondary btn-small" title="Collapse/Expand Recent Connections">▼</button>
-                    <button id="clear-recent-btn" class="btn btn-secondary btn-small">Clear</button>
+                    <button id="clear-recent-btn" class="btn btn-secondary btn-small" title="Clear all recent connections">Clear</button>
                 </div>
             </div>
             <div id="recent-connections-list" class="recent-connections-list">
@@ -283,10 +283,13 @@
 
                     <div class="form-group">
                         <label for="group-parent">Parent Group</label>
-                        <select id="group-parent">
-                            <option value="">-- Top Level --</option>
-                            <!-- Options will be populated dynamically -->
-                        </select>
+                        <div class="searchable-dropdown-wrapper">
+                            <input type="text" id="group-parent" placeholder="Type to search or select..." autocomplete="off">
+                            <div id="group-parent-dropdown" class="searchable-dropdown hidden">
+                                <!-- Parent group options will be populated dynamically -->
+                            </div>
+                        </div>
+                        <input type="hidden" id="group-parent-id" value="">
                     </div>
                 </form>
             </div>
@@ -382,7 +385,7 @@
                             </label>
                         </div>
                         <div class="settings-actions">
-                            <button id="export-profiles-btn" class="btn btn-secondary">Export All Profiles</button>
+                            <button id="export-profiles-btn" class="btn btn-primary">Export All Profiles</button>
                             <button id="import-profiles-btn" class="btn btn-secondary">Import Profiles</button>
                             <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All</button>
                             <input type="file" id="import-file-input" accept=".json" class="hidden">
@@ -400,7 +403,7 @@
                             </label>
                         </div>
                         <div class="settings-actions">
-                            <button id="backup-settings-btn" class="btn btn-secondary">Backup Settings</button>
+                            <button id="backup-settings-btn" class="btn btn-primary">Backup Settings</button>
                             <button id="restore-settings-btn" class="btn btn-secondary">Restore Settings</button>
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">

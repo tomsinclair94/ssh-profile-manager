@@ -555,6 +555,17 @@ function setupKeyboardShortcutListeners() {
     document.addEventListener('keydown', (e) => {
         if (!keyboardShortcutsEnabled) return;
 
+        // Check if context menu is open
+        const groupMenu = document.querySelector('.group-context-menu');
+        const profileMenu = document.querySelector('.profile-action-menu');
+        const contextMenuOpen = groupMenu || profileMenu;
+
+        if (contextMenuOpen) {
+            // Handle context menu keyboard navigation
+            const handled = handleContextMenuKeyboard(e, contextMenuOpen);
+            if (handled) return;
+        }
+
         // Check if filter popup is open
         const filterPopupOpen = !filterPopup.classList.contains('hidden');
         if (filterPopupOpen) {
@@ -568,7 +579,8 @@ function setupKeyboardShortcutListeners() {
         const inModal = !profileModal.classList.contains('hidden') ||
                        !settingsModal.classList.contains('hidden') ||
                        !confirmModal.classList.contains('hidden') ||
-                       !versionSplashModal.classList.contains('hidden');
+                       !versionSplashModal.classList.contains('hidden') ||
+                       !groupModal.classList.contains('hidden');
 
         // Handle modal shortcuts (always active in modals)
         if (inModal) {
@@ -586,6 +598,61 @@ function setupKeyboardShortcutListeners() {
             handleProfileNavigation(e);
         }
     });
+}
+
+function handleContextMenuKeyboard(e, menu) {
+    const menuItems = Array.from(menu.querySelectorAll('.group-menu-item, .profile-menu-item'));
+    if (menuItems.length === 0) return false;
+
+    // Get currently focused item
+    let focusedIndex = menuItems.findIndex(item => item === document.activeElement);
+
+    // Arrow Down - Move to next item
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (focusedIndex === -1) {
+            // No item focused, focus first item
+            menuItems[0].focus();
+        } else {
+            // Move to next item (wrap around)
+            const nextIndex = (focusedIndex + 1) % menuItems.length;
+            menuItems[nextIndex].focus();
+        }
+        return true;
+    }
+
+    // Arrow Up - Move to previous item
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (focusedIndex === -1) {
+            // No item focused, focus last item
+            menuItems[menuItems.length - 1].focus();
+        } else {
+            // Move to previous item (wrap around)
+            const prevIndex = focusedIndex <= 0 ? menuItems.length - 1 : focusedIndex - 1;
+            menuItems[prevIndex].focus();
+        }
+        return true;
+    }
+
+    // Enter or Space - Select focused item
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (focusedIndex !== -1) {
+            menuItems[focusedIndex].click();
+        }
+        return true;
+    }
+
+    // Escape - Close menu
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        closeAllGroupMenus();
+        closeAllProfileActionMenus();
+        return true;
+    }
+
+    return false;
 }
 
 function handleGlobalShortcuts(e) {
@@ -632,6 +699,41 @@ function handleGlobalShortcuts(e) {
         e.preventDefault();
         openSettings();
         return;
+    }
+
+    // G - New Group (single key)
+    if ((e.key === 'g' || e.key === 'G') && !cmdOrCtrl) {
+        e.preventDefault();
+        openGroupModal();
+        return;
+    }
+
+    // F - Filter Groups (single key)
+    if ((e.key === 'f' || e.key === 'F') && !cmdOrCtrl) {
+        e.preventDefault();
+        toggleFilterPopup();
+        return;
+    }
+
+    // T - Toggle Expand/Collapse All Groups (single key)
+    if ((e.key === 't' || e.key === 'T') && !cmdOrCtrl) {
+        e.preventDefault();
+        toggleExpandCollapseAll();
+        return;
+    }
+
+    // Escape - Close context menus
+    if (e.key === 'Escape') {
+        // Check if there are any open context menus
+        const groupMenu = document.querySelector('.group-context-menu');
+        const profileMenu = document.querySelector('.profile-action-menu');
+
+        if (groupMenu || profileMenu) {
+            e.preventDefault();
+            closeAllGroupMenus();
+            closeAllProfileActionMenus();
+            return;
+        }
     }
 }
 
@@ -726,6 +828,13 @@ function getSettingsModalTabbableItems() {
         const browseTerminalBtn = document.getElementById('browse-terminal-btn');
         if (browseTerminalBtn) items.push(browseTerminalBtn);
     }
+
+    const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
+    if (useTabsInTerminalCheck) items.push(useTabsInTerminalCheck);
+
+    // Profile management
+    const includePasswordsCheck = document.getElementById('include-passwords-check');
+    if (includePasswordsCheck) items.push(includePasswordsCheck);
 
     // Profile management buttons
     const exportProfilesBtn = document.getElementById('export-profiles-btn');
@@ -967,17 +1076,29 @@ async function handleModalShortcuts(e) {
         e.preventDefault();
 
         switch (topmostModal) {
-            case 'profile':
-                saveProfile();
+            case 'profile': {
+                const saveBtn = document.getElementById('profile-save-btn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveProfile();
+                }
                 return;
+            }
 
-            case 'settings':
-                saveSettings();
+            case 'settings': {
+                const saveBtn = document.getElementById('settings-save-btn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveSettings();
+                }
                 return;
+            }
 
-            case 'group':
-                saveGroup();
+            case 'group': {
+                const saveBtn = document.getElementById('group-save-btn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveGroup();
+                }
                 return;
+            }
         }
     }
 
@@ -1030,6 +1151,10 @@ function handleProfileNavigation(e) {
     // Reset mouse movement flag when using keyboard navigation
     // This prevents mouseenter events from interfering when elements scroll under cursor
     mouseHasMoved = false;
+
+    // Close any open context menus when navigating
+    closeAllGroupMenus();
+    closeAllProfileActionMenus();
 
     // Tab - Cycle through sections
     if (e.key === 'Tab') {
@@ -1431,10 +1556,80 @@ function handleProfilesNavigation(e, visibleProfiles) {
             return;
         }
 
+        // A - Open Actions menu for selected profile
+        if (e.key === 'a' || e.key === 'A') {
+            e.preventDefault();
+            // Find the profile card to position the menu
+            const profileCard = document.querySelector(`.profile-card[data-id="${selectedProfileId}"]`);
+            if (profileCard) {
+                // Find the Actions button within the card to use for positioning
+                const actionsBtn = profileCard.querySelector('.actions-btn');
+                if (actionsBtn) {
+                    showProfileActionMenu(selectedProfileId, actionsBtn);
+                }
+            }
+            return;
+        }
+
+        // X - Export selected profile
+        if (e.key === 'x' || e.key === 'X') {
+            e.preventDefault();
+            exportSingleProfile(selectedProfileId);
+            return;
+        }
+
         // Delete/Backspace - Delete selected profile
         if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
             deleteProfile(selectedProfileId);
+            return;
+        }
+    }
+
+    // Group-specific shortcuts (only work when on a group)
+    if (selectedGroupName) {
+        // E - Edit selected group
+        if (e.key === 'e' || e.key === 'E') {
+            e.preventDefault();
+            editGroup(selectedGroupName);
+            return;
+        }
+
+        // G - Add subgroup to selected group
+        if (e.key === 'g' || e.key === 'G') {
+            e.preventDefault();
+            openGroupModal(null, selectedGroupName); // Create new group with this as parent
+            return;
+        }
+
+        // A - Open Actions menu for selected group
+        if (e.key === 'a' || e.key === 'A') {
+            e.preventDefault();
+            // Find the group header to position the menu
+            const groupHeader = document.querySelector(`.profile-group-header[data-group-id="${selectedGroupName}"]`);
+            if (groupHeader) {
+                // Create a fake event with coordinates from the group header
+                const rect = groupHeader.getBoundingClientRect();
+                const fakeEvent = {
+                    clientX: rect.right - 10, // Position near right edge of header
+                    clientY: rect.bottom + 5   // Just below the header
+                };
+                showGroupMenu(selectedGroupName, fakeEvent);
+            }
+            return;
+        }
+
+        // X - Export selected group
+        if (e.key === 'x' || e.key === 'X') {
+            e.preventDefault();
+            exportSingleGroup(selectedGroupName);
+            return;
+        }
+
+        // Delete/Backspace - Delete selected group
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            deleteGroup(selectedGroupName);
             return;
         }
     }
@@ -1685,36 +1880,51 @@ function showKeyboardShortcutsHelp() {
     const modKey = isMac ? 'Cmd' : 'Ctrl';
 
     const shortcuts = [
-        { category: 'Global', items: [
+        { category: 'Global Actions', items: [
             { keys: 'N', action: 'New Profile' },
+            { keys: 'G', action: 'New Group' },
             { keys: 'S', action: 'Open Settings' },
+            { keys: 'F', action: 'Filter Groups' },
+            { keys: 'T', action: 'Toggle Expand/Collapse Groups' },
             { keys: `${modKey}+F or /`, action: 'Focus Search' },
             { keys: '?', action: 'Show This Help' },
         ]},
         { category: 'Navigation', items: [
-            { keys: 'Tab', action: 'Cycle: Search → Actions → Recent → Groups' },
+            { keys: 'Tab', action: 'Cycle Through Interface Elements' },
             { keys: 'Shift+Tab', action: 'Cycle Backwards' },
-            { keys: 'Enter', action: 'Activate Focused Button/Item' },
+            { keys: '↑ / ↓', action: 'Navigate Items' },
+            { keys: 'Enter / Space', action: 'Activate Selected Item' },
+        ]},
+        { category: 'Profile Actions', items: [
+            { keys: 'Enter', action: 'Connect to Profile' },
+            { keys: 'E', action: 'Edit Profile' },
+            { keys: 'D', action: 'Duplicate Profile' },
+            { keys: 'A', action: 'Open Actions Menu' },
+            { keys: 'X', action: 'Export Profile' },
+            { keys: 'Backspace / Delete', action: 'Delete Profile' },
+        ]},
+        { category: 'Group Actions', items: [
+            { keys: 'Enter', action: 'Toggle Group Expand/Collapse' },
+            { keys: '← / →', action: 'Collapse / Expand Group' },
+            { keys: 'E', action: 'Edit Group' },
+            { keys: 'G', action: 'Add Subgroup' },
+            { keys: 'A', action: 'Open Actions Menu' },
+            { keys: 'X', action: 'Export Group' },
+            { keys: 'Backspace / Delete', action: 'Delete Group' },
         ]},
         { category: 'Recent Connections', items: [
             { keys: '← / →', action: 'Navigate Connections' },
-            { keys: '↑', action: 'Collapse Section' },
-            { keys: '↓', action: 'Expand Section' },
-            { keys: 'Enter', action: 'Connect to Selected' },
-            { keys: 'D', action: 'Delete Selected Connection' },
-            { keys: 'C', action: 'Clear All Recent Connections' },
-        ]},
-        { category: 'Profile List', items: [
-            { keys: '↑ / ↓', action: 'Navigate Profiles' },
-            { keys: 'Enter', action: 'Connect (Profile) / Toggle (Group)' },
-            { keys: '← / →', action: 'Collapse / Expand Group' },
-            { keys: 'E', action: 'Edit Selected Profile' },
-            { keys: 'D', action: 'Duplicate Selected Profile' },
-            { keys: 'Backspace / Delete', action: 'Delete Selected Profile' },
+            { keys: '↑ / ↓', action: 'Collapse / Expand Section' },
+            { keys: 'Enter', action: 'Connect' },
+            { keys: 'D', action: 'Delete Connection' },
+            { keys: 'C', action: 'Clear All' },
         ]},
         { category: 'Modals', items: [
-            { keys: 'Escape', action: 'Close Modal/Cancel' },
-            { keys: `${modKey}+S`, action: 'Save' },
+            { keys: 'Escape', action: 'Close / Cancel' },
+            { keys: 'Tab', action: 'Cycle Through Fields/Buttons' },
+            { keys: 'Shift+Tab', action: 'Cycle Backwards' },
+            { keys: 'Enter / Space', action: 'Activate Focused Button' },
+            { keys: `${modKey}+S`, action: 'Save (if applicable)' },
         ]},
     ];
 
@@ -2771,7 +2981,7 @@ function renderGroupNode(group, profilesByGroupPath, depth) {
             <div class="profile-group-header ${depthClass}" data-group-id="${group.id}">
                 <span class="group-chevron">${chevron}</span>
                 <span class="group-name">${escapeHtml(group.name)}</span>
-                <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Group actions">
+                <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Show group actions">
                     <svg width="20" height="20" viewBox="0 0 512 512" fill="currentColor">
                         <path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z"/>
                     </svg>
@@ -2848,9 +3058,8 @@ function renderProfileCard(profile, depth) {
                 </div>
             </div>
             <div class="profile-card-actions">
-                <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}">Connect</button>
-                <button class="btn btn-info btn-small edit-btn" data-id="${profile.id}">Edit</button>
-                <button class="btn btn-secondary btn-small actions-btn" data-id="${profile.id}">Actions</button>
+                <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
+                <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
             </div>
         </div>
     `;
@@ -2974,7 +3183,7 @@ function showGroupMenu(groupId, event) {
     menu.style.position = 'absolute';
 
     menu.innerHTML = `
-        <button class="group-menu-item" data-action="rename">Rename Group</button>
+        <button class="group-menu-item group-menu-edit" data-action="edit">Edit Group</button>
         <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
         <button class="group-menu-item" data-action="export">Export Group</button>
         <button class="group-menu-item group-menu-delete" data-action="delete">Delete Group</button>
@@ -3010,14 +3219,20 @@ function showGroupMenu(groupId, event) {
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
 
+    // Focus first menu item for keyboard navigation
+    setTimeout(() => {
+        const firstItem = menu.querySelector('.group-menu-item');
+        if (firstItem) firstItem.focus();
+    }, 0);
+
     // Handle menu item clicks
     menu.querySelectorAll('.group-menu-item').forEach(item => {
         item.addEventListener('click', async (e) => {
             const action = item.dataset.action;
             document.body.removeChild(menu);
 
-            if (action === 'rename') {
-                await renameGroup(groupId);
+            if (action === 'edit') {
+                await editGroup(groupId);
             } else if (action === 'add-subgroup') {
                 openGroupModal(null, groupId); // Create new group with this as parent
             } else if (action === 'export') {
@@ -3096,6 +3311,7 @@ function showProfileActionMenu(profileId, buttonElement) {
     menu.style.position = 'absolute';
 
     menu.innerHTML = `
+        <button class="profile-menu-item profile-menu-edit" data-action="edit">Edit Profile</button>
         <button class="profile-menu-item" data-action="duplicate">Duplicate Profile</button>
         <button class="profile-menu-item" data-action="export">Export Profile</button>
         <button class="profile-menu-item profile-menu-delete" data-action="delete">Delete Profile</button>
@@ -3134,13 +3350,21 @@ function showProfileActionMenu(profileId, buttonElement) {
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
 
+    // Focus first menu item for keyboard navigation
+    setTimeout(() => {
+        const firstItem = menu.querySelector('.profile-menu-item');
+        if (firstItem) firstItem.focus();
+    }, 0);
+
     // Handle menu item clicks
     menu.querySelectorAll('.profile-menu-item').forEach(item => {
         item.addEventListener('click', async (e) => {
             const action = item.dataset.action;
             document.body.removeChild(menu);
 
-            if (action === 'duplicate') {
+            if (action === 'edit') {
+                editProfile(profileId);
+            } else if (action === 'duplicate') {
                 duplicateProfile(profileId);
             } else if (action === 'export') {
                 await exportSingleProfile(profileId);
@@ -3180,8 +3404,8 @@ async function confirmDeleteProfile(profileId) {
     await deleteProfile(profileId);
 }
 
-// Rename a group
-async function renameGroup(groupId) {
+// Edit a group
+async function editGroup(groupId) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
@@ -3201,16 +3425,20 @@ async function deleteGroup(groupId) {
     if (profileCount === 0 && subgroupCount === 0) {
         const confirmMessage = buildConfirmMessage({
             lines: [
-                { prefix: 'Group: ', highlight: `"${group.name}"`, highlightClass: 'group-name' }
+                {
+                    segments: [
+                        { text: 'Delete group ' },
+                        { highlight: group.name }
+                    ]
+                }
             ],
-            warnings: ['This action cannot be undone.'],
             question: 'Are you sure you want to delete this group?'
         });
 
         const confirmed = await customConfirm(
             confirmMessage,
             {
-                title: 'Delete Empty Group',
+                title: 'Delete Group',
                 okText: 'Delete',
                 cancelText: 'Cancel',
                 okClass: 'btn-danger'
@@ -3239,16 +3467,54 @@ async function deleteGroup(groupId) {
 
     // Group has content - offer two deletion modes
     const parentText = group.parent_id ? 'parent group' : 'top level';
+
+    // Build content description with highlighting
+    const profileText = profileCount === 1 ? 'profile' : 'profiles';
+    const subgroupText = subgroupCount === 1 ? 'subgroup' : 'subgroups';
+
+    const lines = [
+        {
+            segments: [
+                { text: 'Delete group ' },
+                { highlight: group.name }
+            ]
+        }
+    ];
+
+    // Add content description if there are profiles and/or subgroups
+    if (profileCount > 0 && subgroupCount > 0) {
+        lines.push({
+            segments: [
+                { text: 'This group contains ' },
+                { highlight: `${profileCount} ${profileText}` },
+                { text: ' and ' },
+                { highlight: `${subgroupCount} ${subgroupText}` },
+                { text: '.' }
+            ]
+        });
+    } else if (profileCount > 0) {
+        lines.push({
+            segments: [
+                { text: 'This group contains ' },
+                { highlight: `${profileCount} ${profileText}` },
+                { text: '.' }
+            ]
+        });
+    } else if (subgroupCount > 0) {
+        lines.push({
+            segments: [
+                { text: 'This group contains ' },
+                { highlight: `${subgroupCount} ${subgroupText}` },
+                { text: '.' }
+            ]
+        });
+    }
+
     const confirmMessage = buildConfirmMessage({
-        lines: [
-            { prefix: 'Group: ', highlight: `"${group.name}"`, highlightClass: 'group-name' },
-            `Contains: ${profileCount} profile(s) and ${subgroupCount} subgroup(s)`,
-            '',
-            'Choose how to handle the contents:'
-        ],
+        lines,
         list: [
-            `Delete All: Permanently deletes all profiles and subgroups`,
-            `Move to Parent: Moves profiles/subgroups to ${parentText}, then deletes group`
+            `<span class="action-delete-all">Delete All:</span> Permanently deletes all profiles and subgroups`,
+            `<span class="action-move-to-parent">Move to Parent:</span> Moves profiles/subgroups to ${parentText}, then deletes group`
         ]
     });
 
@@ -3259,17 +3525,18 @@ async function deleteGroup(groupId) {
         modal.style.display = 'flex';
 
         modal.innerHTML = `
-            <div class="modal-content confirm-modal-content">
+            <div class="modal-content delete-group-modal-content">
                 <div class="modal-header">
                     <h2>Delete Group</h2>
                 </div>
                 <div class="confirm-body" id="delete-group-confirm-body"></div>
                 <div class="form-actions">
-                    <div class="form-actions-left"></div>
-                    <div class="form-actions-right">
-                        <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
-                        <button id="move-to-parent-btn" class="btn btn-primary">Move to Parent</button>
+                    <div class="form-actions-left">
                         <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                    <div class="form-actions-right">
+                        <button id="move-to-parent-btn" class="btn btn-primary">Move to Parent</button>
+                        <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
                     </div>
                 </div>
             </div>
@@ -3375,9 +3642,6 @@ function setupEventListeners() {
         if (target.classList.contains('connect-btn')) {
             e.stopPropagation();
             connectToProfile(target.dataset.id);
-        } else if (target.classList.contains('edit-btn')) {
-            e.stopPropagation();
-            editProfile(target.dataset.id);
         } else if (target.classList.contains('actions-btn')) {
             e.stopPropagation();
             showProfileActionMenu(target.dataset.id, target);
@@ -3516,8 +3780,23 @@ function setupEventListeners() {
         });
     }
 
-    // Close dropdown when clicking outside
+    // Parent Group searchable dropdown event listeners
+    const parentGroupInput = document.getElementById('group-parent');
+    if (parentGroupInput) {
+        parentGroupInput.addEventListener('input', (e) => {
+            showParentGroupDropdown(e.target.value);
+        });
+
+        parentGroupInput.addEventListener('focus', () => {
+            showParentGroupDropdown(parentGroupInput.value);
+        });
+
+        parentGroupInput.addEventListener('keydown', handleParentGroupKeydown);
+    }
+
+    // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {
+        // Close profile group dropdown
         const profileGroupDropdown = document.getElementById('profile-group-dropdown');
         const profileGroupInput = document.getElementById('profile-group');
         const addGroupBtn = document.getElementById('add-group-from-profile-btn');
@@ -3527,6 +3806,17 @@ function setupEventListeners() {
                 !profileGroupDropdown.contains(e.target) &&
                 !addGroupBtn.contains(e.target)) {
                 hideProfileGroupDropdown();
+            }
+        }
+
+        // Close parent group dropdown
+        const parentGroupDropdown = document.getElementById('group-parent-dropdown');
+        const parentGroupInputElem = document.getElementById('group-parent');
+
+        if (parentGroupDropdown && !parentGroupDropdown.classList.contains('hidden')) {
+            if (!parentGroupInputElem.contains(e.target) &&
+                !parentGroupDropdown.contains(e.target)) {
+                hideParentGroupDropdown();
             }
         }
     });
@@ -5567,19 +5857,30 @@ async function importAllProfiles(data) {
             toastElement.classList.add('hidden');
 
             const existingCount = profiles.length;
-            const importCount = data.profiles?.length || 0;
-            const existingText = existingCount === 1 ? 'existing profile' : 'existing profiles';
-            const importText = importCount === 1 ? 'new profile' : 'new profiles';
+            const profileText = existingCount === 1 ? 'profile' : 'profiles';
 
             const groupCount = groups.length;
             const groupText = groupCount === 1 ? 'group' : 'groups';
 
+            // Build message with both profile and group counts highlighted
+            const segments = groupCount > 0
+                ? [
+                    { text: 'You currently have ' },
+                    { highlight: `${existingCount} ${profileText}` },
+                    { text: ' and ' },
+                    { highlight: `${groupCount} ${groupText}` },
+                    { text: '.' }
+                  ]
+                : [
+                    { text: 'You currently have ' },
+                    { highlight: `${existingCount} ${profileText}` },
+                    { text: '.' }
+                  ];
+
             const confirmMessage = buildConfirmMessage({
-                lines: [
-                    { prefix: 'You currently have ', highlight: `${existingCount} ${existingText}`, suffix: groupCount > 0 ? ` and ${groupCount} ${groupText}.` : '.' }
-                ],
+                lines: [{ segments }],
                 warnings: [
-                    `Importing will add ${importCount} ${importText} and override all existing profiles and groups.`
+                    'Importing will override all existing profiles and groups.'
                 ],
                 question: 'Are you sure you want to import?'
             });
@@ -5588,7 +5889,7 @@ async function importAllProfiles(data) {
                 title: 'Confirm Import',
                 okText: 'Import',
                 cancelText: 'Cancel',
-                okClass: 'btn-primary'
+                okClass: 'btn-danger' // Red button for destructive action
             });
 
             if (!confirmImport) {
@@ -5790,13 +6091,25 @@ async function deleteAllProfiles() {
     const groupCount = groups.length;
     const groupText = groupCount === 1 ? 'group' : 'groups';
 
+    // Build message with both profile and group counts highlighted
+    const segments = groupCount > 0
+        ? [
+            { text: 'You currently have ' },
+            { highlight: `${count} ${profileText}` },
+            { text: ' and ' },
+            { highlight: `${groupCount} ${groupText}` },
+            { text: '.' }
+          ]
+        : [
+            { text: 'You currently have ' },
+            { highlight: `${count} ${profileText}` },
+            { text: '.' }
+          ];
+
     const confirmMessage = buildConfirmMessage({
-        lines: [
-            { prefix: 'You currently have ', highlight: `${count} ${profileText}`, suffix: groupCount > 0 ? ` and ${groupCount} ${groupText}.` : '.' }
-        ],
+        lines: [{ segments }],
         warnings: [
-            'This will permanently delete all profiles, groups, and stored passwords.',
-            'This action cannot be undone.'
+            'This will permanently delete all profiles, groups, and stored passwords.'
         ],
         question: 'Are you sure you want to delete everything?'
     });
@@ -6032,9 +6345,29 @@ async function restoreSettings(file) {
             const warnings = [];
 
             if (includesProfiles) {
-                const importCount = result.profiles.length;
-                const profileText = importCount === 1 ? 'profile' : 'profiles';
-                lines.push({ prefix: 'This backup contains ', highlight: `${importCount} ${profileText}`, suffix: '.' });
+                const importProfileCount = result.profiles.length;
+                const profileText = importProfileCount === 1 ? 'profile' : 'profiles';
+
+                // Count groups in the backup
+                const importGroupCount = result.groups ? result.groups.length : 0;
+                const groupText = importGroupCount === 1 ? 'group' : 'groups';
+
+                // Build message with both profile and group counts highlighted
+                const segments = importGroupCount > 0
+                    ? [
+                        { text: 'This backup contains ' },
+                        { highlight: `${importProfileCount} ${profileText}` },
+                        { text: ' and ' },
+                        { highlight: `${importGroupCount} ${groupText}` },
+                        { text: '.' }
+                      ]
+                    : [
+                        { text: 'This backup contains ' },
+                        { highlight: `${importProfileCount} ${profileText}` },
+                        { text: '.' }
+                      ];
+
+                lines.push({ segments });
                 warnings.push(`Restoring will replace all your current settings${hasProfiles ? ' and profiles' : ''}.`);
             } else {
                 lines.push('You have existing settings configured.');
@@ -6057,7 +6390,7 @@ async function restoreSettings(file) {
                 title: 'Confirm Restore',
                 okText: 'Restore',
                 cancelText: 'Cancel',
-                okClass: 'btn-primary'
+                okClass: 'btn-danger' // Red button for destructive action
             });
 
             if (!confirmRestore) {
@@ -6353,7 +6686,7 @@ async function openModal(profile = null) {
         if (profile.group_path) {
             const group = groups.find(g => g.path === profile.group_path);
             if (group) {
-                document.getElementById('profile-group').value = group.path;
+                document.getElementById('profile-group').value = formatGroupPathDisplay(group.path);
                 document.getElementById('profile-group-id').value = group.id;
             } else {
                 document.getElementById('profile-group').value = '';
@@ -6510,7 +6843,7 @@ function hasUnsavedProfileChanges() {
 // Check if group form has required fields and handle Save button state
 function checkGroupFormChanged() {
     const groupName = groupNameInput.value.trim();
-    const parentId = groupParentSelect.value || null;
+    const parentId = document.getElementById('group-parent-id').value || null;
 
     // Group name is required
     if (!groupName) {
@@ -6591,9 +6924,17 @@ async function saveProfile() {
         return;
     }
 
+    // Get actual group path from group ID (not the formatted display value)
+    // This is used for both duplicate checking and saving
+    const selectedGroupId = document.getElementById('profile-group-id').value;
+    let selectedGroupPath = null;
+    if (selectedGroupId) {
+        const selectedGroup = groups.find(g => g.id === selectedGroupId);
+        selectedGroupPath = selectedGroup ? selectedGroup.path : null;
+    }
+
     // Check for duplicate names within the same group (case-insensitive)
     // Profile names must be unique within their group (allows same name in different groups)
-    const selectedGroupPath = document.getElementById('profile-group').value || null;
     const duplicateProfile = profiles.find(p =>
         p.name.toLowerCase() === profileName.toLowerCase() &&
         p.group_path === selectedGroupPath &&
@@ -6618,7 +6959,7 @@ async function saveProfile() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value || null,
         password: document.getElementById('profile-password').value || null,
-        group_path: document.getElementById('profile-group').value || null // Use visible field with path
+        group_path: selectedGroupPath // Use actual path from group object, not formatted display
     };
 
     try {
@@ -6718,15 +7059,18 @@ async function deleteProfile(id) {
 
     const confirmMessage = buildConfirmMessage({
         lines: [
-            { prefix: 'Profile: ', highlight: `"${profile.name}"`, highlightClass: 'profile-name' },
-            `Host: ${profile.username}@${profile.host}`
+            {
+                segments: [
+                    { text: 'Delete profile ' },
+                    { highlight: profile.name }
+                ]
+            }
         ],
-        warnings: ['This action cannot be undone.'],
         question: 'Are you sure you want to delete this profile?'
     });
 
     const confirmDelete = await customConfirm(confirmMessage, {
-        title: 'Confirm Delete',
+        title: 'Delete Profile',
         okText: 'Delete',
         cancelText: 'Cancel',
         okClass: 'btn-danger'
@@ -6758,6 +7102,7 @@ async function deleteProfile(id) {
 async function openGroupModal(group = null, preselectedParentId = null) {
     debug.log('openGroupModal called with group:', group, 'preselectedParentId:', preselectedParentId);
     editingGroupId = group ? group.id : null;
+    currentExcludeGroupId = editingGroupId; // Store for parent group dropdown filtering
 
     // Close any open menus and popups
     closeAllProfileActionMenus();
@@ -6767,15 +7112,34 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     // Populate parent group dropdown FIRST
     populateParentGroupSelect(editingGroupId);
 
+    const parentGroupInput = document.getElementById('group-parent');
+    const parentGroupIdInput = document.getElementById('group-parent-id');
+
     if (group) {
         groupModalTitle.textContent = 'Edit Group';
         groupNameInput.value = group.name;
-        groupParentSelect.value = group.parent_id || '';
+
+        // Set parent group value
+        const parentId = group.parent_id || '';
+        parentGroupIdInput.value = parentId;
+        if (parentId) {
+            const parentGroup = groups.find(g => g.id === parentId);
+            parentGroupInput.value = parentGroup ? formatGroupPathDisplay(parentGroup.path) : '';
+        } else {
+            parentGroupInput.value = '';
+        }
     } else {
         groupModalTitle.textContent = preselectedParentId ? 'New Subgroup' : 'New Group';
         groupForm.reset();
-        // Set parent AFTER populating dropdown
-        groupParentSelect.value = preselectedParentId || '';
+
+        // Set parent group value
+        parentGroupIdInput.value = preselectedParentId || '';
+        if (preselectedParentId) {
+            const parentGroup = groups.find(g => g.id === preselectedParentId);
+            parentGroupInput.value = parentGroup ? formatGroupPathDisplay(parentGroup.path) : '';
+        } else {
+            parentGroupInput.value = '';
+        }
     }
 
     groupModal.classList.remove('hidden');
@@ -6805,26 +7169,197 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     }, 0);
 }
 
-// Populate parent group dropdown with hierarchical options
-function populateParentGroupSelect(excludeGroupId = null) {
-    // Clear existing options except the first one
-    groupParentSelect.innerHTML = '<option value="">-- Top Level --</option>';
+// Format group path for display with spaces around separators
+// Example: "Group/SubGroup1/SubGroup2" → "Group / SubGroup1 / SubGroup2"
+// Note: This is purely visual - underlying path structure remains unchanged
+function formatGroupPathDisplay(path) {
+    if (!path) return path;
+    return path.replace(/\//g, ' / ');
+}
 
-    // Add groups as options (exclude current group if editing to prevent circular reference)
-    groups.forEach(group => {
-        if (group.id === excludeGroupId) return; // Skip current group
+// Show parent group searchable dropdown
+// excludeGroupId: Exclude this group from the list (used when editing to prevent circular reference)
+function showParentGroupDropdown(filterText = '', excludeGroupId = null) {
+    const parentGroupInput = document.getElementById('group-parent');
+    const parentGroupDropdown = document.getElementById('group-parent-dropdown');
+    if (!parentGroupInput || !parentGroupDropdown) return;
 
-        const option = document.createElement('option');
-        option.value = group.id;
-        option.textContent = group.path; // Show full path
-        groupParentSelect.appendChild(option);
+    // Use provided excludeGroupId or fall back to currentExcludeGroupId
+    const excludeId = excludeGroupId !== null ? excludeGroupId : currentExcludeGroupId;
+
+    // Sort groups by path (hierarchical)
+    const sortedGroups = [...groups].sort((a, b) => a.path.localeCompare(b.path));
+
+    // Normalize filter text by removing spaces around slashes for comparison
+    // This allows users to type either "Group/Sub" or "Group / Sub" and find matches
+    const normalizedFilter = filterText.replace(/\s*\/\s*/g, '/').toLowerCase();
+
+    // Filter groups based on input and exclude specified group (to prevent circular reference)
+    filteredParentGroupOptions = sortedGroups.filter(g => {
+        if (g.id === excludeId) return false; // Exclude current group when editing
+        return g.path.toLowerCase().includes(normalizedFilter);
     });
+
+    // Add "Top Level" option at the beginning
+    filteredParentGroupOptions.unshift({ id: '', name: 'Top Level', path: '-- Top Level --' });
+
+    // Build dropdown HTML
+    let html = '';
+    if (filteredParentGroupOptions.length === 1) { // Only "Top Level" option
+        html = '<div class="searchable-dropdown-empty">No groups found</div>';
+    } else {
+        const currentParentId = document.getElementById('group-parent-id').value;
+        filteredParentGroupOptions.forEach((group, index) => {
+            const isSelected = group.id === currentParentId;
+            const displayText = group.id === '' ? group.path : formatGroupPathDisplay(group.path);
+            html += `
+                <div class="searchable-dropdown-item ${isSelected ? 'selected' : ''}"
+                     data-group-id="${group.id}"
+                     data-index="${index}">
+                    ${escapeHtml(displayText)}
+                </div>
+            `;
+        });
+    }
+
+    parentGroupDropdown.innerHTML = html;
+    parentGroupDropdown.classList.remove('hidden');
+    parentGroupDropdownVisible = true;
+    focusedParentDropdownIndex = -1;
+
+    // Attach click handlers
+    parentGroupDropdown.querySelectorAll('.searchable-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const groupId = e.currentTarget.dataset.groupId;
+            const group = filteredParentGroupOptions.find(g => g.id === groupId);
+            selectParentGroup(group);
+        });
+    });
+
+    // Auto-scroll modal to show dropdown
+    setTimeout(() => {
+        // Find the scrollable container (form element for profile/group modals)
+        const scrollContainer = parentGroupDropdown.closest('form') || parentGroupDropdown.closest('.modal-content');
+        if (!scrollContainer) return;
+
+        const dropdownRect = parentGroupDropdown.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const desiredPadding = 20;
+        const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
+
+        if (dropdownOverflow > -desiredPadding) {
+            // Calculate the current padding-bottom (might be from CSS)
+            const computedStyle = window.getComputedStyle(scrollContainer);
+            const currentPadding = parseInt(computedStyle.paddingBottom) || 0;
+
+            // Add temporary padding to container so there's room to scroll
+            const paddingNeeded = currentPadding + Math.abs(dropdownOverflow) + desiredPadding;
+            const originalPaddingBottom = scrollContainer.style.paddingBottom;
+            scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
+            scrollContainer.dataset.originalPaddingBottom = originalPaddingBottom;
+
+            setTimeout(() => {
+                const scrollNeeded = Math.abs(dropdownOverflow) + desiredPadding;
+                scrollContainer.scrollBy({
+                    top: scrollNeeded,
+                    behavior: 'smooth'
+                });
+            }, 10);
+        }
+    }, 50);
+}
+
+function hideParentGroupDropdown() {
+    const parentGroupDropdown = document.getElementById('group-parent-dropdown');
+    if (parentGroupDropdown) {
+        parentGroupDropdown.classList.add('hidden');
+        parentGroupDropdownVisible = false;
+        focusedParentDropdownIndex = -1;
+
+        // Restore original container padding if we modified it
+        const scrollContainer = parentGroupDropdown.closest('form') || parentGroupDropdown.closest('.modal-content');
+        if (scrollContainer && scrollContainer.dataset.originalPaddingBottom !== undefined) {
+            scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottom || '';
+            delete scrollContainer.dataset.originalPaddingBottom;
+        }
+    }
+}
+
+function selectParentGroup(group) {
+    const parentGroupInput = document.getElementById('group-parent');
+    const parentGroupIdInput = document.getElementById('group-parent-id');
+
+    if (group && group.id !== '') {
+        parentGroupInput.value = formatGroupPathDisplay(group.path);
+        parentGroupIdInput.value = group.id;
+    } else {
+        // Top Level
+        parentGroupInput.value = '';
+        parentGroupIdInput.value = '';
+    }
+
+    hideParentGroupDropdown();
+    checkGroupFormChanged();
+}
+
+function handleParentGroupKeydown(e) {
+    if (!parentGroupDropdownVisible) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            e.preventDefault();
+            const parentGroupInput = document.getElementById('group-parent');
+            showParentGroupDropdown(parentGroupInput.value);
+        }
+        return;
+    }
+
+    const items = document.querySelectorAll('#group-parent-dropdown .searchable-dropdown-item');
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedParentDropdownIndex = Math.min(focusedParentDropdownIndex + 1, items.length - 1);
+        updateFocusedParentDropdownItem(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedParentDropdownIndex = Math.max(focusedParentDropdownIndex - 1, -1);
+        updateFocusedParentDropdownItem(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedParentDropdownIndex >= 0 && focusedParentDropdownIndex < filteredParentGroupOptions.length) {
+            selectParentGroup(filteredParentGroupOptions[focusedParentDropdownIndex]);
+        }
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideParentGroupDropdown();
+    }
+}
+
+function updateFocusedParentDropdownItem(items) {
+    items.forEach((item, index) => {
+        if (index === focusedParentDropdownIndex) {
+            item.classList.add('focused');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('focused');
+        }
+    });
+}
+
+// Legacy function kept for backward compatibility
+function populateParentGroupSelect(excludeGroupId = null) {
+    // This function is now a no-op as the dropdown is populated dynamically
+    // The excludeGroupId is passed to showParentGroupDropdown when needed
 }
 
 // Populate profile group searchable dropdown
 let profileGroupDropdownVisible = false;
 let focusedDropdownIndex = -1;
 let filteredGroupOptions = [];
+
+// Parent group searchable dropdown state
+let parentGroupDropdownVisible = false;
+let focusedParentDropdownIndex = -1;
+let filteredParentGroupOptions = [];
+let currentExcludeGroupId = null; // For preventing circular references when editing groups
 
 function populateProfileGroupSelect() {
     // This function is now called to initialize the searchable dropdown
@@ -6839,9 +7374,13 @@ function showProfileGroupDropdown(filterText = '') {
     // Sort groups by path (hierarchical)
     const sortedGroups = [...groups].sort((a, b) => a.path.localeCompare(b.path));
 
+    // Normalize filter text by removing spaces around slashes for comparison
+    // This allows users to type either "Group/Sub" or "Group / Sub" and find matches
+    const normalizedFilter = filterText.replace(/\s*\/\s*/g, '/').toLowerCase();
+
     // Filter groups based on input
     filteredGroupOptions = sortedGroups.filter(g =>
-        g.path.toLowerCase().includes(filterText.toLowerCase())
+        g.path.toLowerCase().includes(normalizedFilter)
     );
 
     // Add "Ungrouped" option at the beginning
@@ -6859,7 +7398,7 @@ function showProfileGroupDropdown(filterText = '') {
                 <div class="searchable-dropdown-item ${isSelected ? 'selected' : ''}"
                      data-group-id="${group.id}"
                      data-index="${index}">
-                    ${escapeHtml(group.path)}
+                    ${escapeHtml(formatGroupPathDisplay(group.path))}
                 </div>
             `;
         });
@@ -6881,27 +7420,32 @@ function showProfileGroupDropdown(filterText = '') {
 
     // Auto-scroll modal to show dropdown
     setTimeout(() => {
-        const modal = profileGroupDropdown.closest('.modal-content');
-        if (!modal) return;
+        // Find the scrollable container (form element for profile/group modals)
+        const scrollContainer = profileGroupDropdown.closest('form') || profileGroupDropdown.closest('.modal-content');
+        if (!scrollContainer) return;
 
         // Get positions after dropdown is fully rendered
         const dropdownRect = profileGroupDropdown.getBoundingClientRect();
-        const modalRect = modal.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
 
         // We want 20px of breathing room below the dropdown
         const desiredPadding = 20;
 
-        // Calculate how much the dropdown extends beyond the modal
-        const dropdownOverflow = dropdownRect.bottom - modalRect.bottom;
+        // Calculate how much the dropdown extends beyond the container
+        const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
 
-        console.log('[DROPDOWN] Dropdown extends beyond modal by:', dropdownOverflow);
+        console.log('[DROPDOWN] Dropdown extends beyond container by:', dropdownOverflow);
 
         if (dropdownOverflow > -desiredPadding) {
-            // Add temporary padding to modal so there's room to scroll
-            const paddingNeeded = Math.abs(dropdownOverflow) + desiredPadding + 20; // Extra buffer
-            const originalPaddingBottom = modal.style.paddingBottom;
-            modal.style.paddingBottom = `${paddingNeeded}px`;
-            modal.dataset.originalPaddingBottom = originalPaddingBottom;
+            // Calculate the current padding-bottom (might be from CSS)
+            const computedStyle = window.getComputedStyle(scrollContainer);
+            const currentPadding = parseInt(computedStyle.paddingBottom) || 0;
+
+            // Add temporary padding to container so there's room to scroll
+            const paddingNeeded = currentPadding + Math.abs(dropdownOverflow) + desiredPadding;
+            const originalPaddingBottom = scrollContainer.style.paddingBottom;
+            scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
+            scrollContainer.dataset.originalPaddingBottom = originalPaddingBottom;
 
             console.log('[DROPDOWN] Added padding:', paddingNeeded);
 
@@ -6910,13 +7454,13 @@ function showProfileGroupDropdown(filterText = '') {
                 const scrollNeeded = Math.abs(dropdownOverflow) + desiredPadding;
                 console.log('[DROPDOWN] Scrolling by:', scrollNeeded);
 
-                modal.scrollBy({
+                scrollContainer.scrollBy({
                     top: scrollNeeded,
                     behavior: 'smooth'
                 });
             }, 10);
         } else {
-            console.log('[DROPDOWN] Dropdown fits within modal, no adjustment needed');
+            console.log('[DROPDOWN] Dropdown fits within container, no adjustment needed');
         }
     }, 50); // Delay to ensure dropdown is fully rendered
 }
@@ -6928,11 +7472,11 @@ function hideProfileGroupDropdown() {
         profileGroupDropdownVisible = false;
         focusedDropdownIndex = -1;
 
-        // Restore original modal padding if we modified it
-        const modal = profileGroupDropdown.closest('.modal-content');
-        if (modal && modal.dataset.originalPaddingBottom !== undefined) {
-            modal.style.paddingBottom = modal.dataset.originalPaddingBottom || '';
-            delete modal.dataset.originalPaddingBottom;
+        // Restore original container padding if we modified it
+        const scrollContainer = profileGroupDropdown.closest('form') || profileGroupDropdown.closest('.modal-content');
+        if (scrollContainer && scrollContainer.dataset.originalPaddingBottom !== undefined) {
+            scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottom || '';
+            delete scrollContainer.dataset.originalPaddingBottom;
             console.log('[DROPDOWN] Restored original padding');
         }
     }
@@ -6943,7 +7487,7 @@ function selectProfileGroup(group) {
     const profileGroupIdInput = document.getElementById('profile-group-id');
 
     if (group && group.id !== '') {
-        profileGroupInput.value = group.path;
+        profileGroupInput.value = formatGroupPathDisplay(group.path);
         profileGroupIdInput.value = group.id;
     } else {
         // Ungrouped
@@ -7016,7 +7560,7 @@ async function saveGroup() {
         return;
     }
 
-    const parentId = groupParentSelect.value || null;
+    const parentId = document.getElementById('group-parent-id').value || null;
 
     isSubmitting = true;
     groupSaveBtn.disabled = true;
@@ -7162,15 +7706,29 @@ function buildConfirmMessage(config) {
             if (typeof line === 'string') {
                 div.textContent = line;
             } else if (typeof line === 'object' && line !== null) {
-                // Line can have parts with different styling
-                if (line.prefix) div.appendChild(document.createTextNode(line.prefix));
-                if (line.highlight) {
-                    const span = createSpan(line.highlight, line.highlightClass || 'profile-name');
-                    div.appendChild(span);
-                }
-                if (line.suffix) div.appendChild(document.createTextNode(line.suffix));
-                if (line.text && !line.prefix && !line.highlight && !line.suffix) {
-                    div.textContent = line.text;
+                // Support segments array for multiple highlights in one line
+                if (line.segments && Array.isArray(line.segments)) {
+                    line.segments.forEach(segment => {
+                        if (typeof segment === 'string') {
+                            div.appendChild(document.createTextNode(segment));
+                        } else if (segment.highlight) {
+                            const span = createSpan(segment.highlight, segment.highlightClass || 'profile-name');
+                            div.appendChild(span);
+                        } else if (segment.text) {
+                            div.appendChild(document.createTextNode(segment.text));
+                        }
+                    });
+                } else {
+                    // Original single-highlight format (backward compatible)
+                    if (line.prefix) div.appendChild(document.createTextNode(line.prefix));
+                    if (line.highlight) {
+                        const span = createSpan(line.highlight, line.highlightClass || 'profile-name');
+                        div.appendChild(span);
+                    }
+                    if (line.suffix) div.appendChild(document.createTextNode(line.suffix));
+                    if (line.text && !line.prefix && !line.highlight && !line.suffix) {
+                        div.textContent = line.text;
+                    }
                 }
             }
             fragment.appendChild(div);
@@ -7190,7 +7748,12 @@ function buildConfirmMessage(config) {
         ul.className = 'confirmation-list';
         config.list.forEach(item => {
             const li = document.createElement('li');
-            li.textContent = item;
+            // Support both plain text and HTML content for styled list items
+            if (typeof item === 'string') {
+                li.innerHTML = item; // Use innerHTML to support styled content
+            } else {
+                li.textContent = item;
+            }
             ul.appendChild(li);
         });
         fragment.appendChild(ul);
