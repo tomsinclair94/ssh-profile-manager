@@ -4128,13 +4128,45 @@ function customConfirmWithButtons(message, options = {}) {
 
 // Show profile conflict dialog
 async function showProfileConflictDialog(profileName, groupName) {
-    const message = `A profile named '${profileName}' already exists in '${groupName || 'Top Level'}'.`;
+    // Create message with HTML formatting
+    const messageDiv = document.createElement('div');
 
-    const result = await customConfirmWithButtons(message, {
+    const firstLine = document.createElement('p');
+    firstLine.style.marginBottom = '16px';
+    firstLine.innerHTML = `A profile named <span class="highlight-name">${profileName}</span> already exists in group <span class="highlight-name">${groupName || 'Top Level'}</span>.`;
+    messageDiv.appendChild(firstLine);
+
+    const question = document.createElement('p');
+    question.textContent = 'How would you like to proceed?';
+    question.style.marginBottom = '8px';
+    messageDiv.appendChild(question);
+
+    const list = document.createElement('ul');
+    list.style.marginLeft = '20px';
+    list.style.marginTop = '8px';
+    list.style.marginBottom = '0';
+
+    const option1 = document.createElement('li');
+    option1.innerHTML = '<span class="conflict-text-skip">Skip</span> - Cancel the import (no changes made)';
+    option1.style.marginBottom = '4px';
+    list.appendChild(option1);
+
+    const option2 = document.createElement('li');
+    option2.innerHTML = '<span class="conflict-text-primary">Keep Both</span> - Import with renamed profile';
+    option2.style.marginBottom = '4px';
+    list.appendChild(option2);
+
+    const option3 = document.createElement('li');
+    option3.innerHTML = '<span class="conflict-text-danger">Overwrite</span> - Replace the existing profile';
+    list.appendChild(option3);
+
+    messageDiv.appendChild(list);
+
+    const result = await customConfirmWithButtons(messageDiv, {
         title: 'Duplicate Profile Found',
         buttons: [
-            { text: 'Skip', value: null, class: 'btn-secondary' },
-            { text: 'Rename', value: 'rename', class: 'btn-primary', default: true },
+            { text: 'Skip', value: null, class: 'btn-secondary', default: true },
+            { text: 'Keep Both', value: 'rename', class: 'btn-primary' },
             { text: 'Overwrite', value: 'overwrite', class: 'btn-danger' }
         ]
     });
@@ -4144,13 +4176,45 @@ async function showProfileConflictDialog(profileName, groupName) {
 
 // Show group conflict dialog
 async function showGroupConflictDialog(groupName, parentName) {
-    const message = `A group named '${groupName}' already exists under '${parentName || 'Top Level'}'.`;
+    // Create message with HTML formatting
+    const messageDiv = document.createElement('div');
 
-    const result = await customConfirmWithButtons(message, {
+    const firstLine = document.createElement('p');
+    firstLine.style.marginBottom = '16px';
+    firstLine.innerHTML = `A group named <span class="highlight-name">${groupName}</span> already exists under group <span class="highlight-name">${parentName || 'Top Level'}</span>.`;
+    messageDiv.appendChild(firstLine);
+
+    const question = document.createElement('p');
+    question.textContent = 'How would you like to proceed?';
+    question.style.marginBottom = '8px';
+    messageDiv.appendChild(question);
+
+    const list = document.createElement('ul');
+    list.style.marginLeft = '20px';
+    list.style.marginTop = '8px';
+    list.style.marginBottom = '0';
+
+    const option1 = document.createElement('li');
+    option1.innerHTML = '<span class="conflict-text-skip">Skip</span> - Cancel the import (no changes made)';
+    option1.style.marginBottom = '4px';
+    list.appendChild(option1);
+
+    const option2 = document.createElement('li');
+    option2.innerHTML = '<span class="conflict-text-primary">Keep Both</span> - Import with renamed group';
+    option2.style.marginBottom = '4px';
+    list.appendChild(option2);
+
+    const option3 = document.createElement('li');
+    option3.innerHTML = '<span class="conflict-text-warning">Merge</span> - Combine profiles and subgroups';
+    list.appendChild(option3);
+
+    messageDiv.appendChild(list);
+
+    const result = await customConfirmWithButtons(messageDiv, {
         title: 'Duplicate Group Found',
         buttons: [
-            { text: 'Skip', value: null, class: 'btn-secondary' },
-            { text: 'Rename', value: 'rename', class: 'btn-primary', default: true },
+            { text: 'Skip', value: null, class: 'btn-secondary', default: true },
+            { text: 'Keep Both', value: 'rename', class: 'btn-primary' },
             { text: 'Merge', value: 'merge', class: 'btn-warning' }
         ]
     });
@@ -5122,8 +5186,8 @@ function sanitizeFilename(name) {
     // Remove special chars that are invalid in filenames
     let sanitized = name.replace(/[/\\?%*:|"<>.]/g, '');
 
-    // Replace spaces with hyphens
-    sanitized = sanitized.replace(/\s+/g, '-');
+    // Remove spaces (concatenate words)
+    sanitized = sanitized.replace(/\s+/g, '');
 
     // Limit to 50 chars
     sanitized = sanitized.substring(0, 50);

@@ -955,14 +955,40 @@ button.keyboard-selected {
 /* Conflict resolution buttons (horizontal layout) */
 .conflict-buttons-horizontal {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     justify-content: center;
 }
 
 .conflict-buttons-horizontal .btn {
-    flex: 1;
-    min-width: 80px;
-    max-width: 150px;
+    width: 110px;
+    white-space: nowrap;
+}
+
+/* Highlighted name in conflict modals */
+.highlight-name {
+    color: #0078d4;
+    font-weight: 500;
+}
+
+/* Colored text for conflict options */
+.conflict-text-skip {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.conflict-text-primary {
+    color: #0078d4;
+    font-weight: 500;
+}
+
+.conflict-text-danger {
+    color: #e81123;
+    font-weight: 500;
+}
+
+.conflict-text-warning {
+    color: #ff9500;
+    font-weight: 500;
 }
 
 .btn-warning {
