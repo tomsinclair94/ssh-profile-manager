@@ -147,6 +147,26 @@ pub struct Profile {
     pub group_path: Option<String>, // v0.7.0+: Semantic path like "Work/Production/Servers"
 }
 
+// Profile with metadata and tags (for get_profiles response)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileWithMetadata {
+    // Base profile fields
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub host: String,
+    pub port: i32,
+    pub username: String,
+    pub auth_method: String,
+    pub key_path: Option<String>,
+    pub group_path: Option<String>,
+    // Metadata fields
+    pub icon: Option<String>,
+    pub is_favorite: bool,
+    // Tags (tag names, not IDs, for easier frontend use)
+    pub tags: Vec<String>,
+}
+
 // Group structure for hierarchical organization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Group {
@@ -1030,6 +1050,74 @@ impl Database {
         Ok(profiles)
     }
 
+    fn get_all_profiles_with_metadata(&self) -> SqlResult<Vec<ProfileWithMetadata>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+
+        // First, get all profiles with their metadata in one query
+        let mut stmt = conn.prepare(
+            "SELECT p.id, p.name, p.description, p.host, p.port, p.username, p.auth_method,
+                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0)
+             FROM profiles p
+             LEFT JOIN profile_metadata m ON p.id = m.profile_id
+             ORDER BY p.name"
+        )?;
+
+        let profiles_with_metadata = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?, // id
+                    ProfileWithMetadata {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        description: row.get(2)?,
+                        host: row.get(3)?,
+                        port: row.get(4)?,
+                        username: row.get(5)?,
+                        auth_method: row.get(6)?,
+                        key_path: row.get(7)?,
+                        group_path: row.get(8)?,
+                        icon: row.get(9)?,
+                        is_favorite: row.get::<_, i32>(10)? != 0,
+                        tags: Vec::new(), // Will populate below
+                    }
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Convert to HashMap for efficient tag assignment
+        let mut profiles_map: std::collections::HashMap<String, ProfileWithMetadata> =
+            profiles_with_metadata.into_iter().collect();
+
+        // Get all tag assignments in one query
+        let mut tag_stmt = conn.prepare(
+            "SELECT pt.profile_id, t.name
+             FROM profile_tags pt
+             JOIN tags t ON pt.tag_id = t.id
+             ORDER BY pt.profile_id, t.name"
+        )?;
+
+        let tag_rows = tag_stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?, // profile_id
+                row.get::<_, String>(1)?, // tag_name
+            ))
+        })?;
+
+        // Assign tags to profiles
+        for tag_result in tag_rows {
+            let (profile_id, tag_name) = tag_result?;
+            if let Some(profile) = profiles_map.get_mut(&profile_id) {
+                profile.tags.push(tag_name);
+            }
+        }
+
+        // Convert back to Vec and sort by name
+        let mut profiles: Vec<ProfileWithMetadata> = profiles_map.into_values().collect();
+        profiles.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(profiles)
+    }
+
     fn create_profile(&self, profile: &Profile) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
@@ -1378,6 +1466,166 @@ impl Database {
         Ok(tags)
     }
 
+    // Toggle favorite status for a profile
+    fn toggle_profile_favorite_db(&self, profile_id: &str) -> SqlResult<bool> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+
+        // Get current favorite status (or false if no metadata exists)
+        let current_favorite: bool = conn.query_row(
+            "SELECT COALESCE(is_favorite, 0) FROM profile_metadata WHERE profile_id = ?1",
+            [profile_id],
+            |row| {
+                let val: i32 = row.get(0)?;
+                Ok(val != 0)
+            }
+        ).unwrap_or(false);
+
+        let new_favorite = !current_favorite;
+
+        // Upsert metadata with new favorite status
+        conn.execute(
+            "INSERT INTO profile_metadata (profile_id, icon, is_favorite, display_order)
+             VALUES (?1, NULL, ?2, 0)
+             ON CONFLICT(profile_id) DO UPDATE SET is_favorite = excluded.is_favorite",
+            (profile_id, if new_favorite { 1 } else { 0 }),
+        )?;
+
+        Ok(new_favorite)
+    }
+
+    // Update profile icon
+    fn update_profile_icon_db(&self, profile_id: &str, icon: Option<String>) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO profile_metadata (profile_id, icon, is_favorite, display_order)
+             VALUES (?1, ?2, 0, 0)
+             ON CONFLICT(profile_id) DO UPDATE SET icon = excluded.icon",
+            (profile_id, icon),
+        )?;
+        Ok(())
+    }
+
+    // Get all tags
+    fn get_all_tags(&self) -> SqlResult<Vec<Tag>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, color, created_at FROM tags ORDER BY name"
+        )?;
+
+        let tags = stmt
+            .query_map([], |row| {
+                Ok(Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(tags)
+    }
+
+    // Create a new tag
+    fn create_tag_db(&self, tag: &Tag) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
+            (&tag.id, &tag.name, &tag.color, &tag.created_at),
+        )?;
+        Ok(())
+    }
+
+    // Delete a tag
+    fn delete_tag_db(&self, tag_id: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute("DELETE FROM tags WHERE id = ?1", [tag_id])?;
+        Ok(())
+    }
+
+    // Get tag usage counts
+    fn get_tag_usage_counts_db(&self) -> SqlResult<Vec<(Tag, i32)>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT t.id, t.name, t.color, t.created_at, COUNT(pt.profile_id) as usage_count
+             FROM tags t
+             LEFT JOIN profile_tags pt ON t.id = pt.tag_id
+             GROUP BY t.id
+             ORDER BY t.name"
+        )?;
+
+        let results = stmt
+            .query_map([], |row| {
+                let tag = Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    created_at: row.get(3)?,
+                };
+                let count: i32 = row.get(4)?;
+                Ok((tag, count))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(results)
+    }
+
+    // Add tag to profile
+    fn add_profile_tag_db(&self, profile_id: &str, tag_id: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT OR IGNORE INTO profile_tags (profile_id, tag_id) VALUES (?1, ?2)",
+            (profile_id, tag_id),
+        )?;
+        Ok(())
+    }
+
+    // Remove tag from profile
+    fn remove_profile_tag_db(&self, profile_id: &str, tag_id: &str) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "DELETE FROM profile_tags WHERE profile_id = ?1 AND tag_id = ?2",
+            (profile_id, tag_id),
+        )?;
+        Ok(())
+    }
+
+    // Set profile tags (replaces all existing tags)
+    fn set_profile_tags_db(&self, profile_id: &str, tag_ids: &[String]) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+
+        // Start transaction
+        conn.execute("BEGIN TRANSACTION", [])?;
+
+        // Delete existing tags
+        let result = conn.execute(
+            "DELETE FROM profile_tags WHERE profile_id = ?1",
+            [profile_id],
+        );
+
+        if result.is_err() {
+            conn.execute("ROLLBACK", [])?;
+            return result.map(|_| ());
+        }
+
+        // Insert new tags
+        for tag_id in tag_ids {
+            let result = conn.execute(
+                "INSERT INTO profile_tags (profile_id, tag_id) VALUES (?1, ?2)",
+                (profile_id, tag_id),
+            );
+
+            if result.is_err() {
+                conn.execute("ROLLBACK", [])?;
+                return result.map(|_| ());
+            }
+        }
+
+        // Commit transaction
+        conn.execute("COMMIT", [])?;
+        Ok(())
+    }
+
     fn get_profiles_by_group_path(&self, group_path: &str) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
@@ -1587,8 +1835,8 @@ struct SettingsImportResult {
 
 // Tauri commands
 #[tauri::command]
-fn get_profiles(db: State<Database>) -> Result<Vec<Profile>, String> {
-    db.get_all_profiles()
+fn get_profiles(db: State<Database>) -> Result<Vec<ProfileWithMetadata>, String> {
+    db.get_all_profiles_with_metadata()
         .map_err(|e| format!("Failed to get profiles: {}", e))
 }
 
@@ -3222,6 +3470,117 @@ fn save_setting(db: State<Database>, key: String, value: String) -> Result<(), S
         .map_err(|e| format!("Failed to save setting: {}", e))
 }
 
+// Profile Metadata Commands
+#[tauri::command]
+fn toggle_profile_favorite(db: State<Database>, profile_id: String) -> Result<bool, String> {
+    db.toggle_profile_favorite_db(&profile_id)
+        .map_err(|e| format!("Failed to toggle favorite: {}", e))
+}
+
+#[tauri::command]
+fn update_profile_icon(db: State<Database>, profile_id: String, icon: Option<String>) -> Result<(), String> {
+    db.update_profile_icon_db(&profile_id, icon)
+        .map_err(|e| format!("Failed to update icon: {}", e))
+}
+
+#[tauri::command]
+fn get_profile_metadata(db: State<Database>, profile_id: String) -> Result<Option<ProfileMetadata>, String> {
+    db.get_profile_metadata(&profile_id)
+        .map_err(|e| format!("Failed to get metadata: {}", e))
+}
+
+// Tag Commands
+#[tauri::command]
+fn get_tags(db: State<Database>) -> Result<Vec<Tag>, String> {
+    db.get_all_tags()
+        .map_err(|e| format!("Failed to get tags: {}", e))
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateTagInput {
+    name: String,
+    color: String,
+}
+
+#[tauri::command]
+fn create_tag(db: State<Database>, input: CreateTagInput) -> Result<String, String> {
+    // Validate tag name
+    if input.name.trim().is_empty() {
+        return Err("Tag name cannot be empty".to_string());
+    }
+
+    if input.name.len() > 32 {
+        return Err("Tag name must be 32 characters or less".to_string());
+    }
+
+    // Validate name: alphanumeric, spaces, hyphens, underscores only
+    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9\s\-_]+$").unwrap();
+    if !name_regex.is_match(&input.name) {
+        return Err("Tag name can only contain letters, numbers, spaces, hyphens, and underscores".to_string());
+    }
+
+    // Validate color format (#RRGGBB)
+    let color_regex = regex::Regex::new(r"^#[0-9A-Fa-f]{6}$").unwrap();
+    if !color_regex.is_match(&input.color) {
+        return Err("Invalid color format. Use hex format like #FF5733".to_string());
+    }
+
+    let tag_id = Uuid::new_v4().to_string();
+    let tag = Tag {
+        id: tag_id.clone(),
+        name: input.name.trim().to_string(),
+        color: input.color.to_uppercase(), // Normalize to uppercase
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    db.create_tag_db(&tag)
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE constraint failed") {
+                "A tag with this name already exists".to_string()
+            } else {
+                format!("Failed to create tag: {}", e)
+            }
+        })?;
+
+    Ok(tag_id)
+}
+
+#[tauri::command]
+fn delete_tag(db: State<Database>, tag_id: String) -> Result<(), String> {
+    db.delete_tag_db(&tag_id)
+        .map_err(|e| format!("Failed to delete tag: {}", e))
+}
+
+#[tauri::command]
+fn get_tag_usage_counts(db: State<Database>) -> Result<Vec<(Tag, i32)>, String> {
+    db.get_tag_usage_counts_db()
+        .map_err(|e| format!("Failed to get tag usage counts: {}", e))
+}
+
+#[tauri::command]
+fn get_profile_tags(db: State<Database>, profile_id: String) -> Result<Vec<Tag>, String> {
+    db.get_profile_tags(&profile_id)
+        .map_err(|e| format!("Failed to get profile tags: {}", e))
+}
+
+#[tauri::command]
+fn add_profile_tag(db: State<Database>, profile_id: String, tag_id: String) -> Result<(), String> {
+    db.add_profile_tag_db(&profile_id, &tag_id)
+        .map_err(|e| format!("Failed to add tag: {}", e))
+}
+
+#[tauri::command]
+fn remove_profile_tag(db: State<Database>, profile_id: String, tag_id: String) -> Result<(), String> {
+    db.remove_profile_tag_db(&profile_id, &tag_id)
+        .map_err(|e| format!("Failed to remove tag: {}", e))
+}
+
+#[tauri::command]
+fn set_profile_tags(db: State<Database>, profile_id: String, tag_ids: Vec<String>) -> Result<(), String> {
+    db.set_profile_tags_db(&profile_id, &tag_ids)
+        .map_err(|e| format!("Failed to set tags: {}", e))
+}
+
 #[tauri::command]
 async fn create_terminal_session(
     db: State<'_, Database>,
@@ -4311,6 +4670,17 @@ pub fn run() {
             remove_recent_connection,
             get_setting,
             save_setting,
+            toggle_profile_favorite,
+            update_profile_icon,
+            get_profile_metadata,
+            get_tags,
+            create_tag,
+            delete_tag,
+            get_tag_usage_counts,
+            get_profile_tags,
+            add_profile_tag,
+            remove_profile_tag,
+            set_profile_tags,
             create_terminal_session,
             write_to_terminal,
             resize_terminal,

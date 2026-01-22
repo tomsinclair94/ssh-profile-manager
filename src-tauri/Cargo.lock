@@ -4230,6 +4230,7 @@ dependencies = [
  "log",
  "portable-pty",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "rfd",
  "rusqlite",

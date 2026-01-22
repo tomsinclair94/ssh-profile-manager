@@ -38,6 +38,7 @@ portable-pty = "0.8"
 base64 = "0.22"
 rand = "0.8"
 unicode-normalization = "0.1"
+regex = "1.11"
 
 [target.'cfg(windows)'.dependencies]
 windows-acl = "0.3"
