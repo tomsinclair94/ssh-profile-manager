@@ -949,9 +949,19 @@ button.keyboard-selected {
 /* Ensure input fields are constrained within their containers */
 .modal-content input[type="text"],
 .modal-content input[type="password"],
-.modal-content input[type="number"] {
+.modal-content input[type="number"],
+.modal-content textarea {
     max-width: 100%; /* Never exceed parent width */
     box-sizing: border-box; /* Include padding in width calculation */
+}
+
+/* Textarea specific styling */
+.modal-content textarea {
+    resize: vertical; /* Allow vertical resize only */
+    min-height: 48px; /* Minimum 2 rows */
+    max-height: 200px; /* Maximum height before scroll */
+    font-family: inherit;
+    line-height: 1.5;
 }
 
 .confirm-body {
@@ -1218,7 +1228,8 @@ form {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 10px 12px;
     background-color: var(--bg-color);
@@ -1226,12 +1237,17 @@ form {
     border-radius: var(--radius);
     color: var(--text-color);
     font-size: 14px;
-    height: 42px; /* Ensure consistent height for inputs and selects */
     box-sizing: border-box;
 }
 
+.form-group input,
+.form-group select {
+    height: 42px; /* Ensure consistent height for inputs and selects */
+}
+
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
     outline: none;
     border-color: var(--primary-color);
 }
@@ -1245,8 +1261,13 @@ form {
 
 .form-row {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 3fr 1fr; /* Host wider, Port narrower */
     gap: 16px;
+}
+
+/* Name and Icon row - Name takes most space, Icon smaller */
+.form-row-name-icon {
+    grid-template-columns: 2.5fr 1fr; /* Name ~70%, Icon ~30% */
 }
 
 .form-actions {
@@ -1605,7 +1626,8 @@ form {
 
 /* Show on hover (even when focused) */
 .form-group input:hover + .input-tooltip,
-.form-group select:hover + .input-tooltip {
+.form-group select:hover + .input-tooltip,
+.form-group textarea:hover + .input-tooltip {
     opacity: 1;
     visibility: visible;
 }
@@ -1624,7 +1646,8 @@ form {
 
 /* Show when field is invalid */
 .form-group input.validation-error + .input-tooltip,
-.form-group select.validation-error + .input-tooltip {
+.form-group select.validation-error + .input-tooltip,
+.form-group textarea.validation-error + .input-tooltip {
     opacity: 1;
     visibility: visible;
 }
@@ -1670,13 +1693,15 @@ form {
 
 /* Error state for invalid fields */
 .form-group input.validation-error,
-.form-group select.validation-error {
+.form-group select.validation-error,
+.form-group textarea.validation-error {
     border-color: var(--danger-color);
     background-color: rgba(232, 17, 35, 0.05);
 }
 
 .form-group input.validation-error:focus,
-.form-group select.validation-error:focus {
+.form-group select.validation-error:focus,
+.form-group textarea.validation-error:focus {
     border-color: var(--danger-color);
     box-shadow: 0 0 0 2px rgba(232, 17, 35, 0.2);
 }
@@ -2267,5 +2292,115 @@ form {
 /* Hidden state */
 .recent-connections-section.hidden {
     display: none;
+}
+
+/* ============================================================================
+   PROFILE ICON STYLES
+   ============================================================================ */
+
+/* Icon Input Field with Icon Display */
+.icon-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.icon-input-icon {
+    position: absolute;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.icon-input-icon svg {
+    color: var(--text-color);
+}
+
+/* Adjust input padding when icon is present */
+.icon-input-wrapper.has-icon input {
+    padding-left: 36px;
+}
+
+/* Icon Dropdown in Profile Form */
+.icon-dropdown .icon-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+}
+
+.icon-dropdown .dropdown-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.icon-dropdown .dropdown-icon-preview {
+    color: var(--text-color);
+}
+
+.icon-dropdown .dropdown-icon-label {
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+.icon-dropdown .icon-dropdown-item:hover .dropdown-icon-preview {
+    color: var(--primary-color);
+}
+
+.icon-dropdown .icon-dropdown-item.selected .dropdown-icon-preview {
+    color: var(--primary-color);
+}
+
+.icon-dropdown .icon-dropdown-item.focused .dropdown-icon-preview {
+    color: var(--primary-color);
+}
+
+/* Profile Card Layout - Icon under name, info to right */
+.profile-card-header {
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+.profile-card-title {
+    font-weight: 600;
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-card-body {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    min-width: 0; /* Allow flex children to shrink below content size */
+}
+
+.profile-card-icon-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+.profile-card-icon {
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.profile-card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0; /* Critical: allows children to respect text-overflow */
+    overflow: hidden; /* Ensures no overflow from children */
 }
 

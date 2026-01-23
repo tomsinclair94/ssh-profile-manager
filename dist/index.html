@@ -105,25 +105,42 @@
                     </div>
                 </div>
                 <form id="profile-form">
-                    <div class="form-group">
-                        <label for="profile-name">Profile Name <span class="required">*</span></label>
-                        <input type="text" id="profile-name" required placeholder="e.g., Production Server">
-                        <div class="input-tooltip">
-                            <div class="tooltip-content">
-                                <div class="tooltip-title">Profile Name Requirements</div>
-                                <ul class="tooltip-rules">
-                                    <li>Letters, numbers, and spaces allowed</li>
-                                    <li>Special characters: - _ ( ) . [ ] #</li>
-                                    <li>Maximum 64 characters</li>
-                                </ul>
+                    <!-- Name and Icon Row -->
+                    <div class="form-row form-row-name-icon">
+                        <div class="form-group form-group-name">
+                            <label for="profile-name">Profile Name <span class="required">*</span></label>
+                            <input type="text" id="profile-name" required placeholder="e.g., Production Server">
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">Profile Name Requirements</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Letters, numbers, and spaces allowed</li>
+                                        <li>Special characters: - _ ( ) . [ ] #</li>
+                                        <li>Maximum 64 characters</li>
+                                    </ul>
+                                </div>
                             </div>
+                            <span class="char-counter" id="profile-name-counter">0 / 64</span>
                         </div>
-                        <span class="char-counter" id="profile-name-counter">0 / 64</span>
+
+                        <div class="form-group form-group-icon">
+                            <label for="profile-icon">Icon</label>
+                            <div class="searchable-dropdown-wrapper">
+                                <div class="icon-input-wrapper">
+                                    <span id="profile-icon-display" class="icon-input-icon"></span>
+                                    <input type="text" id="profile-icon" placeholder="Icon..." autocomplete="off">
+                                </div>
+                                <div id="profile-icon-dropdown" class="searchable-dropdown icon-dropdown hidden">
+                                    <!-- Icon options will be populated dynamically -->
+                                </div>
+                            </div>
+                            <input type="hidden" id="profile-icon-value" value="">
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label for="profile-description">Description</label>
-                        <input type="text" id="profile-description" placeholder="Optional description">
+                        <textarea id="profile-description" placeholder="Optional description" rows="2"></textarea>
                         <div class="input-tooltip">
                             <div class="tooltip-content">
                                 <div class="tooltip-title">Description Requirements</div>

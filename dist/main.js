@@ -92,6 +92,77 @@ const EXPORT_FORMAT_INFO = {
     }
 };
 
+// Icon system - Lucide icon SVG paths (24x24 viewBox)
+// Default icon for profiles without a custom icon
+const DEFAULT_PROFILE_ICON = 'desktop';
+
+// Curated list of Lucide icons for SSH profiles
+// Each entry: [icon_name, svg_path]
+const PROFILE_ICONS = {
+    'server': 'M12 2L2 7v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7l-10-5zM2 17.5V9l10 5 10-5v8.5c0 .28-.22.5-.5.5h-19c-.28 0-.5-.22-.5-.5zM12 12.5l8-4-8-4-8 4 8 4z',
+    'database': 'M12 2C6.5 2 2 3.34 2 5v14c0 1.66 4.5 3 10 3s10-1.34 10-3V5c0-1.66-4.5-3-10-3zM2 9c0 1.66 4.5 3 10 3s10-1.34 10-3M2 14c0 1.66 4.5 3 10 3s10-1.34 10-3',
+    'hard-drive': 'M22 12v5c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2v-5M3.5 15h.01M7 15h.01M22 7v5H2V7c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2z',
+    'cpu': 'M9 9h6v6H9zM4 9h2M4 15h2M18 9h2M18 15h2M9 2v2M15 2v2M9 20v2M15 20v2M7 3h10c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z',
+    'monitor': 'M20 3H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM8 21h8M12 17v4',
+    'laptop': 'M20 16V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v11M2 19h20',
+    'terminal': 'M4 17l6-6-6-6M12 19h8',
+    'globe': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM2 12h20M12 2c2.5 0 4.5 4.5 4.5 10S14.5 22 12 22 7.5 17.5 7.5 12 9.5 2 12 2z',
+    'cloud': 'M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z',
+    'network': 'M12 2l5 5-5 5-5-5 5-5zM2 12l5 5-5 5v-10zM17 12l5 5-5 5v-10zM12 14l5 5-5 5-5-5 5-5z',
+    'box': 'M21 8l-9 5-9-5M21 8v8c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8M21 8l-9-5-9 5',
+    'package': 'M16.5 9.4l-9-5.19M21 16V8c0-.5-.2-1-.6-1.3l-7-4c-.4-.2-.9-.2-1.3 0l-7 4c-.4.3-.6.8-.6 1.3v8c0 .5.2 1 .6 1.3l7 4c.4.2.9.2 1.3 0l7-4c.4-.3.6-.8.6-1.3zM3.3 7L12 12.01l8.7-5.01M12 22.08V12',
+    'shield': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+    'lock': 'M19 11H5c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2zM7 11V7c0-2.76 2.24-5 5-5s5 2.24 5 5v4',
+    'key': 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4',
+    'folder': 'M22 19c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h5l2 3h9c1.1 0 2 .9 2 2v11z',
+    'file': 'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM14 2v6h6',
+    'settings': 'M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2zM12 15a3 3 0 100-6 3 3 0 000 6z',
+    'layers': 'M12 2l9 4.5-9 4.5-9-4.5L12 2zM3 11l9 4.5 9-4.5M3 16l9 4.5 9-4.5',
+    'activity': 'M22 12h-4l-3 9L9 3l-3 9H2',
+    'zap': 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+    'wifi': 'M5 13a10 10 0 0114 0M8.5 16.5a5 5 0 017 0M12 20h.01',
+    'radio': 'M4.9 19.1C1 15.2 1 8.8 4.9 4.9M19.1 4.9c3.9 3.9 3.9 10.3 0 14.2M8.3 15.7a5 5 0 017.4 0M12 20h.01',
+    'rss': 'M4 11a9 9 0 019 9M4 4a16 16 0 0116 16M5 20h.01',
+    'home': 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM9 22V12h6v10',
+    'building': 'M4 21V5c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2v16M4 7h16M4 11h16M4 15h16M8 3v18M16 3v18',
+    'briefcase': 'M16 20V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v16M8 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-4',
+    'tool': 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
+    'code': 'M16 18l6-6-6-6M8 6l-6 6 6 6',
+    'git-branch': 'M6 3v12M18 9a3 3 0 100-6 3 3 0 000 6zM6 21a3 3 0 100-6 3 3 0 000 6zM18 9c-2.5 0-4 1.67-4 3.5V15',
+    'disc': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM12 16a4 4 0 110-8 4 4 0 010 8z',
+    'archive': 'M21 8v13H3V8M1 3h22v5H1zM10 12h4',
+    'bookmark': 'M19 21l-7-5-7 5V5c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v16z',
+    'star': 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+    'circle': 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z',
+    'square': 'M3 3h18v18H3z',
+    'smartphone': 'M17 2H7c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM12 20h.01',
+    'tablet': 'M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM12 18h.01',
+    'desktop': 'M7 22h10M2 17V5c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2z',
+    'airplay': 'M5 17H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2h-1M12 15l-7 7h14l-7-7z'
+};
+
+// Helper function to create SVG icon element
+function createIcon(iconName, size = 20, className = '') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    if (className) {
+        svg.setAttribute('class', className);
+    }
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', PROFILE_ICONS[iconName] || PROFILE_ICONS[DEFAULT_PROFILE_ICON]);
+    svg.appendChild(path);
+
+    return svg;
+}
+
 // Validation patterns and rules
 const VALIDATION = {
     name: {
@@ -360,6 +431,18 @@ function updateCharCounter(fieldId, value) {
     } else {
         counter.classList.remove('over-limit');
     }
+}
+
+// Auto-resize textarea to fit content
+function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+
+    // Set height to scrollHeight (content height)
+    // Constrained by CSS max-height of 200px
+    textarea.style.height = textarea.scrollHeight + 'px';
 }
 
 // Initialize all character counters based on current field values
@@ -3042,19 +3125,28 @@ function renderProfileCard(profile, depth) {
     // Add depth class for CSS-based indentation
     const depthClass = depth > 0 ? `depth-${depth}` : '';
 
+    // Get icon (use default if not set)
+    const iconName = profile.icon || DEFAULT_PROFILE_ICON;
+    const iconSvg = createIcon(iconName, 32, 'profile-card-icon');
+
     return `
         <div class="profile-card ${depthClass}" data-id="${profile.id}">
-            <div class="profile-card-header"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
+            <div class="profile-card-header">
                 <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
             </div>
-            <div class="profile-card-info"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
-                <div class="profile-info-item">
-                    <span class="profile-info-label">User:</span>
-                    <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
+            <div class="profile-card-body">
+                <div class="profile-card-icon-section">
+                    ${iconSvg.outerHTML}
                 </div>
-                <div class="profile-info-item">
-                    <span class="profile-info-label">Host:</span>
-                    <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
+                <div class="profile-card-info"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
+                    <div class="profile-info-item">
+                        <span class="profile-info-label">User:</span>
+                        <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
+                    </div>
+                    <div class="profile-info-item">
+                        <span class="profile-info-label">Host:</span>
+                        <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
+                    </div>
                 </div>
             </div>
             <div class="profile-card-actions">
@@ -3727,6 +3819,11 @@ function setupEventListeners() {
             field.addEventListener('input', (e) => {
                 handleRealtimeValidation(fieldId, e.target.value);
                 updateCharCounter(fieldId, e.target.value);
+
+                // Auto-resize textarea as user types
+                if (e.target.tagName === 'TEXTAREA') {
+                    autoResizeTextarea(e.target);
+                }
             });
         }
     });
@@ -3767,6 +3864,33 @@ function setupEventListeners() {
         });
 
         profileGroupInput.addEventListener('keydown', handleProfileGroupKeydown);
+    }
+
+    // Profile icon searchable dropdown handlers
+    const profileIconInput = document.getElementById('profile-icon');
+    if (profileIconInput) {
+        profileIconInput.addEventListener('input', (e) => {
+            const inputValue = e.target.value.toLowerCase().trim();
+
+            // Update icon display if the input matches an icon name exactly
+            if (PROFILE_ICONS[inputValue]) {
+                updateIconInputDisplay(inputValue);
+                document.getElementById('profile-icon-value').value = inputValue;
+            } else if (inputValue === '') {
+                // Clear icon if input is empty
+                updateIconInputDisplay('');
+                document.getElementById('profile-icon-value').value = '';
+            }
+
+            showProfileIconDropdown(e.target.value);
+            checkFormChanged(); // Track changes for new profiles
+        });
+
+        profileIconInput.addEventListener('focus', () => {
+            showProfileIconDropdown(profileIconInput.value);
+        });
+
+        profileIconInput.addEventListener('keydown', handleProfileIconKeydown);
     }
 
     // Add Group button from profile modal
@@ -3817,6 +3941,17 @@ function setupEventListeners() {
             if (!parentGroupInputElem.contains(e.target) &&
                 !parentGroupDropdown.contains(e.target)) {
                 hideParentGroupDropdown();
+            }
+        }
+
+        // Close profile icon dropdown
+        const profileIconDropdown = document.getElementById('profile-icon-dropdown');
+        const profileIconInput = document.getElementById('profile-icon');
+
+        if (profileIconDropdown && !profileIconDropdown.classList.contains('hidden')) {
+            if (!profileIconInput.contains(e.target) &&
+                !profileIconDropdown.contains(e.target)) {
+                hideProfileIconDropdown();
             }
         }
     });
@@ -6713,6 +6848,12 @@ async function openModal(profile = null) {
             document.getElementById('profile-password').value = '';
         }
 
+        // Set icon for editing
+        const profileIcon = profile.icon || '';
+        document.getElementById('profile-icon').value = profileIcon;
+        document.getElementById('profile-icon-value').value = profileIcon;
+        updateIconInputDisplay(profileIcon);
+
         deleteProfileBtn.classList.remove('hidden');
     } else {
         modalTitle.textContent = 'New Profile';
@@ -6722,6 +6863,10 @@ async function openModal(profile = null) {
         // Set default group to Ungrouped (empty values)
         document.getElementById('profile-group').value = '';
         document.getElementById('profile-group-id').value = '';
+        // Reset icon to empty for new profile
+        document.getElementById('profile-icon').value = '';
+        document.getElementById('profile-icon-value').value = '';
+        updateIconInputDisplay('');
         deleteProfileBtn.classList.add('hidden');
     }
 
@@ -6738,6 +6883,12 @@ async function openModal(profile = null) {
 
     // Initialize character counters based on current field values
     initializeCharCounters();
+
+    // Auto-resize description textarea if it has content
+    const descriptionTextarea = document.getElementById('profile-description');
+    if (descriptionTextarea) {
+        autoResizeTextarea(descriptionTextarea);
+    }
 
     // Capture original form values and reset Save button state
     captureFormValues();
@@ -6769,7 +6920,8 @@ function getCurrentFormValues() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value,
         password: document.getElementById('profile-password').value,
-        group: document.getElementById('profile-group-id').value // Use hidden field for group ID
+        group: document.getElementById('profile-group-id').value, // Use hidden field for group ID
+        icon: document.getElementById('profile-icon-value').value // Icon selection
     };
 }
 
@@ -6906,6 +7058,191 @@ async function closeModal() {
     // No unsaved changes or user confirmed - close the modal
     forceCloseModal();
 }
+
+// ============================================================================
+// ICON DROPDOWN FUNCTIONS
+// ============================================================================
+
+// Icon dropdown state
+let profileIconDropdownVisible = false;
+let focusedIconDropdownIndex = -1;
+let filteredIconOptions = [];
+
+// Show icon dropdown with filtering
+function showProfileIconDropdown(filterText = '') {
+    const profileIconInput = document.getElementById('profile-icon');
+    const profileIconDropdown = document.getElementById('profile-icon-dropdown');
+    if (!profileIconInput || !profileIconDropdown) return;
+
+    // Get all icon names and sort alphabetically
+    const iconNames = Object.keys(PROFILE_ICONS).sort();
+
+    // Filter icons based on input
+    const normalizedFilter = filterText.toLowerCase().trim();
+    filteredIconOptions = iconNames.filter(iconName =>
+        iconName.toLowerCase().includes(normalizedFilter)
+    );
+
+    // Build dropdown HTML
+    let html = '';
+    if (filteredIconOptions.length === 0) {
+        html = '<div class="searchable-dropdown-empty">No icons found</div>';
+    } else {
+        const currentIconValue = document.getElementById('profile-icon-value').value;
+        filteredIconOptions.forEach((iconName, index) => {
+            const isSelected = iconName === currentIconValue;
+            const iconSvg = createIcon(iconName, 18, 'dropdown-icon-preview');
+            html += `
+                <div class="searchable-dropdown-item icon-dropdown-item ${isSelected ? 'selected' : ''}"
+                     data-icon-name="${iconName}"
+                     data-index="${index}">
+                    <span class="dropdown-icon-wrapper">${iconSvg.outerHTML}</span>
+                    <span class="dropdown-icon-label">${escapeHtml(iconName)}</span>
+                </div>
+            `;
+        });
+    }
+
+    profileIconDropdown.innerHTML = html;
+    profileIconDropdown.classList.remove('hidden');
+    profileIconDropdownVisible = true;
+    focusedIconDropdownIndex = -1;
+
+    // Attach click handlers
+    profileIconDropdown.querySelectorAll('.icon-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const iconName = e.currentTarget.dataset.iconName;
+            selectProfileIcon(iconName);
+        });
+    });
+}
+
+// Hide icon dropdown
+function hideProfileIconDropdown() {
+    const profileIconDropdown = document.getElementById('profile-icon-dropdown');
+    if (profileIconDropdown) {
+        profileIconDropdown.classList.add('hidden');
+        profileIconDropdownVisible = false;
+        focusedIconDropdownIndex = -1;
+    }
+}
+
+// Update the icon display in the input field
+function updateIconInputDisplay(iconName) {
+    const iconDisplay = document.getElementById('profile-icon-display');
+    const iconWrapper = document.querySelector('.icon-input-wrapper');
+
+    if (!iconDisplay || !iconWrapper) return;
+
+    // Clear previous icon
+    iconDisplay.innerHTML = '';
+
+    if (iconName) {
+        // Show selected icon
+        const iconSvg = createIcon(iconName, 18, 'selected-icon');
+        iconDisplay.appendChild(iconSvg);
+        iconWrapper.classList.add('has-icon');
+    } else {
+        // No icon selected
+        iconWrapper.classList.remove('has-icon');
+    }
+}
+
+// Select icon from dropdown
+async function selectProfileIcon(iconName) {
+    const profileIconInput = document.getElementById('profile-icon');
+    const profileIconValueInput = document.getElementById('profile-icon-value');
+
+    // Update UI
+    profileIconInput.value = iconName;
+    profileIconValueInput.value = iconName;
+
+    // Update icon display
+    updateIconInputDisplay(iconName);
+
+    hideProfileIconDropdown();
+
+    // If editing an existing profile, save to backend immediately
+    if (editingProfileId) {
+        try {
+            await invoke('update_profile_icon', {
+                profileId: editingProfileId,
+                icon: iconName
+            });
+
+            // Update local profiles array
+            const profile = profiles.find(p => p.id === editingProfileId);
+            if (profile) {
+                profile.icon = iconName;
+            }
+
+            // Reload profiles to show updated icon
+            await loadProfiles();
+        } catch (err) {
+            showToast(`Failed to update icon: ${err}`, TOAST_DURATION_LONG, 'error');
+        }
+    }
+
+    checkFormChanged();
+}
+
+// Handle keyboard navigation in icon dropdown
+function handleProfileIconKeydown(e) {
+    if (!profileIconDropdownVisible) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            e.preventDefault();
+            const profileIconInput = document.getElementById('profile-icon');
+            showProfileIconDropdown(profileIconInput.value);
+        }
+        return;
+    }
+
+    const items = document.querySelectorAll('#profile-icon-dropdown .icon-dropdown-item');
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedIconDropdownIndex = Math.min(focusedIconDropdownIndex + 1, items.length - 1);
+        updateFocusedIconDropdownItem(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedIconDropdownIndex = Math.max(focusedIconDropdownIndex - 1, -1);
+        if (focusedIconDropdownIndex === -1) {
+            // Back to input
+            const profileIconInput = document.getElementById('profile-icon');
+            profileIconInput.focus();
+            items.forEach(item => item.classList.remove('focused'));
+        } else {
+            updateFocusedIconDropdownItem(items);
+        }
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedIconDropdownIndex >= 0 && focusedIconDropdownIndex < items.length) {
+            const iconName = items[focusedIconDropdownIndex].dataset.iconName;
+            selectProfileIcon(iconName);
+        }
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideProfileIconDropdown();
+        const profileIconInput = document.getElementById('profile-icon');
+        profileIconInput.focus();
+    }
+}
+
+// Update visual focus indicator for icon dropdown
+function updateFocusedIconDropdownItem(items) {
+    items.forEach((item, index) => {
+        if (index === focusedIconDropdownIndex) {
+            item.classList.add('focused');
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            item.classList.remove('focused');
+        }
+    });
+}
+
+// ============================================================================
+// END ICON DROPDOWN FUNCTIONS
+// ============================================================================
 
 // Save profile (create or update)
 async function saveProfile() {
