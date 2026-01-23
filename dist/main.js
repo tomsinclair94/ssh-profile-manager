@@ -94,51 +94,85 @@ const EXPORT_FORMAT_INFO = {
 
 // Icon system - Lucide icon SVG paths (24x24 viewBox)
 // Default icon for profiles without a custom icon
-const DEFAULT_PROFILE_ICON = 'desktop';
+const DEFAULT_PROFILE_ICON = 'server';
 
 // Curated list of Lucide icons for SSH profiles
 // Each entry: [icon_name, svg_path]
 const PROFILE_ICONS = {
-    'server': 'M12 2L2 7v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7l-10-5zM2 17.5V9l10 5 10-5v8.5c0 .28-.22.5-.5.5h-19c-.28 0-.5-.22-.5-.5zM12 12.5l8-4-8-4-8 4 8 4z',
+    'server': 'M4 2h16c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2zM2 14c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2v-4zM6 6h.01M6 16h.01',
+    'server-cog': ['m10.852 14.772-.383.923', 'M13.148 14.772a3 3 0 1 0-2.296-5.544l-.383-.923', 'm13.148 9.228.383-.923', 'm13.53 15.696-.382-.924a3 3 0 1 1-2.296-5.544', 'm14.772 10.852.923-.383', 'm14.772 13.148.923.383', 'M4.5 10H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-.5', 'M4.5 14H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-.5', 'M6 18h.01', 'M6 6h.01', 'm9.228 10.852-.923-.383', 'm9.228 13.148-.923.383'],
+    'server-off': ['M7 2h13a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-5', 'M10 10 2.5 2.5C2 2 2 2.5 2 5v3a2 2 0 0 0 2 2h6z', 'M22 17v-1a2 2 0 0 0-2-2h-1', 'M4 14a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16.5l1-.5.5.5-8-8H4z', 'M6 18h.01', 'm2 2 20 20'],
     'database': 'M12 2C6.5 2 2 3.34 2 5v14c0 1.66 4.5 3 10 3s10-1.34 10-3V5c0-1.66-4.5-3-10-3zM2 9c0 1.66 4.5 3 10 3s10-1.34 10-3M2 14c0 1.66 4.5 3 10 3s10-1.34 10-3',
+    'database-backup': [
+        { type: 'ellipse', attrs: { cx: 12, cy: 5, rx: 9, ry: 3 } },
+        { type: 'path', attrs: { d: 'M3 12a9 3 0 0 0 5 2.69' } },
+        { type: 'path', attrs: { d: 'M21 9.3V5' } },
+        { type: 'path', attrs: { d: 'M3 5v14a9 3 0 0 0 6.47 2.88' } },
+        { type: 'path', attrs: { d: 'M12 12v4h4' } },
+        { type: 'path', attrs: { d: 'M13 20a5 5 0 0 0 9-3 4.5 4.5 0 0 0-4.5-4.5c-1.33 0-2.54.54-3.41 1.41L12 16' } }
+    ],
     'hard-drive': 'M22 12v5c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2v-5M3.5 15h.01M7 15h.01M22 7v5H2V7c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2z',
-    'cpu': 'M9 9h6v6H9zM4 9h2M4 15h2M18 9h2M18 15h2M9 2v2M15 2v2M9 20v2M15 20v2M7 3h10c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z',
     'monitor': 'M20 3H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM8 21h8M12 17v4',
     'laptop': 'M20 16V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v11M2 19h20',
     'terminal': 'M4 17l6-6-6-6M12 19h8',
     'globe': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM2 12h20M12 2c2.5 0 4.5 4.5 4.5 10S14.5 22 12 22 7.5 17.5 7.5 12 9.5 2 12 2z',
     'cloud': 'M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z',
-    'network': 'M12 2l5 5-5 5-5-5 5-5zM2 12l5 5-5 5v-10zM17 12l5 5-5 5v-10zM12 14l5 5-5 5-5-5 5-5z',
-    'box': 'M21 8l-9 5-9-5M21 8v8c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8M21 8l-9-5-9 5',
-    'package': 'M16.5 9.4l-9-5.19M21 16V8c0-.5-.2-1-.6-1.3l-7-4c-.4-.2-.9-.2-1.3 0l-7 4c-.4.3-.6.8-.6 1.3v8c0 .5.2 1 .6 1.3l7 4c.4.2.9.2 1.3 0l7-4c.4-.3.6-.8.6-1.3zM3.3 7L12 12.01l8.7-5.01M12 22.08V12',
+    'package': [
+        { type: 'path', attrs: { d: 'M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z' } },
+        { type: 'path', attrs: { d: 'M12 22V12' } },
+        { type: 'polyline', attrs: { points: '3.29 7 12 12 20.71 7' } },
+        { type: 'path', attrs: { d: 'm7.5 4.27 9 5.15' } }
+    ],
     'shield': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
     'lock': 'M19 11H5c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2zM7 11V7c0-2.76 2.24-5 5-5s5 2.24 5 5v4',
     'key': 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4',
     'folder': 'M22 19c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h5l2 3h9c1.1 0 2 .9 2 2v11z',
     'file': 'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM14 2v6h6',
-    'settings': 'M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2zM12 15a3 3 0 100-6 3 3 0 000 6z',
     'layers': 'M12 2l9 4.5-9 4.5-9-4.5L12 2zM3 11l9 4.5 9-4.5M3 16l9 4.5 9-4.5',
-    'activity': 'M22 12h-4l-3 9L9 3l-3 9H2',
-    'zap': 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
     'wifi': 'M5 13a10 10 0 0114 0M8.5 16.5a5 5 0 017 0M12 20h.01',
-    'radio': 'M4.9 19.1C1 15.2 1 8.8 4.9 4.9M19.1 4.9c3.9 3.9 3.9 10.3 0 14.2M8.3 15.7a5 5 0 017.4 0M12 20h.01',
-    'rss': 'M4 11a9 9 0 019 9M4 4a16 16 0 0116 16M5 20h.01',
-    'home': 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM9 22V12h6v10',
-    'building': 'M4 21V5c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2v16M4 7h16M4 11h16M4 15h16M8 3v18M16 3v18',
-    'briefcase': 'M16 20V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v16M8 7H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2h-4',
     'tool': 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
     'code': 'M16 18l6-6-6-6M8 6l-6 6 6 6',
-    'git-branch': 'M6 3v12M18 9a3 3 0 100-6 3 3 0 000 6zM6 21a3 3 0 100-6 3 3 0 000 6zM18 9c-2.5 0-4 1.67-4 3.5V15',
-    'disc': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM12 16a4 4 0 110-8 4 4 0 010 8z',
-    'archive': 'M21 8v13H3V8M1 3h22v5H1zM10 12h4',
-    'bookmark': 'M19 21l-7-5-7 5V5c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v16z',
-    'star': 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
-    'circle': 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z',
-    'square': 'M3 3h18v18H3z',
     'smartphone': 'M17 2H7c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM12 20h.01',
     'tablet': 'M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM12 18h.01',
     'desktop': 'M7 22h10M2 17V5c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2z',
-    'airplay': 'M5 17H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2h-1M12 15l-7 7h14l-7-7z'
+    'computer': [
+        { type: 'rect', attrs: { width: 14, height: 8, x: 5, y: 2, rx: 2 } },
+        { type: 'rect', attrs: { width: 20, height: 8, x: 2, y: 14, rx: 2 } },
+        { type: 'path', attrs: { d: 'M6 18h2' } },
+        { type: 'path', attrs: { d: 'M12 18h6' } }
+    ],
+    'pc-case': [
+        { type: 'rect', attrs: { width: 14, height: 20, x: 5, y: 2, rx: 2 } },
+        { type: 'path', attrs: { d: 'M15 14h.01' } },
+        { type: 'path', attrs: { d: 'M9 6h6' } },
+        { type: 'path', attrs: { d: 'M9 10h6' } }
+    ],
+    'ethernet-port': ['m15 20 3-3h2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2l3 3z', 'M6 8v1', 'M10 8v1', 'M14 8v1', 'M18 8v1'],
+    'cable': ['M17 19a1 1 0 0 1-1-1v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1z', 'M17 21v-2', 'M19 14V6.5a1 1 0 0 0-7 0v11a1 1 0 0 1-7 0V10', 'M21 21v-2', 'M3 5V3', 'M4 10a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a2 2 0 0 1-2 2z', 'M7 5V3'],
+    'plug': ['M12 22v-5', 'M15 8V2', 'M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z', 'M9 8V2'],
+    'usb': ['M4.7 19.3 19 5', 'm21 3-3 1 2 2Z', 'M9.26 7.68 5 12l2 5', 'm10 14 5 2 3.5-3.5', 'm18 12 1-1 1 1-1 1Z'],
+    'router': [
+        { type: 'rect', attrs: { width: 20, height: 8, x: 2, y: 14, rx: 2 } },
+        { type: 'path', attrs: { d: 'M6.01 18H6' } },
+        { type: 'path', attrs: { d: 'M10.01 18H10' } },
+        { type: 'path', attrs: { d: 'M15 10v4' } },
+        { type: 'path', attrs: { d: 'M17.84 7.17a4 4 0 0 0-5.66 0' } },
+        { type: 'path', attrs: { d: 'M20.66 4.34a8 8 0 0 0-11.31 0' } }
+    ],
+    'bluetooth': 'm7 7 10 10-5 5V2l5 5L7 17',
+    'key-round': 'M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z',
+    'key-square': ['M12.4 2.7a2.5 2.5 0 0 1 3.4 0l5.5 5.5a2.5 2.5 0 0 1 0 3.4l-3.7 3.7a2.5 2.5 0 0 1-3.4 0L8.7 9.8a2.5 2.5 0 0 1 0-3.4z', 'm14 7 3 3', 'm9.4 10.6-6.814 6.814A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814'],
+    'shield-check': ['M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z', 'm9 12 2 2 4-4'],
+    'cloud-cog': ['m10.852 19.772-.383.924', 'm13.148 14.228.383-.923', 'M13.148 19.772a3 3 0 1 0-2.296-5.544l-.383-.923', 'm13.53 20.696-.382-.924a3 3 0 1 1-2.296-5.544', 'm14.772 15.852.923-.383', 'm14.772 18.148.923.383', 'M4.2 15.1a7 7 0 1 1 9.93-9.858A7 7 0 0 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.2', 'm9.228 15.852-.923-.383', 'm9.228 18.148-.923.383'],
+    'workflow': [
+        { type: 'rect', attrs: { width: 8, height: 8, x: 3, y: 3, rx: 2 } },
+        { type: 'path', attrs: { d: 'M7 11v4a2 2 0 0 0 2 2h4' } },
+        { type: 'rect', attrs: { width: 8, height: 8, x: 13, y: 13, rx: 2 } }
+    ],
+    'settings': [
+        { type: 'path', attrs: { d: 'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915' } },
+        { type: 'circle', attrs: { cx: 12, cy: 12, r: 3 } }
+    ]
 };
 
 // Helper function to create SVG icon element
@@ -156,9 +190,26 @@ function createIcon(iconName, size = 20, className = '') {
         svg.setAttribute('class', className);
     }
 
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', PROFILE_ICONS[iconName] || PROFILE_ICONS[DEFAULT_PROFILE_ICON]);
-    svg.appendChild(path);
+    const iconData = PROFILE_ICONS[iconName] || PROFILE_ICONS[DEFAULT_PROFILE_ICON];
+
+    // Support: string (single path), array of strings (multiple paths), array of objects (mixed elements)
+    const elements = Array.isArray(iconData) ? iconData : [iconData];
+
+    elements.forEach(elementData => {
+        if (typeof elementData === 'string') {
+            // Simple path string
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', elementData);
+            svg.appendChild(path);
+        } else if (typeof elementData === 'object') {
+            // Object with element type and attributes
+            const element = document.createElementNS('http://www.w3.org/2000/svg', elementData.type);
+            Object.keys(elementData.attrs).forEach(attr => {
+                element.setAttribute(attr, elementData.attrs[attr]);
+            });
+            svg.appendChild(element);
+        }
+    });
 
     return svg;
 }
@@ -3059,15 +3110,16 @@ function renderGroupNode(group, profilesByGroupPath, depth) {
         return '';
     }
 
+    // Create settings icon for group menu button
+    const settingsIcon = createIcon('settings', 22);
+
     let html = `
         <div class="profile-group" data-group-id="${group.id}">
             <div class="profile-group-header ${depthClass}" data-group-id="${group.id}">
                 <span class="group-chevron">${chevron}</span>
                 <span class="group-name">${escapeHtml(group.name)}</span>
                 <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Show group actions">
-                    <svg width="20" height="20" viewBox="0 0 512 512" fill="currentColor">
-                        <path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z"/>
-                    </svg>
+                    ${settingsIcon.outerHTML}
                 </button>
                 <span class="badge group-count-badge">${totalProfileCount}</span>
             </div>

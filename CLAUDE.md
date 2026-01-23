@@ -205,14 +205,52 @@ CREATE TABLE profiles (
     username TEXT NOT NULL,
     auth_method TEXT NOT NULL DEFAULT 'key',
     key_path TEXT,
-    group_name TEXT
+    group_path TEXT  -- Semantic hierarchical path (e.g., "Work/Production")
+);
+
+CREATE TABLE groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    parent_id TEXT,
+    path TEXT NOT NULL UNIQUE,  -- Semantic hierarchical path
+    icon TEXT,
+    is_favorite INTEGER DEFAULT 0,
+    display_order INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES groups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE profile_metadata (
+    profile_id TEXT PRIMARY KEY,
+    icon TEXT,  -- Always set (default: 'server')
+    is_favorite INTEGER DEFAULT 0,
+    display_order INTEGER DEFAULT 0,
+    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE tags (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE profile_tags (
+    profile_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    PRIMARY KEY (profile_id, tag_id),
+    FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
 CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TEXT);
-CREATE TABLE active_sessions (id TEXT PRIMARY KEY, profile_id TEXT, created_at TEXT);
-CREATE TABLE recent_connections (profile_id TEXT PRIMARY KEY, last_connected_at TEXT);
+CREATE TABLE active_sessions (id TEXT PRIMARY KEY, profile_id TEXT, tab_id TEXT, started_at TEXT, last_activity_at TEXT);
+CREATE TABLE recent_connections (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id TEXT, connected_at TEXT);
 CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 ```
+
+**Important:** All profiles automatically receive default metadata on creation (icon='server', is_favorite=false, display_order=0). Migration 4 backfills metadata for existing profiles.
 
 **Location:** `~/Library/Application Support/ssh-profile-manager/profiles.db`
 **Keychain:** System keychain (service: "ssh-profile-manager")

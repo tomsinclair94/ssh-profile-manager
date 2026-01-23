@@ -188,7 +188,7 @@ body {
 .btn-settings {
     background-color: #6c757d;
     color: white;
-    padding: 6px;
+    padding: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -198,10 +198,10 @@ body {
 
 .btn-settings svg {
     display: block;
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 24px !important;
-    min-height: 24px !important;
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
 }
 
 .btn-settings:hover {
@@ -455,13 +455,14 @@ body {
 
 /* Group menu button */
 .group-menu-btn {
-    padding: 4px;
+    padding: 3px;
     line-height: 1;
     opacity: 1; /* Always visible */
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-right: -8px; /* Reduce gap between menu button and badge */
 }
 
 .group-menu-btn svg {

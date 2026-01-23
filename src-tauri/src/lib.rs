@@ -925,6 +925,15 @@ impl Database {
                 [],
             )?;
 
+            // Backfill default metadata for all existing profiles
+            // Default: icon='server', is_favorite=0, display_order=0
+            conn.execute(
+                "INSERT INTO profile_metadata (profile_id, icon, is_favorite, display_order)
+                 SELECT id, 'server', 0, 0
+                 FROM profiles",
+                [],
+            )?;
+
             // Create tags table
             conn.execute(
                 "CREATE TABLE tags (
@@ -1505,6 +1514,20 @@ impl Database {
         Ok(())
     }
 
+    // Upsert profile metadata (icon and is_favorite)
+    fn upsert_profile_metadata_db(&self, profile_id: &str, icon: Option<String>, is_favorite: bool) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO profile_metadata (profile_id, icon, is_favorite, display_order)
+             VALUES (?1, ?2, ?3, 0)
+             ON CONFLICT(profile_id) DO UPDATE SET
+                icon = excluded.icon,
+                is_favorite = excluded.is_favorite",
+            (profile_id, icon, if is_favorite { 1 } else { 0 }),
+        )?;
+        Ok(())
+    }
+
     // Get all tags
     fn get_all_tags(&self) -> SqlResult<Vec<Tag>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
@@ -1719,6 +1742,10 @@ struct ProfileExport {
     #[serde(flatten)]
     profile: Profile,  // Use Profile directly - group_path is already semantic
     password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metadata: Option<ProfileMetadata>,
+    #[serde(default)]
+    tags: Vec<Tag>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1914,6 +1941,11 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     db.create_profile(&new_profile)
         .map_err(|e| format!("Failed to create profile: {}", e))?;
+
+    // Create default metadata for new profile
+    // Default: icon='server', is_favorite=false, display_order=0
+    db.upsert_profile_metadata_db(&id, Some("server".to_string()), false)
+        .map_err(|e| format!("Failed to create profile metadata: {}", e))?;
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
@@ -2443,9 +2475,17 @@ fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<Strin
             None
         };
 
+        // Fetch metadata for the profile
+        let metadata = db.get_profile_metadata(&profile.id).ok().flatten();
+
+        // Fetch tags for the profile
+        let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
+
         export_profiles.push(ProfileExport {
             profile,  // Use profile directly - group_path is already semantic
             password,
+            metadata,
+            tags,
         });
     }
 
@@ -2557,6 +2597,43 @@ fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
             if !password.is_empty() {
                 store_password(&profile.id, &password)?;
             }
+        }
+
+        // Import metadata if provided, otherwise use defaults
+        if let Some(metadata) = profile_export.metadata {
+            db.upsert_profile_metadata_db(&profile.id, metadata.icon, metadata.is_favorite)
+                .map_err(|e| format!("Failed to import metadata for profile '{}': {}", profile.name, e))?;
+        } else {
+            // No metadata provided - use defaults (icon='server', is_favorite=false)
+            db.upsert_profile_metadata_db(&profile.id, Some("server".to_string()), false)
+                .map_err(|e| format!("Failed to create default metadata for profile '{}': {}", profile.name, e))?;
+        }
+
+        // Import tags - match by name, create if missing, then assign
+        if !profile_export.tags.is_empty() {
+            let mut tag_ids = Vec::new();
+
+            for import_tag in profile_export.tags {
+                // Try to find existing tag by name
+                let existing_tags = db.get_all_tags()
+                    .map_err(|e| format!("Failed to get tags: {}", e))?;
+
+                let tag_id = if let Some(existing) = existing_tags.iter().find(|t| t.name == import_tag.name) {
+                    // Tag exists - use existing tag (preserve color)
+                    existing.id.clone()
+                } else {
+                    // Tag doesn't exist - create new tag with imported color
+                    db.create_tag_db(&import_tag)
+                        .map_err(|e| format!("Failed to create tag '{}': {}", import_tag.name, e))?;
+                    import_tag.id.clone()
+                };
+
+                tag_ids.push(tag_id);
+            }
+
+            // Assign all tags to the profile
+            db.set_profile_tags_db(&profile.id, &tag_ids)
+                .map_err(|e| format!("Failed to assign tags to profile '{}': {}", profile.name, e))?;
         }
     }
 
@@ -2734,12 +2811,18 @@ fn import_profile_metadata_and_tags(
 ) -> Result<(), String> {
     let conn = db.conn.lock().expect("Database lock poisoned");
 
-    // Import metadata if provided
+    // Import metadata if provided, otherwise use defaults
     if let Some(meta) = metadata {
         conn.execute(
             "INSERT OR REPLACE INTO profile_metadata (profile_id, icon, is_favorite, display_order) VALUES (?1, ?2, ?3, ?4)",
             (profile_id, meta.icon, if meta.is_favorite { 1 } else { 0 }, meta.display_order),
         ).map_err(|e| format!("Failed to import profile metadata: {}", e))?;
+    } else {
+        // No metadata provided - insert defaults (icon='server', is_favorite=0, display_order=0)
+        conn.execute(
+            "INSERT OR REPLACE INTO profile_metadata (profile_id, icon, is_favorite, display_order) VALUES (?1, 'server', 0, 0)",
+            [profile_id],
+        ).map_err(|e| format!("Failed to create default profile metadata: {}", e))?;
     }
 
     // Import tags
@@ -3105,9 +3188,17 @@ fn export_settings(
                 None
             };
 
+            // Fetch metadata for the profile
+            let metadata = db.get_profile_metadata(&profile.id).ok().flatten();
+
+            // Fetch tags for the profile
+            let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
+
             profile_exports.push(ProfileExport {
                 profile,  // Use profile directly - group_path is already semantic
                 password,
+                metadata,
+                tags,
             });
         }
 
