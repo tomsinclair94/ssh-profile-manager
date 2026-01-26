@@ -6,30 +6,35 @@
 **Type:** Bug Fix Release
 **Focus:** UX improvements, validation fixes, startup issues
 
+## Current Development Version: v0.7.0
+
+**Type:** Major Feature Release
+**Focus:** Enhanced Group Management, Hierarchical Organization, Export/Import Improvements, Favorites, Icons & Tags
+
 ---
 
 ## Roadmap
 
 ```
-v0.6.3 ✅ → v0.6.4 ✅ → v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1.0.0
+v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1.0.0
 ```
 
 ### v0.7.0 - Hierarchical Groups & Enhanced Organization
 **Status:** In Development
-**Focus:** Enhanced group management, hierarchical organization, export/import improvements, favorites & tags
+**Focus:** Enhanced group management, hierarchical organization, export/import improvements, favorites, icons & tags
 
 See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed plan.
 
-**Major Features:**
-- Hierarchical group system with sub-groups (up to 3 levels)
-- Separate group management (Add, Rename, Delete with cascade/move options)
-- Individual profile/group export/import with append mode
+**Major Features:** 🔄 In Progress
+- ✅ Hierarchical group system with sub-groups (up to 3 levels)
+- ✅ Separate group management (Add, Rename, Delete with cascade/move options)
+- ✅ Individual profile/group export/import with append mode
 - Encrypted exports with AES-256-GCM and HMAC integrity verification
-- Favorites system for profiles and groups
-- Icon picker for profiles (predefined library)
+- ✅ Favorites system for profiles and groups
+- ✅ Icon picker for profiles (predefined library)
 - Tag system with color-coding and filtering
 - ✅ Profile name uniqueness scoped to parent group (allows same name in different groups)
-- Settings Export/Import renamed to Backup/Restore
+- ✅ Settings Export/Import renamed to Backup/Restore
 
 **Phase 1 Progress (Database Migration & Group CRUD):** ✅ Completed
 - ✅ Created migration script (version 4) with new tables
@@ -75,7 +80,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Header and section padding optimization (consistent 12px left/right across all sections)
 - ✅ Typography improvements (title 24px, version 14px, logo 64px)
 
-**Phase 4 Progress (Export/Import Modes):** Phase 4A ✅ | Phase 4B ✅ | Phase 4C 🔄
+**Phase 4 Progress (Export/Import Modes):** ✅ Completed
 
 **Phase 4A (Version Tracking Foundation):** ✅ Completed
 - ✅ Add `exportFormatVersion` field to all profile export commands
@@ -111,69 +116,61 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - ✅ Updated Tauri command input structs (CreateProfileInput, UpdateProfileInput)
   - ✅ Build verification successful with semantic paths
 
-**Backend Design Decisions:**
-- **Semantic Paths Everywhere:** Profiles store group_path directly ("Work/Production/Servers")
-  - Export/import is trivial - no UUID conversion required
-  - Duplicate detection compares semantic paths (portable across systems)
-  - Groups still use UUID parent_id internally (only converted at export boundary)
-- **Duplicate Detection:** Uses (name + group_path) as unique key
-  - Profile names unique within their group only (allows same name in different groups)
-  - Matches hierarchical group behavior (group names scoped to parent)
-  - Connection details (host, username) NOT part of duplicate detection
-- **Import Strategies:**
-  - Profiles: "skip", "rename", "overwrite"
-  - Groups: "skip", "rename", "merge"
-  - Default: "rename" for safest UX
-- **Tag Handling:** Tags matched by name; reuses existing tags with same name
-- **File Naming:** `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`, `sshpm-profiles-{date}.json`
-- **Group Rename/Move/Delete:** Cascade updates implemented for all profile group_paths
+**Phase 4C (Frontend UI - Individual Export/Import):** ✅ Completed
+- ✅ Profile card redesign: Connect, Edit, Actions button
+- ✅ Actions menu: Duplicate, Export (new), Delete
+- ✅ Group context menu: Add Export option (above Delete)
+- ✅ Settings: Rename "Export Profiles" → "Export All Profiles"
+- ✅ Import auto-detects type (profile/group/all) and routes accordingly
+- ✅ Conflict resolution uses buttons (Skip/Rename/Overwrite for profiles, Skip/Rename/Merge for groups)
+- ✅ Proper file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
+- ✅ All export/import testing completed successfully
 
-**Phase 4C (Frontend UI - Individual Export/Import):** Not started
+**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** Phase 5A ✅ | Phase 5B ✅ | Phase 5C ✅ | Phase 5D 🔄
 
-See `plans/v0.7.0-phase4c.md` for detailed implementation plan.
+See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-tracking.md` for full details.
 
-**Summary:**
-- Profile card redesign: Connect, Edit, Actions button
-- Actions menu: Duplicate, Export (new), Delete
-- Group context menu: Add Export option (above Delete)
-- Settings: Rename "Export Profiles" → "Export All Profiles"
-- Import auto-detects type (profile/group/all) and routes accordingly
-- Conflict resolution uses buttons (Skip/Rename/Overwrite for profiles, Skip/Rename/Merge for groups)
-- No dedicated export modal - all exports are direct actions
-- Proper file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
+**Phase 5A (Backend Infrastructure):** ✅ Completed (2026-01-22)
+- ✅ Database schema: `profile_metadata`, `tags`, `profile_tags` tables (Migration 4)
+- ✅ Rust structs: ProfileMetadata, Tag, ProfileWithMetadata
+- ✅ Database methods: metadata CRUD, tag CRUD, tag assignments
+- ✅ Tauri commands: 11 new commands (toggle_profile_favorite, update_profile_icon, get_tags, create_tag, delete_tag, etc.)
+- ✅ Enhanced get_profiles: Returns ProfileWithMetadata with metadata + tags in 2 efficient queries
+- ✅ Validation: Tag names (alphanumeric + spaces/hyphens/underscores, max 32 chars), colors (hex #RRGGBB)
 
-**Phase 4C Testing Checklist:**
-*Export Tests:*
-- [ ] Export single profile (with/without password)
-- [ ] Export single profile with metadata (favorite, icon)
-- [ ] Export single profile with tags
-- [ ] Export group with no subgroups
-- [ ] Export group with 1 level of subgroups
-- [ ] Export group with 3 levels of subgroups (max depth)
-- [ ] Export group with mixed profiles (some with passwords, metadata, tags)
-- [ ] Export all profiles (existing behavior)
+**Phase 5B (Icons & Lucide Integration):** ✅ Completed (2026-01-23)
+- ✅ Icon system: 40+ Lucide icons as inline SVG (no CDN, CSP-compliant)
+- ✅ Searchable dropdown: Inline dropdown with keyboard navigation
+- ✅ Profile modal: Icon selector integrated (Name 70% / Icon 30% row layout)
+- ✅ Profile cards: Icons display at 32px below name
+- ✅ Icon library refinement: Removed 18 irrelevant icons, added 16 SSH-focused icons
+- ✅ Export/import: Includes icon, is_favorite, tags metadata
+- ✅ Lucide settings icons: Replaced custom SVGs with Lucide 'settings' icon
+- ✅ Default icon: 'server' for all profiles
 
-*Import Tests:*
-- [ ] Import single profile to root (no group)
-- [ ] Import single profile to existing group
-- [ ] Import single profile with duplicate (skip)
-- [ ] Import single profile with duplicate (rename)
-- [ ] Import single profile with duplicate (overwrite)
-- [ ] Import group to root
-- [ ] Import group under existing parent group
-- [ ] Import group with duplicate name (skip)
-- [ ] Import group with duplicate name (rename)
-- [ ] Import group with duplicate name (merge)
-- [ ] Import nested group structure (3 levels)
-- [ ] Import all profiles (existing behavior)
-- [ ] Import v1.0 format file (backward compatibility)
+**Phase 5C (Favorites Implementation):** ✅ Completed (2026-01-26)
+- ✅ Backend: Added `set_profile_favorite()` command for explicit state setting
+- ✅ Profile modal: Favorite checkbox (below Name, above Description)
+- ✅ Profile cards: Star icon toggle (star-off/star, gray/gold, left of title)
+- ✅ Toast notifications: "Added to Favourites" / "Removed from Favourites"
+- ✅ Virtual Favourites group: Renders at top with 2px gold/amber (#f59e0b) border
+- ✅ Favourites cards: Group path display (at bottom, above actions)
+- ✅ Navigation: "Go to Profile" button (collapses Favourites, expands group, scrolls & highlights)
+- ✅ Collapse state: localStorage persistence (favouritesCollapsed)
+- ✅ Auto-hide: Group hidden when no favorites exist
+- ✅ Sorting: Profiles sorted A-Z by group path in Favourites
+- ✅ Filtering: Favourites group ignores group filters (respects search only)
+- ✅ Styling: Gold/amber theme, star hover animations, highlight pulse animation
+- ✅ Icons: Added 'star' and 'star-off' to PROFILE_ICONS
 
-*Edge Cases:*
-- [ ] Export/import empty group
-- [ ] Import with missing metadata (should default gracefully)
-- [ ] Import with missing tags (should handle empty array)
-- [ ] Import group that exceeds max depth when combined with existing structure
-- [ ] Large export (100+ profiles in nested groups)
+**Phase 5D (Tags & Search Integration):** 🔄 Next - Ready to Start
+- [ ] Display tag badges on profile cards
+- [ ] Make badges clickable (add to search)
+- [ ] Implement `tag:` search prefix parsing (OR logic)
+- [ ] Build Tag Manager modal (Settings)
+- [ ] Add tag creation/deletion UI
+- [ ] Tag selector in profile editor (multi-select)
+- [ ] Update search placeholder/tooltip with tag syntax
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned

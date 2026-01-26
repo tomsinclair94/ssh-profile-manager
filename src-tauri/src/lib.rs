@@ -1502,6 +1502,18 @@ impl Database {
         Ok(new_favorite)
     }
 
+    // Set profile favorite status (explicit set, not toggle)
+    fn set_profile_favorite_db(&self, profile_id: &str, is_favorite: bool) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO profile_metadata (profile_id, icon, is_favorite, display_order)
+             VALUES (?1, NULL, ?2, 0)
+             ON CONFLICT(profile_id) DO UPDATE SET is_favorite = excluded.is_favorite",
+            (profile_id, if is_favorite { 1 } else { 0 }),
+        )?;
+        Ok(())
+    }
+
     // Update profile icon
     fn update_profile_icon_db(&self, profile_id: &str, icon: Option<String>) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
@@ -3569,6 +3581,12 @@ fn toggle_profile_favorite(db: State<Database>, profile_id: String) -> Result<bo
 }
 
 #[tauri::command]
+fn set_profile_favorite(db: State<Database>, profile_id: String, is_favorite: bool) -> Result<(), String> {
+    db.set_profile_favorite_db(&profile_id, is_favorite)
+        .map_err(|e| format!("Failed to set favorite: {}", e))
+}
+
+#[tauri::command]
 fn update_profile_icon(db: State<Database>, profile_id: String, icon: Option<String>) -> Result<(), String> {
     db.update_profile_icon_db(&profile_id, icon)
         .map_err(|e| format!("Failed to update icon: {}", e))
@@ -4762,6 +4780,7 @@ pub fn run() {
             get_setting,
             save_setting,
             toggle_profile_favorite,
+            set_profile_favorite,
             update_profile_icon,
             get_profile_metadata,
             get_tags,

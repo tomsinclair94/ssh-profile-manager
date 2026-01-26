@@ -172,7 +172,11 @@ const PROFILE_ICONS = {
     'settings': [
         { type: 'path', attrs: { d: 'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915' } },
         { type: 'circle', attrs: { cx: 12, cy: 12, r: 3 } }
-    ]
+    ],
+    'star': [
+        { type: 'polygon', attrs: { points: '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2', fill: 'currentColor', stroke: 'currentColor' } }
+    ],
+    'star-off': 'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z'
 };
 
 // Helper function to create SVG icon element
@@ -261,6 +265,7 @@ let editingProfileId = null;
 let editingGroupId = null; // Currently editing group ID
 let isSubmitting = false;
 let collapsedGroups = new Set();
+let favouritesCollapsed = false; // Track Favourites group collapse state
 let originalFormValues = {}; // Track original profile form values for change detection
 let originalSettingsValues = {}; // Track original settings values for change detection
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
@@ -875,9 +880,17 @@ function handleGlobalShortcuts(e) {
 function getProfileModalTabbableItems() {
     const items = [];
 
-    // Form fields (in order)
+    // Form fields (in order matching the modal layout)
     const profileName = document.getElementById('profile-name');
     if (profileName) items.push(profileName);
+
+    // Icon selector (Row 2, left side)
+    const profileIcon = document.getElementById('profile-icon');
+    if (profileIcon) items.push(profileIcon);
+
+    // Favorite checkbox (Row 2, right side)
+    const profileFavoriteCheckbox = document.getElementById('profile-favorite-checkbox');
+    if (profileFavoriteCheckbox) items.push(profileFavoriteCheckbox);
 
     const profileDescription = document.getElementById('profile-description');
     if (profileDescription) items.push(profileDescription);
@@ -915,6 +928,10 @@ function getProfileModalTabbableItems() {
 
     const profileGroup = document.getElementById('profile-group');
     if (profileGroup) items.push(profileGroup);
+
+    // +Group button
+    const addGroupBtn = document.getElementById('add-group-from-profile-btn');
+    if (addGroupBtn) items.push(addGroupBtn);
 
     // Header buttons (Save/Close/Delete at the end)
     const deleteBtn = document.getElementById('delete-profile-btn');
@@ -2246,6 +2263,7 @@ async function init() {
     // so that renderProfiles() can apply filters immediately
     loadFilterState();
     loadCollapsedState();
+    loadFavouritesCollapsedState();
 
     await loadProfiles();
     await loadGroups(); // Load groups for hierarchical UI
@@ -2957,6 +2975,97 @@ function loadRecentConnectionsCollapsedState() {
 }
 
 // Render profiles in the UI with hierarchical collapsible groups
+// Render the Favourites group (virtual group showing favorited profiles)
+function renderFavouritesGroup(favoritedProfiles) {
+    if (favoritedProfiles.length === 0) {
+        return ''; // Don't render if no favorites
+    }
+
+    // Sort favorited profiles A-Z by group path
+    const sorted = favoritedProfiles.sort((a, b) => {
+        const pathA = a.group_path || 'Ungrouped';
+        const pathB = b.group_path || 'Ungrouped';
+        return pathA.localeCompare(pathB);
+    });
+
+    const count = sorted.length;
+    const chevron = favouritesCollapsed ? '▶' : '▼';
+    const starIcon = createIcon('star', 22, 'favourites-group-icon');
+
+    let html = `
+        <div class="profile-group favourites-group">
+            <div class="profile-group-header" data-group-id="__favourites__">
+                <span class="group-chevron">${chevron}</span>
+                <span class="group-name">Favourites</span>
+                ${starIcon.outerHTML}
+                <span class="badge group-count-badge">${count}</span>
+            </div>
+    `;
+
+    if (!favouritesCollapsed) {
+        html += '<div class="profile-group-content">';
+        sorted.forEach(profile => {
+            html += renderFavouriteProfileCard(profile);
+        });
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    return html;
+}
+
+// Render a profile card in the Favourites view (with group path and "Go to Profile" button)
+function renderFavouriteProfileCard(profile) {
+    const groupPath = profile.group_path || 'Ungrouped';
+    const iconName = profile.icon || DEFAULT_PROFILE_ICON;
+    const iconSvg = createIcon(iconName, 32, 'profile-card-icon');
+
+    // Favorite star icon (always active in Favourites view)
+    const starIconName = 'star';
+    const starClass = 'favorite-star-active';
+    const starTitle = 'Remove from Favourites';
+    const starSvg = createIcon(starIconName, 18, `favorite-star-toggle ${starClass}`);
+
+    // Group path icon
+    const folderIcon = createIcon('folder', 14, 'group-path-icon');
+
+    return `
+        <div class="profile-card favourite-card" data-id="${profile.id}">
+            <div class="profile-card-header">
+                <span class="favorite-star-wrapper" data-profile-id="${profile.id}" title="${starTitle}">${starSvg.outerHTML}</span>
+                <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
+            </div>
+            <div class="profile-card-body">
+                <div class="profile-card-icon-section">
+                    ${iconSvg.outerHTML}
+                </div>
+                <div class="profile-card-info"${profile.description ? ` title="${escapeHtml(profile.description)}"` : ''}>
+                    <div class="profile-info-item">
+                        <span class="profile-info-label">User:</span>
+                        <span class="profile-info-value" title="${escapeHtml(profile.username)}">${escapeHtml(profile.username)}</span>
+                    </div>
+                    <div class="profile-info-item">
+                        <span class="profile-info-label">Host:</span>
+                        <span class="profile-info-value" title="${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}">${escapeHtml(profile.host)}${profile.port !== 22 ? ':' + profile.port : ''}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="profile-group-path">
+                ${folderIcon.outerHTML}
+                <span>${escapeHtml(groupPath.replace(/\//g, ' / '))}</span>
+            </div>
+            <div class="profile-card-actions favourite-card-actions">
+                <div class="favourite-actions-row">
+                    <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
+                    <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
+                </div>
+                <button class="btn btn-secondary btn-small goto-profile-btn" data-id="${profile.id}" title="Go to profile's real location">Go to Profile</button>
+            </div>
+        </div>
+    `;
+}
+
 function renderProfiles(filter = '') {
     const searchText = filter.toLowerCase();
 
@@ -3034,6 +3143,26 @@ function renderProfiles(filter = '') {
 
     // Build HTML using hierarchical structure
     let html = '';
+
+    // Extract favorited profiles from filtered profiles (for Favourites group)
+    // Important: Favourites group ignores group filters but respects search filter
+    const favoritedProfiles = profiles.filter(profile => {
+        // Only include favorited profiles
+        if (!profile.is_favorite) return false;
+
+        // Apply search filter (same as regular profiles)
+        if (!searchText) return true;
+
+        return (
+            profile.name.toLowerCase().includes(searchText) ||
+            profile.host.toLowerCase().includes(searchText) ||
+            profile.username.toLowerCase().includes(searchText) ||
+            (profile.description && profile.description.toLowerCase().includes(searchText))
+        );
+    });
+
+    // Render Favourites group FIRST (if any favorites exist)
+    html += renderFavouritesGroup(favoritedProfiles);
 
     // Render top-level groups (parent_id = null)
     // Sort with "Ungrouped" always at the bottom
@@ -3181,9 +3310,16 @@ function renderProfileCard(profile, depth) {
     const iconName = profile.icon || DEFAULT_PROFILE_ICON;
     const iconSvg = createIcon(iconName, 32, 'profile-card-icon');
 
+    // Favorite star icon
+    const starIconName = profile.is_favorite ? 'star' : 'star-off';
+    const starClass = profile.is_favorite ? 'favorite-star-active' : 'favorite-star-inactive';
+    const starTitle = profile.is_favorite ? 'Remove from Favourites' : 'Add to Favourites';
+    const starSvg = createIcon(starIconName, 18, `favorite-star-toggle ${starClass}`);
+
     return `
         <div class="profile-card ${depthClass}" data-id="${profile.id}">
             <div class="profile-card-header">
+                <span class="favorite-star-wrapper" data-profile-id="${profile.id}" title="${starTitle}">${starSvg.outerHTML}</span>
                 <div class="profile-card-title" title="${escapeHtml(profile.name)}">${escapeHtml(profile.name)}</div>
             </div>
             <div class="profile-card-body">
@@ -3209,6 +3345,77 @@ function renderProfileCard(profile, depth) {
     `;
 }
 
+// Toggle profile favorite status
+async function toggleProfileFavorite(profileId, event) {
+    if (event) {
+        event.stopPropagation(); // Prevent card click events
+    }
+
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+
+    const newState = !profile.is_favorite;
+
+    try {
+        await invoke('set_profile_favorite', { profileId, isFavorite: newState });
+
+        // Update local state
+        profile.is_favorite = newState;
+
+        // Show toast notification
+        showToast(
+            newState ? 'Added to Favourites' : 'Removed from Favourites',
+            TOAST_DURATION_SHORT
+        );
+
+        // Re-render profiles
+        renderProfiles();
+    } catch (err) {
+        console.error('Failed to update favourite:', err);
+        showToast(`Failed to update favourite: ${cleanErrorMessage(err)}`, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Navigate from Favourites view to profile's real location in group structure
+function navigateToProfile(profileId) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+
+    // Collapse Favourites section
+    if (!favouritesCollapsed) {
+        favouritesCollapsed = true;
+        saveFavouritesCollapsedState();
+    }
+
+    // Find and expand profile's real group (if it has one)
+    if (profile.group_path) {
+        // Find group by path
+        const group = groups.find(g => g.path === profile.group_path);
+        if (group && collapsedGroups.has(group.id)) {
+            collapsedGroups.delete(group.id);
+            saveCollapsedState();
+        }
+    }
+
+    // Re-render to show changes
+    renderProfiles(searchInput?.value || '');
+
+    // Scroll to and focus profile card in its real location (not the Favourites copy)
+    setTimeout(() => {
+        // Find the card that's NOT in the favourites section
+        const cards = document.querySelectorAll(`.profile-card[data-id="${profileId}"]`);
+        const realCard = Array.from(cards).find(card => !card.classList.contains('favourite-card'));
+
+        if (realCard) {
+            realCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Select/focus the profile card for keyboard navigation
+            selectedProfileId = profileId;
+            realCard.classList.add('selected');
+            realCard.focus();
+        }
+    }, 100);
+}
+
 // Attach event listeners after rendering
 function attachProfileEventListeners() {
     // Group headers
@@ -3218,7 +3425,15 @@ function attachProfileEventListeners() {
             if (e.target.classList.contains('group-menu-btn')) return; // Skip if clicking menu button
 
             const groupId = header.dataset.groupId;
-            toggleGroup(groupId);
+
+            // Handle special Favourites group
+            if (groupId === '__favourites__') {
+                favouritesCollapsed = !favouritesCollapsed;
+                saveFavouritesCollapsedState();
+                renderProfiles(searchInput?.value || '');
+            } else {
+                toggleGroup(groupId);
+            }
         });
 
         // Clear keyboard selection when hovering with mouse
@@ -3241,6 +3456,24 @@ function attachProfileEventListeners() {
             e.stopPropagation(); // Prevent group toggle
             const groupId = btn.dataset.groupId;
             showGroupMenu(groupId, e);
+        });
+    });
+
+    // Favorite star toggles
+    document.querySelectorAll('.favorite-star-wrapper').forEach(wrapper => {
+        wrapper.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click events
+            const profileId = wrapper.dataset.profileId;
+            toggleProfileFavorite(profileId, e);
+        });
+    });
+
+    // "Go to Profile" buttons (only in Favourites view)
+    document.querySelectorAll('.goto-profile-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click events
+            const profileId = btn.dataset.id;
+            navigateToProfile(profileId);
         });
     });
 
@@ -3747,7 +3980,9 @@ function updateExpandCollapseButton() {
 // Expand all groups
 function expandAllGroups() {
     collapsedGroups.clear();
+    favouritesCollapsed = false; // Also expand Favourites
     saveCollapsedState();
+    saveFavouritesCollapsedState();
     renderProfiles(searchInput.value);
 }
 
@@ -3755,14 +3990,16 @@ function expandAllGroups() {
 function collapseAllGroups() {
     const allGroups = getAllGroups();
     allGroups.forEach(group => collapsedGroups.add(group));
+    favouritesCollapsed = true; // Also collapse Favourites
     saveCollapsedState();
+    saveFavouritesCollapsedState();
     renderProfiles(searchInput.value);
 }
 
 // Toggle expand/collapse all groups
 function toggleExpandCollapseAll() {
     const allGroups = getAllGroups();
-    const anyCollapsed = allGroups.some(group => collapsedGroups.has(group));
+    const anyCollapsed = allGroups.some(group => collapsedGroups.has(group)) || favouritesCollapsed;
 
     if (anyCollapsed) {
         expandAllGroups();
@@ -3890,7 +4127,8 @@ function setupEventListeners() {
         'profile-auth-method',
         'profile-key-path',
         'profile-password',
-        'profile-group'
+        'profile-group',
+        'profile-favorite-checkbox'
     ];
 
     formFields.forEach(fieldId => {
@@ -3913,6 +4151,13 @@ function setupEventListeners() {
 
         profileGroupInput.addEventListener('focus', () => {
             showProfileGroupDropdown(profileGroupInput.value);
+        });
+
+        profileGroupInput.addEventListener('blur', () => {
+            // Hide dropdown when tabbing away (with slight delay to allow click on dropdown items)
+            setTimeout(() => {
+                hideProfileGroupDropdown();
+            }, 150);
         });
 
         profileGroupInput.addEventListener('keydown', handleProfileGroupKeydown);
@@ -3940,6 +4185,13 @@ function setupEventListeners() {
 
         profileIconInput.addEventListener('focus', () => {
             showProfileIconDropdown(profileIconInput.value);
+        });
+
+        profileIconInput.addEventListener('blur', () => {
+            // Hide dropdown when tabbing away (with slight delay to allow click on dropdown items)
+            setTimeout(() => {
+                hideProfileIconDropdown();
+            }, 150);
         });
 
         profileIconInput.addEventListener('keydown', handleProfileIconKeydown);
@@ -5123,6 +5375,15 @@ function loadCollapsedState() {
 function saveCollapsedState() {
     const collapsedArray = Array.from(collapsedGroups);
     localStorage.setItem('collapsedGroups', JSON.stringify(collapsedArray));
+}
+
+function loadFavouritesCollapsedState() {
+    const savedState = localStorage.getItem('favouritesCollapsed');
+    favouritesCollapsed = savedState === 'true';
+}
+
+function saveFavouritesCollapsedState() {
+    localStorage.setItem('favouritesCollapsed', favouritesCollapsed ? 'true' : 'false');
 }
 
 function updateFilterBadge() {
@@ -6906,6 +7167,9 @@ async function openModal(profile = null) {
         document.getElementById('profile-icon-value').value = profileIcon;
         updateIconInputDisplay(profileIcon);
 
+        // Set favorite checkbox
+        document.getElementById('profile-favorite-checkbox').checked = profile.is_favorite || false;
+
         deleteProfileBtn.classList.remove('hidden');
     } else {
         modalTitle.textContent = 'New Profile';
@@ -6919,6 +7183,8 @@ async function openModal(profile = null) {
         document.getElementById('profile-icon').value = '';
         document.getElementById('profile-icon-value').value = '';
         updateIconInputDisplay('');
+        // Reset favorite checkbox for new profile
+        document.getElementById('profile-favorite-checkbox').checked = false;
         deleteProfileBtn.classList.add('hidden');
     }
 
@@ -6973,7 +7239,8 @@ function getCurrentFormValues() {
         key_path: document.getElementById('profile-key-path').value,
         password: document.getElementById('profile-password').value,
         group: document.getElementById('profile-group-id').value, // Use hidden field for group ID
-        icon: document.getElementById('profile-icon-value').value // Icon selection
+        icon: document.getElementById('profile-icon-value').value, // Icon selection
+        favorite: document.getElementById('profile-favorite-checkbox').checked // Favorite status
     };
 }
 
@@ -7354,14 +7621,20 @@ async function saveProfile() {
     try {
         // Capture whether we're editing or creating before closeModal resets editingProfileId
         const isEditing = !!editingProfileId;
+        const isFavorite = document.getElementById('profile-favorite-checkbox').checked;
 
+        let savedProfileId;
         if (editingProfileId) {
             debug.log('Updating profile:', profileData);
             await invoke('update_profile', { profile: profileData });
+            savedProfileId = editingProfileId;
         } else {
             debug.log('Creating profile:', profileData);
-            await invoke('create_profile', { profile: profileData });
+            savedProfileId = await invoke('create_profile', { profile: profileData });
         }
+
+        // Set favorite status
+        await invoke('set_profile_favorite', { profileId: savedProfileId, isFavorite });
 
         await loadProfiles();
         forceCloseModal(); // Force close without confirmation after successful save

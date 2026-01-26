@@ -406,6 +406,109 @@ body {
     margin-bottom: 24px;
 }
 
+/* Favourites Group - Gold/Amber Theme */
+.favourites-group {
+    border: none; /* No border on container */
+    border-radius: var(--radius);
+    padding: 0;
+    background: transparent;
+    margin-bottom: 24px;
+}
+
+.favourites-group .profile-group-header {
+    background-color: rgba(245, 158, 11, 0.1); /* Subtle gold tint */
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+}
+
+.favourites-group .profile-group-header:hover {
+    background-color: rgba(245, 158, 11, 0.15);
+    border-color: #f59e0b; /* Gold border on hover */
+}
+
+.favourites-group .profile-group-header.selected {
+    border-color: #f59e0b; /* Gold border on selection */
+}
+
+.favourites-group-icon {
+    color: #f59e0b; /* Gold/amber star icon */
+    margin-left: 8px; /* Space between title and star */
+    margin-right: 9px; /* Match gap to badge (cog has ~18px, was ~9px) */
+}
+
+/* Favourite cards styling */
+.profile-card.favourite-card {
+    border: 1px solid var(--border-color); /* Default border */
+    grid-template-areas:
+        "header"
+        "info"
+        "path"
+        "actions";
+}
+
+/* Mobile: all buttons in one row under path, minimum size */
+.profile-card.favourite-card .favourite-card-actions {
+    flex-direction: row; /* Single row */
+    justify-content: flex-start; /* Left align the buttons */
+    gap: 12px; /* Gap between buttons to match other padding */
+    margin-top: 10px; /* 10px to achieve 12px visual gap (accounts for 2px offset) */
+    margin-bottom: -4px; /* Compensate for card padding and path negative margin */
+}
+
+.profile-card.favourite-card .favourite-actions-row {
+    display: contents; /* Flatten so all buttons are siblings */
+}
+
+.profile-card.favourite-card .favourite-actions-row .btn,
+.profile-card.favourite-card .goto-profile-btn {
+    flex: 0 0 auto; /* Don't grow */
+    width: auto; /* Auto width based on content */
+    min-width: 90px; /* Minimum width */
+}
+
+/* Gold border on hover/selection for favourite cards */
+.profile-card.favourite-card:hover {
+    border-color: #f59e0b; /* Gold border on hover */
+}
+
+.profile-card.favourite-card.selected,
+.profile-card.favourite-card:focus {
+    border-color: #f59e0b; /* Gold border on selection */
+}
+
+/* Ensure keyboard navigation keeps gold border on favourite cards */
+.keyboard-nav-active .profile-card.favourite-card.selected {
+    border-color: #f59e0b !important;
+}
+
+/* Favourite card actions - layout handled in mobile/desktop sections */
+.favourite-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Group path display (ONLY in Favourites cards) */
+.profile-group-path {
+    grid-area: path;
+    display: flex;
+    align-items: center; /* Vertically center content */
+    gap: 8px;
+    font-size: 13px; /* Increased from 12px for better readability */
+    color: var(--text-secondary);
+    padding: 8px 16px 8px 16px; /* Reduced bottom padding to minimize wasted space */
+    margin: 0 -16px -16px -16px; /* Negative margins: extend full width and eliminate bottom gap */
+    border-top: 1px solid var(--border-color);
+}
+
+.group-path-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Removed highlight animation - just navigate and focus profile */
+
 .profile-group-header {
     display: flex;
     align-items: center;
@@ -683,9 +786,38 @@ button.keyboard-selected {
 .profile-card-header {
     grid-area: header;
     display: flex;
-    justify-content: space-between;
-    align-items: start;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
+}
+
+.favorite-star-wrapper {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.favorite-star-toggle {
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.favorite-star-wrapper:hover .favorite-star-toggle {
+    transform: scale(1.2);
+}
+
+.favorite-star-inactive {
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+.favorite-star-wrapper:hover .favorite-star-inactive {
+    opacity: 1;
+}
+
+.favorite-star-active {
+    color: #f59e0b; /* Gold/amber color for favorited */
 }
 
 .profile-card-title {
@@ -753,14 +885,16 @@ button.keyboard-selected {
 .profile-card-actions {
     grid-area: actions;
     display: flex;
-    gap: 8px;
+    gap: 12px; /* Consistent 12px gap */
+    justify-content: flex-start; /* Left align buttons */
     margin-top: 4px;
 }
 
 .profile-card-actions .btn {
-    flex: 0 0 auto;
-    width: 80px;
+    flex: 0 0 auto; /* Don't grow */
+    width: 90px; /* Fixed width */
     text-align: center;
+    white-space: nowrap;
 }
 
 /* Wide screens: buttons move to right side */
@@ -776,6 +910,44 @@ button.keyboard-selected {
     .profile-card-actions {
         align-self: center;
         margin-top: 0;
+    }
+
+    /* Favourite cards: buttons on right side, path spans full width below */
+    .profile-card.favourite-card {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "header actions"
+            "info actions"
+            "path path";
+        gap: 8px 16px;
+    }
+
+    .profile-card.favourite-card .profile-card-actions {
+        flex-direction: column; /* Stack vertically on wide screens */
+        justify-content: flex-start; /* Align to top */
+        align-self: center; /* Center vertically for even spacing */
+        margin-top: 0;
+        margin-bottom: 0; /* Reset mobile margin */
+        gap: 12px; /* Gap between rows */
+    }
+
+    .profile-card.favourite-card .favourite-actions-row {
+        display: flex; /* Restore flex layout for row */
+        gap: 12px; /* Gap between Connect and Actions buttons */
+    }
+
+    .profile-card.favourite-card .favourite-actions-row .btn {
+        flex: 0 0 auto;
+        width: 90px; /* Fixed width on wide screens */
+    }
+
+    .profile-card.favourite-card .goto-profile-btn {
+        width: 192px; /* 90px + 12px gap + 90px = 192px */
+        flex: 0 0 auto;
+    }
+
+    .profile-card.favourite-card .profile-group-path {
+        margin-top: 8px; /* Add gap between info/buttons and path */
     }
 }
 
@@ -920,7 +1092,7 @@ button.keyboard-selected {
 #group-modal .modal-content {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: hidden; /* Prevent all scroll propagation */
     padding-bottom: 0;
 }
 
@@ -940,12 +1112,7 @@ button.keyboard-selected {
     padding-bottom: 0;
 }
 
-/* Prevent horizontal scroll propagation during text selection */
-.modal-content .modal-body,
-.modal-content .form-group {
-    overflow-x: clip; /* Strict clipping prevents parent shift during input selection */
-    overflow-y: visible; /* Allow normal vertical flow */
-}
+/* Prevent horizontal scroll propagation during text selection - handled by form overflow */
 
 /* Ensure input fields are constrained within their containers */
 .modal-content input[type="text"],
@@ -954,6 +1121,7 @@ button.keyboard-selected {
 .modal-content textarea {
     max-width: 100%; /* Never exceed parent width */
     box-sizing: border-box; /* Include padding in width calculation */
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll from bubbling to parent */
 }
 
 /* Textarea specific styling */
@@ -1121,25 +1289,28 @@ button.keyboard-selected {
 /* Scrollable body for profile modal form */
 #profile-modal form {
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: hidden; /* Prevent horizontal scroll */
     flex: 1;
     padding-bottom: 24px;
+    overscroll-behavior-x: contain; /* Prevent scroll chaining on x-axis */
 }
 
 /* Group modal form - sizes to content, no scrollbar unless dropdown extends */
 #group-modal form {
     overflow-y: hidden;
-    overflow-x: hidden;
+    overflow-x: hidden; /* Prevent horizontal scroll */
     flex: 0 1 auto;
     padding-bottom: 24px;
+    overscroll-behavior-x: contain; /* Prevent scroll chaining on x-axis */
 }
 
 /* Scrollable body for settings modal content */
 .settings-content {
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: hidden; /* Prevent horizontal scroll */
     flex: 1;
     padding-bottom: 12px;
+    overscroll-behavior-x: contain; /* Prevent scroll chaining on x-axis */
 }
 
 .modal-header h2 {
@@ -1266,9 +1437,17 @@ form {
     gap: 16px;
 }
 
-/* Name and Icon row - Name takes most space, Icon smaller */
-.form-row-name-icon {
-    grid-template-columns: 2.5fr 1fr; /* Name ~70%, Icon ~30% */
+/* Icon and Favourite row - Equal split with larger gap */
+.form-row-icon-favorite {
+    grid-template-columns: 1fr 1fr; /* Equal width for Icon and Favourite */
+    gap: 48px; /* Large gap for better spacing */
+}
+
+/* Center the checkbox within the Favourite field to match Icon input height (42px) */
+.form-row-icon-favorite .checkbox-label {
+    display: flex;
+    align-items: center;
+    min-height: 42px; /* Match input field height */
 }
 
 .form-actions {
@@ -1368,6 +1547,7 @@ form {
     align-items: center;
     cursor: pointer;
     user-select: none;
+    min-height: 24px; /* Compact height for checkbox rows */
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -1378,7 +1558,7 @@ form {
 
 .checkbox-label input[type="checkbox"]:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
@@ -1501,7 +1681,7 @@ form {
 
 .input-group .btn-browse:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
@@ -1514,13 +1694,19 @@ form {
 
 .input-group .btn-toggle-password:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
 .input-group .btn-icon-text {
     flex-shrink: 0;
     padding: 8px 12px;
+}
+
+.input-group .btn-icon-text:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
 /* Searchable Dropdown */
@@ -2054,7 +2240,7 @@ form {
 
 .version-splash-actions input[type="checkbox"]:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
 }
 
@@ -2377,6 +2563,7 @@ form {
 }
 
 .profile-card-body {
+    grid-area: info;
     display: flex;
     gap: 12px;
     align-items: flex-start;
