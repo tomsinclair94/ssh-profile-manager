@@ -97,6 +97,14 @@ const EXPORT_FORMAT_INFO = {
 const DEFAULT_PROFILE_ICON = 'server';
 
 // Curated list of Lucide icons for SSH profiles
+// Global icon visibility configuration
+// Icons marked as false are used in the app UI but excluded from profile selection
+const PROFILE_ICON_VISIBILITY = {
+    'star': false,          // Used for favorites feature
+    'star-off': false,      // Used for favorites feature
+    'settings': false       // Used for settings/menu buttons
+};
+
 // Each entry: [icon_name, svg_path]
 const PROFILE_ICONS = {
     'server': 'M4 2h16c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2zM2 14c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2v-4zM6 6h.01M6 16h.01',
@@ -4091,6 +4099,41 @@ function setupEventListeners() {
         }
     });
 
+    // ============================================================================
+    // FIX: Prevent horizontal modal shift during text selection drag
+    // ============================================================================
+    // When dragging to select text in input fields, the browser's native selection
+    // mechanism can set scrollLeft values on modal containers, causing a visual shift.
+    // CSS overflow/overscroll properties cannot prevent this - we must actively reset
+    // scrollLeft to 0 on every animation frame to keep the modal stable.
+    // See: Phase 5C progress tracking for full investigation history
+    // ============================================================================
+    function preventModalHorizontalScroll() {
+        const modals = [profileModal, settingsModal, document.getElementById('group-modal')];
+
+        modals.forEach(modal => {
+            if (!modal) return;
+
+            const modalContent = modal.querySelector('.modal-content');
+            const forms = modal.querySelectorAll('form');
+
+            // Reset scroll on these elements
+            const elementsToReset = [modal, modalContent, ...forms];
+
+            elementsToReset.forEach(element => {
+                if (element && element.scrollLeft !== 0) {
+                    element.scrollLeft = 0;
+                }
+            });
+        });
+
+        // Run check on animation frame for smooth operation
+        requestAnimationFrame(preventModalHorizontalScroll);
+    }
+
+    // Start the prevention loop
+    preventModalHorizontalScroll();
+
     authMethodSelect.addEventListener('change', () => {
         updateAuthMethodVisibility();
         checkFormChanged();
@@ -7393,8 +7436,10 @@ function showProfileIconDropdown(filterText = '') {
     const profileIconDropdown = document.getElementById('profile-icon-dropdown');
     if (!profileIconInput || !profileIconDropdown) return;
 
-    // Get all icon names and sort alphabetically
-    const iconNames = Object.keys(PROFILE_ICONS).sort();
+    // Get all icon names, filter by visibility, and sort alphabetically
+    const iconNames = Object.keys(PROFILE_ICONS)
+        .filter(iconName => PROFILE_ICON_VISIBILITY[iconName] !== false)
+        .sort();
 
     // Filter icons based on input
     const normalizedFilter = filterText.toLowerCase().trim();

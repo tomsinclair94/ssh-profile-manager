@@ -1081,7 +1081,6 @@ button.keyboard-selected {
     max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
-    overflow-x: clip; /* Stricter than hidden - prevents programmatic scrolling */
     padding-bottom: 12px;
     position: relative; /* Ensure positioning context */
 }
@@ -1112,8 +1111,6 @@ button.keyboard-selected {
     padding-bottom: 0;
 }
 
-/* Prevent horizontal scroll propagation during text selection - handled by form overflow */
-
 /* Ensure input fields are constrained within their containers */
 .modal-content input[type="text"],
 .modal-content input[type="password"],
@@ -1121,7 +1118,7 @@ button.keyboard-selected {
 .modal-content textarea {
     max-width: 100%; /* Never exceed parent width */
     box-sizing: border-box; /* Include padding in width calculation */
-    overscroll-behavior-x: contain; /* Prevent horizontal scroll from bubbling to parent */
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
 }
 
 /* Textarea specific styling */
@@ -1274,7 +1271,6 @@ button.keyboard-selected {
     align-items: center;
     padding: 20px 24px;
     border-bottom: 1px solid var(--border-color);
-    overflow-x: clip; /* Prevent horizontal overflow in header */
 }
 
 /* Fixed header for settings, profile, and group modals */
@@ -1292,7 +1288,7 @@ button.keyboard-selected {
     overflow-x: hidden; /* Prevent horizontal scroll */
     flex: 1;
     padding-bottom: 24px;
-    overscroll-behavior-x: contain; /* Prevent scroll chaining on x-axis */
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
 }
 
 /* Group modal form - sizes to content, no scrollbar unless dropdown extends */
@@ -1301,7 +1297,7 @@ button.keyboard-selected {
     overflow-x: hidden; /* Prevent horizontal scroll */
     flex: 0 1 auto;
     padding-bottom: 24px;
-    overscroll-behavior-x: contain; /* Prevent scroll chaining on x-axis */
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
 }
 
 /* Scrollable body for settings modal content */
@@ -1310,7 +1306,7 @@ button.keyboard-selected {
     overflow-x: hidden; /* Prevent horizontal scroll */
     flex: 1;
     padding-bottom: 12px;
-    overscroll-behavior-x: contain; /* Prevent scroll chaining on x-axis */
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
 }
 
 .modal-header h2 {

@@ -147,6 +147,7 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Export/import: Includes icon, is_favorite, tags metadata
 - ✅ Lucide settings icons: Replaced custom SVGs with Lucide 'settings' icon
 - ✅ Default icon: 'server' for all profiles
+- ✅ Icon visibility filter: Global configuration to exclude star/settings icons from profile selector
 
 **Phase 5C (Favorites Implementation):** ✅ Completed (2026-01-26)
 - ✅ Backend: Added `set_profile_favorite()` command for explicit state setting
