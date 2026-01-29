@@ -206,7 +206,7 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Tag input and +Tag button in tab cycle
 - ✅ Tag Manager tab cycle streamlined (removed delete buttons from cycle)
 
-**Keyboard Shortcuts Reorganization** ✅ COMPLETE (2026-01-29)
+**5D-2: Keyboard Shortcuts Reorganization** ✅ COMPLETE (2026-01-29)
 - ✅ **New scheme:** Modified keys (Cmd/Ctrl) for interface controls, single keys for quick actions
 - ✅ **Cmd+S** → Focus Search (removed / shortcut)
 - ✅ **Cmd+F** → Filter Groups
