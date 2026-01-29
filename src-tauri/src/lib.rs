@@ -3622,10 +3622,10 @@ fn create_tag(db: State<Database>, input: CreateTagInput) -> Result<String, Stri
         return Err("Tag name must be 32 characters or less".to_string());
     }
 
-    // Validate name: alphanumeric, spaces, hyphens, underscores only
-    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9\s\-_]+$").unwrap();
+    // Validate name: alphanumeric, hyphens, underscores only (NO spaces)
+    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9\-_]+$").unwrap();
     if !name_regex.is_match(&input.name) {
-        return Err("Tag name can only contain letters, numbers, spaces, hyphens, and underscores".to_string());
+        return Err("Tag name can only contain letters, numbers, hyphens, and underscores (no spaces)".to_string());
     }
 
     // Validate color format (#RRGGBB)

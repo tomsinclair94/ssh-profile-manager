@@ -1102,7 +1102,7 @@ button.keyboard-selected {
 }
 
 .confirm-modal-content {
-    max-width: 400px;
+    max-width: 320px;
     padding-bottom: 0;
 }
 
@@ -1622,6 +1622,179 @@ form {
 
 .about-link svg {
     flex-shrink: 0;
+}
+
+/* Tag Manager Modal */
+.tag-manager-content {
+    padding: 24px 24px 0 24px; /* Consistent 24px spacing on top and sides */
+    max-height: calc(100vh - 200px); /* Prevent whole modal from scrolling */
+    overflow: visible; /* Allow tooltips to show */
+    display: flex;
+    flex-direction: column;
+}
+
+.tag-create-section {
+    background: var(--bg-secondary);
+    padding: 0; /* No padding - children will handle spacing */
+    border-radius: var(--radius);
+    margin-bottom: 4px; /* Tight spacing between sections (12px row padding + 4px margin = 16px total) */
+    flex-shrink: 0; /* Don't shrink when content overflows */
+}
+
+.tag-create-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 0; /* Remove bottom margin, handled by form padding */
+    padding: 0 12px 12px 0; /* Right + bottom padding only, no top/left to keep at 24px from edges */
+    color: var(--text-color);
+}
+
+.tag-create-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto; /* Name flexible, color and button fixed */
+    gap: 16px;
+    align-items: start; /* Align to top, then add spacing for proper alignment */
+    padding: 0 12px 12px 0; /* Right + bottom padding only, no left to align with heading */
+}
+
+.tag-name-group {
+    margin-bottom: 0 !important;
+}
+
+.tag-color-group {
+    margin-bottom: 0 !important;
+}
+
+/* Ensure all labels have same height/spacing */
+.tag-create-row .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    height: 22px; /* Fixed height for alignment */
+    line-height: 22px;
+}
+
+.tag-color-group input[type="color"] {
+    width: 60px;
+    height: 42px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-color);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.tag-color-group input[type="color"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.tag-create-button-wrapper {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+    margin-top: 34px; /* Label (22px) + margin (8px) + centering offset (4px) = 34px to vertically center with inputs */
+}
+
+.tag-create-button-wrapper .btn {
+    white-space: nowrap;
+    /* Use default button height for consistency */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tag-list-section {
+    flex: 1; /* Take remaining space */
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Allow flex child to shrink */
+    padding-bottom: 24px; /* Add bottom padding here instead of content wrapper */
+}
+
+.tag-list-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-color);
+    flex-shrink: 0;
+}
+
+.tag-list {
+    flex: 1; /* Take remaining space */
+    overflow-y: auto; /* Only this section scrolls */
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    min-height: 100px; /* Minimum height for empty state */
+}
+
+.tag-list:empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+}
+
+.tag-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+
+.tag-list-item:last-child {
+    border-bottom: none;
+}
+
+.tag-list-item:hover {
+    background: var(--hover-bg);
+}
+
+.tag-list-item .tag-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.tag-list-item .tag-color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.tag-list-item .tag-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tag-list-item .tag-usage {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-left: 8px;
+    margin-right: 16px; /* Add gap before delete button */
+}
+
+.tag-list-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
 }
 
 /* Toast Notification */

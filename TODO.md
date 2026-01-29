@@ -164,14 +164,37 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Styling: Gold/amber theme, star hover animations, highlight pulse animation
 - ✅ Icons: Added 'star' and 'star-off' to PROFILE_ICONS
 
-**Phase 5D (Tags & Search Integration):** 🔄 Next - Ready to Start
-- [ ] Display tag badges on profile cards
-- [ ] Make badges clickable (add to search)
-- [ ] Implement `tag:` search prefix parsing (OR logic)
-- [ ] Build Tag Manager modal (Settings)
-- [ ] Add tag creation/deletion UI
-- [ ] Tag selector in profile editor (multi-select)
+**Phase 5D (Tags & Search Integration):** 🔄 In Progress - 5D-1 Complete, 5D-2 Next
+
+**Backend:** ✅ Complete (Phase 5A)
+**Implementation Order:** Tag Manager → Profile Editor → Display → Search
+
+**5D-1: Tag Manager Modal** (Create/Delete Tags) ✅ COMPLETE
+- ✅ Settings section with "Manage Tags" button
+- ✅ Tag Manager modal UI (name input, color picker, tag list)
+- ✅ Create tag functionality with validation
+- ✅ Delete tag with usage count warning
+- ✅ Tag list shows usage counts
+- ✅ Fixed alignment and spacing issues (24px spacing, vertical centering)
+- ✅ Optimized modal width (320px confirmation modal)
+- ✅ Updated default tag color to #3b82f6 (blue)
+
+**5D-2: Profile Editor Tag Selector** (Assign Tags)
+- [ ] Tag selector in profile modal (multi-select checkboxes)
+- [ ] Visual feedback for selected tags
+- [ ] Save profile updates tags via set_profile_tags command
+
+**5D-3: Tag Display on Cards** (Show Tags + Icon Centering)
+- [ ] Update grid layout - add "tags" area
+- [ ] Vertically center icon (align-items: center, remove padding-top: 2px)
+- [ ] Render tag badges between info and actions/path
+- [ ] Tag badge styling (6px gap, 8px margin-top)
+
+**5D-4: Tag Search Integration** (Filter by Tags)
+- [ ] Clickable badges add to search
+- [ ] Parse `tag:` search prefix (OR logic)
 - [ ] Update search placeholder/tooltip with tag syntax
+- [ ] Filter profiles by tags in renderProfiles()
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned

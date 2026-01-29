@@ -269,6 +269,7 @@ const VALIDATION = {
 let profiles = [];
 let groups = []; // All groups (flat list)
 let groupTree = []; // Hierarchical group structure
+let allTags = []; // All available tags
 let editingProfileId = null;
 let editingGroupId = null; // Currently editing group ID
 let isSubmitting = false;
@@ -649,6 +650,14 @@ let versionSplashDontShowCheckbox;
 let versionSplashGithubLink;
 let versionLink; // About section in settings
 let mainVersionLink; // Main screen header
+// Tag Manager Elements
+let openTagManagerBtn;
+let tagManagerModal;
+let tagManagerCloseBtn;
+let newTagNameInput;
+let newTagColorInput;
+let createTagBtn;
+let tagListContainer;
 
 // Modal Stack System - tracks which modal is topmost
 // When multiple modals are open (e.g., splash screen over settings),
@@ -727,7 +736,8 @@ function setupKeyboardShortcutListeners() {
                        !settingsModal.classList.contains('hidden') ||
                        !confirmModal.classList.contains('hidden') ||
                        !versionSplashModal.classList.contains('hidden') ||
-                       !groupModal.classList.contains('hidden');
+                       !groupModal.classList.contains('hidden') ||
+                       !tagManagerModal.classList.contains('hidden');
 
         // Handle modal shortcuts (always active in modals)
         if (inModal) {
@@ -1056,6 +1066,30 @@ function getGroupModalTabbableItems() {
     return items;
 }
 
+function getTagManagerModalTabbableItems() {
+    const items = [];
+
+    // Create tag form inputs
+    const tagNameInput = document.getElementById('new-tag-name-input');
+    if (tagNameInput) items.push(tagNameInput);
+
+    const tagColorInput = document.getElementById('new-tag-color-input');
+    if (tagColorInput) items.push(tagColorInput);
+
+    const createTagBtn = document.getElementById('create-tag-btn');
+    if (createTagBtn) items.push(createTagBtn);
+
+    // Delete buttons in tag list (if any tags exist)
+    const deleteButtons = Array.from(document.querySelectorAll('#tag-list-container .btn-danger'));
+    deleteButtons.forEach(btn => items.push(btn));
+
+    // Close button
+    const closeBtn = document.getElementById('tag-manager-close-btn');
+    if (closeBtn) items.push(closeBtn);
+
+    return items;
+}
+
 async function handleModalShortcuts(e) {
     // Get the topmost modal from the stack
     const topmostModal = getTopmostModal();
@@ -1176,6 +1210,25 @@ async function handleModalShortcuts(e) {
                 return;
             }
 
+            case 'tag-manager': {
+                const items = getTagManagerModalTabbableItems();
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
+
+                    if (e.shiftKey) {
+                        // Shift+Tab - backwards
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        // Tab - forwards
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
+
+                    items[nextIndex].focus();
+                }
+                return;
+            }
+
             case 'terminal':
                 // Terminal modal handles Tab internally via xterm.js
                 // Don't prevent default, let xterm process it
@@ -1223,6 +1276,10 @@ async function handleModalShortcuts(e) {
 
             case 'group':
                 await closeGroupModal();
+                return;
+
+            case 'tag-manager':
+                closeTagManager();
                 return;
         }
     }
@@ -2254,6 +2311,14 @@ async function init() {
     versionSplashGithubLink = document.getElementById('version-splash-github-link');
     versionLink = document.getElementById('settings-version-link');
     mainVersionLink = document.getElementById('main-version-link');
+    // Tag Manager Elements
+    openTagManagerBtn = document.getElementById('open-tag-manager-btn');
+    tagManagerModal = document.getElementById('tag-manager-modal');
+    tagManagerCloseBtn = document.getElementById('tag-manager-close-btn');
+    newTagNameInput = document.getElementById('new-tag-name-input');
+    newTagColorInput = document.getElementById('new-tag-color-input');
+    createTagBtn = document.getElementById('create-tag-btn');
+    tagListContainer = document.getElementById('tag-list-container');
 
     debug.log('DOM elements retrieved');
 
@@ -2275,6 +2340,7 @@ async function init() {
 
     await loadProfiles();
     await loadGroups(); // Load groups for hierarchical UI
+    await loadTags(); // Load tags for tag manager
     await loadRecentConnections(); // Load recent connections after profiles
     loadRecentConnectionsLimit(); // Load recent connections limit into settings
     loadRecentConnectionsCollapsedState(); // Load recent connections collapsed state
@@ -2406,6 +2472,17 @@ async function loadGroups() {
         renderProfiles(searchInput?.value || '');
         // Update badge even on error
         updateFilterBadge();
+    }
+}
+
+// Load tags from backend
+async function loadTags() {
+    try {
+        allTags = await invoke('get_tags');
+        debug.log('Tags loaded:', allTags.length);
+    } catch (error) {
+        console.error('Failed to load tags:', error);
+        allTags = [];
     }
 }
 
@@ -4446,6 +4523,32 @@ function setupEventListeners() {
             showKeyboardShortcutsHelp();
         });
     }
+
+    // Tag Manager
+    openTagManagerBtn.addEventListener('click', () => {
+        openTagManager();
+    });
+
+    tagManagerCloseBtn.addEventListener('click', () => {
+        closeTagManager();
+    });
+
+    createTagBtn.addEventListener('click', () => {
+        createTag();
+    });
+
+    // Allow Enter key to create tag
+    newTagNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            createTag();
+        }
+    });
+
+    // Update character counter on input
+    newTagNameInput.addEventListener('input', () => {
+        updateTagNameCounter();
+    });
 
     // Export/Import
     exportProfilesBtn.addEventListener('click', async () => {
@@ -8474,6 +8577,226 @@ function buildConfirmMessage(config) {
     }
 
     return fragment;
+}
+
+// ===========================
+// Tag Manager Functions
+// ===========================
+
+// Open Tag Manager modal
+async function openTagManager() {
+    try {
+        // Load tags and usage counts
+        await loadTags();
+        const usageCounts = await invoke('get_tag_usage_counts');
+
+        // Render tag list
+        renderTagList(usageCounts);
+
+        // Show modal
+        const tagManagerModal = document.getElementById('tag-manager-modal');
+        tagManagerModal.classList.remove('hidden');
+        pushModal('tag-manager');
+
+        // Focus on tag name input and reset counter
+        const tagNameInput = document.getElementById('new-tag-name-input');
+        updateTagNameCounter();
+        setTimeout(() => tagNameInput.focus(), 100);
+    } catch (error) {
+        console.error('Failed to open tag manager:', error);
+        showToast('Failed to load tags', TOAST_DURATION_SHORT, 'error');
+    }
+}
+
+// Update tag name character counter
+function updateTagNameCounter() {
+    const input = document.getElementById('new-tag-name-input');
+    const counter = document.getElementById('tag-name-counter');
+    const currentLength = input.value.length;
+    const maxLength = 32;
+
+    counter.textContent = `${currentLength} / ${maxLength}`;
+
+    // Add over-limit class if at max (even though input prevents going over)
+    if (currentLength >= maxLength) {
+        counter.classList.add('over-limit');
+    } else {
+        counter.classList.remove('over-limit');
+    }
+
+    // Validate characters (no spaces allowed)
+    const validPattern = /^[a-zA-Z0-9\-_]*$/;
+    if (input.value && !validPattern.test(input.value)) {
+        input.classList.add('validation-error');
+    } else {
+        input.classList.remove('validation-error');
+    }
+}
+
+// Close Tag Manager modal
+function closeTagManager() {
+    const tagManagerModal = document.getElementById('tag-manager-modal');
+    tagManagerModal.classList.add('hidden');
+    popModal('tag-manager');
+
+    // Clear inputs and validation states
+    const nameInput = document.getElementById('new-tag-name-input');
+    const colorInput = document.getElementById('new-tag-color-input');
+    const counter = document.getElementById('tag-name-counter');
+
+    nameInput.value = '';
+    nameInput.classList.remove('validation-error');
+    colorInput.value = '#3b82f6';
+    counter.textContent = '0 / 32';
+    counter.classList.remove('over-limit');
+}
+
+// Render tag list with usage counts
+function renderTagList(usageCounts) {
+    const container = document.getElementById('tag-list-container');
+
+    if (!usageCounts || usageCounts.length === 0) {
+        container.innerHTML = '<div class="tag-list-empty">No tags created yet.</div>';
+        return;
+    }
+
+    // Debug: log the first tag to check structure
+    if (usageCounts.length > 0) {
+        debug.log('First tag data:', usageCounts[0]);
+        debug.log('Tag color:', usageCounts[0][0].color);
+    }
+
+    const html = usageCounts.map(([tag, count]) => `
+        <div class="tag-list-item">
+            <div class="tag-info">
+                <div class="tag-color-swatch" data-color="${escapeHtml(tag.color)}"></div>
+                <span class="tag-name">${escapeHtml(tag.name)}</span>
+                <span class="tag-usage">(${count} profile${count !== 1 ? 's' : ''})</span>
+            </div>
+            <button class="btn btn-danger btn-sm tag-delete-btn"
+                    data-tag-id="${escapeHtml(tag.id)}"
+                    data-tag-name="${escapeHtml(tag.name)}"
+                    data-tag-count="${count}">
+                Delete
+            </button>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+
+    // Apply colors to swatches (CSP-compliant way)
+    container.querySelectorAll('.tag-color-swatch').forEach(swatch => {
+        const color = swatch.dataset.color;
+        if (color) {
+            swatch.style.backgroundColor = color;
+        }
+    });
+
+    // Add event delegation for delete buttons
+    container.querySelectorAll('.tag-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tagId = btn.dataset.tagId;
+            const tagName = btn.dataset.tagName;
+            const usageCount = parseInt(btn.dataset.tagCount);
+            deleteTag(tagId, tagName, usageCount);
+        });
+    });
+}
+
+// Create new tag
+async function createTag() {
+    const nameInput = document.getElementById('new-tag-name-input');
+    const colorInput = document.getElementById('new-tag-color-input');
+
+    const name = nameInput.value.trim();
+    const color = colorInput.value;
+
+    // Validate name
+    if (!name) {
+        showToast('Tag name is required', TOAST_DURATION_SHORT, 'error');
+        nameInput.focus();
+        return;
+    }
+
+    // Validate name format (alphanumeric, hyphens, underscores - NO spaces)
+    if (!/^[a-zA-Z0-9\-_]+$/.test(name)) {
+        showToast('Tag name can only contain letters, numbers, hyphens, and underscores (no spaces)', TOAST_DURATION_LONG, 'error');
+        nameInput.focus();
+        return;
+    }
+
+    try {
+        await invoke('create_tag', { input: { name, color } });
+        showToast('Tag created successfully', TOAST_DURATION_SHORT, 'success');
+
+        // Clear inputs and validation states
+        nameInput.value = '';
+        nameInput.classList.remove('validation-error');
+        colorInput.value = '#3b82f6';
+
+        // Reset counter
+        updateTagNameCounter();
+
+        // Refresh tag list
+        await loadTags();
+        const usageCounts = await invoke('get_tag_usage_counts');
+        renderTagList(usageCounts);
+
+        // Focus back on name input
+        nameInput.focus();
+    } catch (error) {
+        console.error('Failed to create tag:', error);
+        showToast(`Failed to create tag: ${error}`, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Delete tag
+async function deleteTag(tagId, tagName, usageCount) {
+    const lines = [
+        {
+            segments: [
+                { text: 'Delete tag ' },
+                { highlight: tagName },
+                { text: '?' }
+            ]
+        }
+    ];
+
+    let warningText = null;
+    if (usageCount > 0) {
+        warningText = `This tag is used by ${usageCount} profile${usageCount !== 1 ? 's' : ''}. It will be removed from all profiles.`;
+    }
+
+    const confirmMessage = buildConfirmMessage({
+        lines: lines,
+        warning: warningText,
+        question: 'Are you sure you want to delete this tag?'
+    });
+
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Delete Tag',
+        okText: 'Delete',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+        await invoke('delete_tag', { tagId });
+        showToast('Tag deleted successfully', TOAST_DURATION_SHORT, 'success');
+
+        // Refresh tag list
+        await loadTags();
+        const usageCounts = await invoke('get_tag_usage_counts');
+        renderTagList(usageCounts);
+
+        // Reload profiles to update UI
+        await loadProfiles();
+    } catch (error) {
+        console.error('Failed to delete tag:', error);
+        showToast(`Failed to delete tag: ${error}`, TOAST_DURATION_LONG, 'error');
+    }
 }
 
 // ===========================
