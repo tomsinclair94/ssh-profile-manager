@@ -2358,9 +2358,9 @@ async function init() {
     loadCollapsedState();
     loadFavouritesCollapsedState();
 
+    await loadTags(); // Load tags BEFORE profiles (needed for tag badge colors)
     await loadProfiles();
     await loadGroups(); // Load groups for hierarchical UI
-    await loadTags(); // Load tags for tag manager
     await loadRecentConnections(); // Load recent connections after profiles
     loadRecentConnectionsLimit(); // Load recent connections limit into settings
     loadRecentConnectionsCollapsedState(); // Load recent connections collapsed state
@@ -3079,6 +3079,43 @@ function loadRecentConnectionsCollapsedState() {
     }
 }
 
+// Render tag badges for a profile
+function renderTagBadges(tags) {
+    if (!tags || tags.length === 0) {
+        return ''; // Return empty string if no tags
+    }
+
+    // Map tag names to tag objects with colors
+    const tagObjects = tags.map(tagName => {
+        const tag = allTags.find(t => t.name === tagName);
+        return tag || { name: tagName, color: '#6b7280' }; // Fallback gray if tag not found
+    });
+
+    // Generate badge HTML with CSP-compliant color application
+    const badgesHtml = tagObjects.map(tag => {
+        // Calculate text color based on background luminance (same as tag pills)
+        const textColor = getContrastTextColor(tag.color);
+        return `<span class="tag-badge" data-tag-name="${escapeHtml(tag.name)}" data-tag-color="${tag.color}" data-text-color="${textColor}">${escapeHtml(tag.name)}</span>`;
+    }).join('');
+
+    return `<div class="profile-card-tags">${badgesHtml}</div>`;
+}
+
+// Apply colors to tag badges (CSP-compliant - colors via JavaScript, not inline styles)
+function applyTagBadgeColors() {
+    const badges = document.querySelectorAll('.tag-badge');
+    badges.forEach(badge => {
+        const bgColor = badge.dataset.tagColor;
+        const textColor = badge.dataset.textColor;
+        if (bgColor) {
+            badge.style.backgroundColor = bgColor;
+        }
+        if (textColor) {
+            badge.style.color = textColor;
+        }
+    });
+}
+
 // Render profiles in the UI with hierarchical collapsible groups
 // Render the Favourites group (virtual group showing favorited profiles)
 function renderFavouritesGroup(favoritedProfiles) {
@@ -3156,6 +3193,7 @@ function renderFavouriteProfileCard(profile) {
                     </div>
                 </div>
             </div>
+            ${renderTagBadges(profile.tags)}
             <div class="profile-group-path">
                 ${folderIcon.outerHTML}
                 <span>${escapeHtml(groupPath.replace(/\//g, ' / '))}</span>
@@ -3290,6 +3328,7 @@ function renderProfiles(filter = '') {
 
     profilesList.innerHTML = html;
     attachProfileEventListeners();
+    applyTagBadgeColors(); // Apply colors to tag badges (CSP-compliant)
 
     updateExpandCollapseButton();
     updateProfileCount(filteredProfiles.length);
@@ -3442,6 +3481,7 @@ function renderProfileCard(profile, depth) {
                     </div>
                 </div>
             </div>
+            ${renderTagBadges(profile.tags)}
             <div class="profile-card-actions">
                 <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
                 <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>

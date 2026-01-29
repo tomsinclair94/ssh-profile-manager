@@ -443,6 +443,7 @@ body {
     grid-template-areas:
         "header"
         "info"
+        "tags"
         "path"
         "actions";
 }
@@ -740,6 +741,7 @@ body {
     grid-template-areas:
         "header"
         "info"
+        "tags"
         "actions";
     gap: 8px;
 }
@@ -903,7 +905,8 @@ button.keyboard-selected {
         grid-template-columns: 1fr auto;
         grid-template-areas:
             "header actions"
-            "info actions";
+            "info actions"
+            "tags actions";
         gap: 8px 16px;
     }
 
@@ -918,6 +921,7 @@ button.keyboard-selected {
         grid-template-areas:
             "header actions"
             "info actions"
+            "tags actions"
             "path path";
         gap: 8px 16px;
     }
@@ -2864,7 +2868,7 @@ form {
     grid-area: info;
     display: flex;
     gap: 12px;
-    align-items: flex-start;
+    align-items: center;
     min-width: 0; /* Allow flex children to shrink below content size */
 }
 
@@ -2873,7 +2877,6 @@ form {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    padding-top: 2px;
 }
 
 .profile-card-icon {
@@ -2888,5 +2891,30 @@ form {
     gap: 4px;
     min-width: 0; /* Critical: allows children to respect text-overflow */
     overflow: hidden; /* Ensures no overflow from children */
+}
+
+/* Profile Card Tags */
+.profile-card-tags {
+    grid-area: tags;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+
+.tag-badge:hover {
+    opacity: 0.8;
 }
 
