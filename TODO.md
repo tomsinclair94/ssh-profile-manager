@@ -215,13 +215,15 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ **N, G, S** → New Profile, New Group, Settings (unchanged)
 - ✅ Help screen updated with cleaner spacing (Cmd + S instead of Cmd+S)
 
-**5D-3: Tag Display on Cards** (Show Tags + Icon Centering) - NEXT
-- [ ] Update grid layout - add "tags" area
-- [ ] Vertically center icon (align-items: center, remove padding-top: 2px)
-- [ ] Render tag badges between info and actions/path
-- [ ] Tag badge styling (6px gap, 8px margin-top)
+**5D-3: Tag Display on Cards** (Show Tags + Icon Centering) ✅ COMPLETE
+- ✅ Update grid layout - add "tags" area
+- ✅ Vertically center icon (align-items: center, remove padding-top: 2px)
+- ✅ Render tag badges between info and actions/path
+- ✅ Tag badge styling (6px gap, 8px margin-top)
+- ✅ Fixed icon centering (align-items: center on .profile-card-body)
+- ✅ Fixed tag color timing (loadTags before loadProfiles)
 
-**5D-4: Tag Search Integration** (Filter by Tags)
+**5D-4: Tag Search Integration** (Filter by Tags) - NEXT
 - [ ] Clickable badges add to search
 - [ ] Parse `tag:` search prefix (OR logic)
 - [ ] Update search placeholder/tooltip with tag syntax
