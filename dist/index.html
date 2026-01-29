@@ -256,6 +256,24 @@
                         </div>
                         <input type="hidden" id="profile-group-id" value="">
                     </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="profile-tags-input">Tags</label>
+                        <div class="input-group">
+                            <div class="searchable-dropdown-wrapper">
+                                <div class="tokenized-input-wrapper" id="profile-tags-wrapper">
+                                    <!-- Selected tags will appear here as pills -->
+                                    <input type="text" id="profile-tags-input" placeholder="Search or create tags..." autocomplete="off">
+                                </div>
+                                <div id="profile-tags-dropdown" class="searchable-dropdown hidden">
+                                    <!-- Tag options will be populated dynamically -->
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-icon-text" id="add-tag-from-profile-btn" title="Manage tags">+ Tag</button>
+                        </div>
+                        <small id="tag-create-hint" class="input-hint hidden" style="color: var(--text-muted); margin-top: 4px;"></small>
+                    </div>
                 </form>
             </div>
         </div>
@@ -605,12 +623,12 @@
                             </div>
 
                             <div class="form-group tag-color-group">
-                                <label for="new-tag-color-input">Color</label>
+                                <label for="new-tag-color-input">Colour</label>
                                 <input
                                     type="color"
                                     id="new-tag-color-input"
                                     value="#3b82f6"
-                                    title="Tag color"
+                                    title="Tag colour"
                                 />
                             </div>
 

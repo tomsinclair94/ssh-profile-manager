@@ -270,6 +270,7 @@ let profiles = [];
 let groups = []; // All groups (flat list)
 let groupTree = []; // Hierarchical group structure
 let allTags = []; // All available tags
+let selectedProfileTags = new Set(); // Selected tags for current profile being edited
 let editingProfileId = null;
 let editingGroupId = null; // Currently editing group ID
 let isSubmitting = false;
@@ -823,10 +824,17 @@ function handleGlobalShortcuts(e) {
         return;
     }
 
-    // Cmd/Ctrl+F or / - Focus Search
-    if ((cmdOrCtrl && e.key === 'f') || e.key === '/') {
+    // Cmd/Ctrl+S - Focus Search
+    if (cmdOrCtrl && e.key === 's') {
         e.preventDefault();
         searchInput.focus();
+        return;
+    }
+
+    // Cmd/Ctrl+F - Filter Groups
+    if (cmdOrCtrl && e.key === 'f') {
+        e.preventDefault();
+        toggleFilterPopup();
         return;
     }
 
@@ -865,17 +873,24 @@ function handleGlobalShortcuts(e) {
         return;
     }
 
-    // F - Filter Groups (single key)
-    if ((e.key === 'f' || e.key === 'F') && !cmdOrCtrl) {
+    // Cmd/Ctrl+Right Arrow - Expand All Groups
+    if (cmdOrCtrl && e.key === 'ArrowRight') {
         e.preventDefault();
-        toggleFilterPopup();
+        expandAllGroups();
         return;
     }
 
-    // T - Toggle Expand/Collapse All Groups (single key)
+    // Cmd/Ctrl+Left Arrow - Collapse All Groups
+    if (cmdOrCtrl && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        collapseAllGroups();
+        return;
+    }
+
+    // T - Open Tag Manager (single key)
     if ((e.key === 't' || e.key === 'T') && !cmdOrCtrl) {
         e.preventDefault();
-        toggleExpandCollapseAll();
+        openTagManager();
         return;
     }
 
@@ -950,6 +965,14 @@ function getProfileModalTabbableItems() {
     // +Group button
     const addGroupBtn = document.getElementById('add-group-from-profile-btn');
     if (addGroupBtn) items.push(addGroupBtn);
+
+    // Tags input
+    const profileTagsInput = document.getElementById('profile-tags-input');
+    if (profileTagsInput) items.push(profileTagsInput);
+
+    // +Tag button
+    const addTagBtn = document.getElementById('add-tag-from-profile-btn');
+    if (addTagBtn) items.push(addTagBtn);
 
     // Header buttons (Save/Close/Delete at the end)
     const deleteBtn = document.getElementById('delete-profile-btn');
@@ -1078,10 +1101,6 @@ function getTagManagerModalTabbableItems() {
 
     const createTagBtn = document.getElementById('create-tag-btn');
     if (createTagBtn) items.push(createTagBtn);
-
-    // Delete buttons in tag list (if any tags exist)
-    const deleteButtons = Array.from(document.querySelectorAll('#tag-list-container .btn-danger'));
-    deleteButtons.forEach(btn => items.push(btn));
 
     // Close button
     const closeBtn = document.getElementById('tag-manager-close-btn');
@@ -2100,14 +2119,15 @@ function showKeyboardShortcutsHelp() {
             { keys: 'N', action: 'New Profile' },
             { keys: 'G', action: 'New Group' },
             { keys: 'S', action: 'Open Settings' },
-            { keys: 'F', action: 'Filter Groups' },
-            { keys: 'T', action: 'Toggle Expand/Collapse Groups' },
-            { keys: `${modKey}+F or /`, action: 'Focus Search' },
+            { keys: 'T', action: 'Open Tag Manager' },
+            { keys: `${modKey} + S`, action: 'Focus Search' },
+            { keys: `${modKey} + F`, action: 'Filter Groups' },
+            { keys: `${modKey} + ← / →`, action: 'Collapse / Expand All Groups' },
             { keys: '?', action: 'Show This Help' },
         ]},
         { category: 'Navigation', items: [
             { keys: 'Tab', action: 'Cycle Through Interface Elements' },
-            { keys: 'Shift+Tab', action: 'Cycle Backwards' },
+            { keys: 'Shift + Tab', action: 'Cycle Backwards' },
             { keys: '↑ / ↓', action: 'Navigate Items' },
             { keys: 'Enter / Space', action: 'Activate Selected Item' },
         ]},
@@ -2138,9 +2158,9 @@ function showKeyboardShortcutsHelp() {
         { category: 'Modals', items: [
             { keys: 'Escape', action: 'Close / Cancel' },
             { keys: 'Tab', action: 'Cycle Through Fields/Buttons' },
-            { keys: 'Shift+Tab', action: 'Cycle Backwards' },
+            { keys: 'Shift + Tab', action: 'Cycle Backwards' },
             { keys: 'Enter / Space', action: 'Activate Focused Button' },
-            { keys: `${modKey}+S`, action: 'Save (if applicable)' },
+            { keys: `${modKey} + S`, action: 'Save (if applicable)' },
         ]},
     ];
 
@@ -4317,6 +4337,49 @@ function setupEventListeners() {
         profileIconInput.addEventListener('keydown', handleProfileIconKeydown);
     }
 
+    // Profile tags searchable dropdown handlers
+    const profileTagsInput = document.getElementById('profile-tags-input');
+    const profileTagsWrapper = document.getElementById('profile-tags-wrapper');
+    if (profileTagsInput) {
+        profileTagsInput.addEventListener('input', (e) => {
+            showProfileTagsDropdown(e.target.value);
+        });
+
+        profileTagsInput.addEventListener('focus', () => {
+            showProfileTagsDropdown(profileTagsInput.value);
+        });
+
+        profileTagsInput.addEventListener('blur', () => {
+            // Hide dropdown when tabbing away (with slight delay to allow click on dropdown items)
+            setTimeout(() => {
+                hideProfileTagsDropdown();
+            }, 150);
+        });
+
+        profileTagsInput.addEventListener('keydown', handleProfileTagsKeydown);
+
+        // Click on wrapper focuses the input
+        if (profileTagsWrapper) {
+            profileTagsWrapper.addEventListener('click', (e) => {
+                // Don't focus if clicking on a remove button
+                if (!e.target.closest('.remove-tag')) {
+                    profileTagsInput.focus();
+                }
+            });
+        }
+    }
+
+    // Add Tag button from profile modal (opens Tag Manager)
+    const addTagFromProfileBtn = document.getElementById('add-tag-from-profile-btn');
+    if (addTagFromProfileBtn) {
+        addTagFromProfileBtn.addEventListener('click', async () => {
+            // Hide tag dropdown if open
+            hideProfileTagsDropdown();
+            // Open Tag Manager modal
+            await openTagManager();
+        });
+    }
+
     // Add Group button from profile modal
     const addGroupFromProfileBtn = document.getElementById('add-group-from-profile-btn');
     if (addGroupFromProfileBtn) {
@@ -4376,6 +4439,19 @@ function setupEventListeners() {
             if (!profileIconInput.contains(e.target) &&
                 !profileIconDropdown.contains(e.target)) {
                 hideProfileIconDropdown();
+            }
+        }
+
+        // Close profile tags dropdown
+        const profileTagsDropdown = document.getElementById('profile-tags-dropdown');
+        const profileTagsWrapper = document.getElementById('profile-tags-wrapper');
+        const addTagBtn = document.getElementById('add-tag-from-profile-btn');
+
+        if (profileTagsDropdown && !profileTagsDropdown.classList.contains('hidden')) {
+            if (!profileTagsWrapper.contains(e.target) &&
+                !profileTagsDropdown.contains(e.target) &&
+                !addTagBtn.contains(e.target)) {
+                hideProfileTagsDropdown();
             }
         }
     });
@@ -7316,6 +7392,9 @@ async function openModal(profile = null) {
         // Set favorite checkbox
         document.getElementById('profile-favorite-checkbox').checked = profile.is_favorite || false;
 
+        // Load profile tags
+        await loadProfileTags(profile.id);
+
         deleteProfileBtn.classList.remove('hidden');
     } else {
         modalTitle.textContent = 'New Profile';
@@ -7331,6 +7410,9 @@ async function openModal(profile = null) {
         updateIconInputDisplay('');
         // Reset favorite checkbox for new profile
         document.getElementById('profile-favorite-checkbox').checked = false;
+        // Reset tags for new profile
+        selectedProfileTags = new Set();
+        renderSelectedTags();
         deleteProfileBtn.classList.add('hidden');
     }
 
@@ -7386,7 +7468,8 @@ function getCurrentFormValues() {
         password: document.getElementById('profile-password').value,
         group: document.getElementById('profile-group-id').value, // Use hidden field for group ID
         icon: document.getElementById('profile-icon-value').value, // Icon selection
-        favorite: document.getElementById('profile-favorite-checkbox').checked // Favorite status
+        favorite: document.getElementById('profile-favorite-checkbox').checked, // Favorite status
+        tags: Array.from(selectedProfileTags).sort().join(',') // Convert Set to sorted string for comparison
     };
 }
 
@@ -7784,6 +7867,12 @@ async function saveProfile() {
         // Set favorite status
         await invoke('set_profile_favorite', { profileId: savedProfileId, isFavorite });
 
+        // Save tags
+        await invoke('set_profile_tags', {
+            profileId: savedProfileId,
+            tagIds: Array.from(selectedProfileTags)
+        });
+
         await loadProfiles();
         forceCloseModal(); // Force close without confirmation after successful save
         showToast(isEditing ? 'Profile updated successfully!' : 'Profile created successfully!');
@@ -7831,6 +7920,19 @@ function duplicateProfile(id) {
     document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
     document.getElementById('profile-password').value = ''; // Don't copy password for security
     document.getElementById('profile-group').value = duplicatedProfile.group_path || '';
+
+    // Set icon for duplicated profile
+    const profileIcon = duplicatedProfile.icon || '';
+    document.getElementById('profile-icon').value = profileIcon;
+    document.getElementById('profile-icon-value').value = profileIcon;
+    updateIconInputDisplay(profileIcon);
+
+    // Set favorite checkbox
+    document.getElementById('profile-favorite-checkbox').checked = duplicatedProfile.is_favorite || false;
+
+    // Copy tags from the original profile
+    selectedProfileTags = new Set(duplicatedProfile.tags || []);
+    renderSelectedTags();
 
     updateAuthMethodVisibility();
 
@@ -8796,6 +8898,376 @@ async function deleteTag(tagId, tagName, usageCount) {
     } catch (error) {
         console.error('Failed to delete tag:', error);
         showToast(`Failed to delete tag: ${error}`, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// ===========================
+// Tag Selector Functions (Profile Editor) - Searchable Dropdown
+// ===========================
+
+/**
+ * Show the tag dropdown with filtered results and detect new tag creation opportunity
+ * @param {string} searchQuery - The search text to filter tags
+ */
+function showProfileTagsDropdown(searchQuery = '') {
+    const dropdown = document.getElementById('profile-tags-dropdown');
+    const hint = document.getElementById('tag-create-hint');
+    if (!dropdown) return;
+
+    const query = searchQuery.toLowerCase().trim();
+    const exactMatch = allTags.find(tag => tag.name.toLowerCase() === query);
+
+    // Show hint if user typed a non-existent tag name
+    if (query.length > 0 && !exactMatch && /^[a-zA-Z0-9_-]+$/.test(query)) {
+        hint.textContent = `Press Enter to create "${searchQuery}" tag`;
+        hint.classList.remove('hidden');
+    } else {
+        hint.classList.add('hidden');
+    }
+
+    // Filter tags that match the search
+    const availableTags = allTags.filter(tag => {
+        const matchesSearch = tag.name.toLowerCase().includes(query);
+        return matchesSearch;
+    });
+
+    if (availableTags.length === 0) {
+        if (allTags.length === 0) {
+            dropdown.innerHTML = '<div class="tag-dropdown-empty">No tags available. Click + Tag to create one.</div>';
+        } else if (query.length > 0) {
+            dropdown.innerHTML = '<div class="tag-dropdown-empty">No tags match your search. Press Enter to create a new tag.</div>';
+        } else {
+            dropdown.innerHTML = '<div class="tag-dropdown-empty">No tags match your search.</div>';
+        }
+    } else {
+        const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="check-icon"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+        dropdown.innerHTML = availableTags.map(tag => {
+            const isSelected = selectedProfileTags.has(tag.id);
+            return `
+                <div class="tag-dropdown-item ${isSelected ? 'selected' : ''}" data-tag-id="${escapeHtml(tag.id)}">
+                    <div class="tag-dropdown-color-swatch" style="background-color: ${escapeHtml(tag.color)};"></div>
+                    <span class="tag-dropdown-item-name">${escapeHtml(tag.name)}</span>
+                    ${isSelected ? checkIcon : ''}
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers
+        dropdown.querySelectorAll('.tag-dropdown-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const tagId = item.dataset.tagId;
+                toggleProfileTag(tagId);
+            });
+        });
+    }
+
+    dropdown.classList.remove('hidden');
+
+    // Auto-scroll modal to show dropdown
+    setTimeout(() => {
+        // Find the scrollable container (form element for profile modal)
+        const scrollContainer = dropdown.closest('form') || dropdown.closest('.modal-content');
+        if (!scrollContainer) return;
+
+        // Get positions after dropdown is fully rendered
+        const dropdownRect = dropdown.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+
+        // We want 20px of breathing room below the dropdown
+        const desiredPadding = 20;
+
+        // Calculate how much the dropdown extends beyond the container
+        const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
+
+        if (dropdownOverflow > -desiredPadding) {
+            // Calculate the current padding-bottom (might be from CSS)
+            const computedStyle = window.getComputedStyle(scrollContainer);
+            const currentPadding = parseInt(computedStyle.paddingBottom) || 0;
+
+            // Add temporary padding to container so there's room to scroll
+            const paddingNeeded = currentPadding + Math.abs(dropdownOverflow) + desiredPadding;
+            const originalPaddingBottom = scrollContainer.style.paddingBottom;
+            scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
+            scrollContainer.dataset.originalPaddingBottomTags = originalPaddingBottom;
+
+            // Now scroll to show the dropdown with proper spacing
+            setTimeout(() => {
+                const scrollNeeded = Math.abs(dropdownOverflow) + desiredPadding;
+
+                scrollContainer.scrollBy({
+                    top: scrollNeeded,
+                    behavior: 'smooth'
+                });
+            }, 10);
+        }
+    }, 50); // Delay to ensure dropdown is fully rendered
+}
+
+/**
+ * Hide the tag dropdown and hint
+ */
+function hideProfileTagsDropdown() {
+    const dropdown = document.getElementById('profile-tags-dropdown');
+    const hint = document.getElementById('tag-create-hint');
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+
+        // Restore original container padding if we modified it
+        const scrollContainer = dropdown.closest('form') || dropdown.closest('.modal-content');
+        if (scrollContainer) {
+            if (scrollContainer.dataset.originalPaddingBottomTags !== undefined) {
+                scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottomTags || '';
+                delete scrollContainer.dataset.originalPaddingBottomTags;
+            }
+            // Force cleanup: if padding was added, ensure it's removed
+            // Check if padding is unusually large (> 50px indicates temporary padding)
+            const currentPadding = parseInt(window.getComputedStyle(scrollContainer).paddingBottom) || 0;
+            if (currentPadding > 50) {
+                scrollContainer.style.paddingBottom = '12px'; // Reset to default modal padding
+            }
+        }
+    }
+    if (hint) {
+        hint.classList.add('hidden');
+    }
+}
+
+/**
+ * Add a tag to the selection
+ * @param {string} tagId - The tag ID to add
+ */
+function addProfileTag(tagId) {
+    selectedProfileTags.add(tagId);
+    renderSelectedTags();
+    checkFormChanged();
+}
+
+/**
+ * Remove a tag from the selection
+ * @param {string} tagId - The tag ID to remove
+ */
+function removeProfileTag(tagId) {
+    selectedProfileTags.delete(tagId);
+    renderSelectedTags();
+    checkFormChanged();
+}
+
+/**
+ * Toggle a tag selection
+ * @param {string} tagId - The tag ID to toggle
+ */
+function toggleProfileTag(tagId) {
+    if (selectedProfileTags.has(tagId)) {
+        removeProfileTag(tagId);
+    } else {
+        addProfileTag(tagId);
+    }
+
+    // Clear search, close dropdown, and unfocus
+    const input = document.getElementById('profile-tags-input');
+    if (input) {
+        input.value = '';
+        hideProfileTagsDropdown();
+        input.blur();
+    }
+}
+
+/**
+ * Calculate relative luminance of a color to determine if text should be black or white
+ * @param {string} hexColor - Hex color string (e.g., "#FF5733")
+ * @returns {string} - "black" or "white" depending on the background luminance
+ */
+function getContrastTextColor(hexColor) {
+    // Remove # if present
+    const hex = hexColor.replace('#', '');
+
+    // Convert hex to RGB
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
+
+    // Calculate relative luminance using sRGB formula
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    // Use white text for dark backgrounds, black text for light backgrounds
+    // Threshold of 0.5 provides good contrast
+    return luminance > 0.5 ? 'black' : 'white';
+}
+
+/**
+ * Render the selected tags as pills inside the input wrapper
+ */
+function renderSelectedTags() {
+    const wrapper = document.getElementById('profile-tags-wrapper');
+    const input = document.getElementById('profile-tags-input');
+    if (!wrapper || !input) return;
+
+    // Get all selected tags
+    const selectedTagsArray = Array.from(selectedProfileTags)
+        .map(tagId => allTags.find(t => t.id === tagId))
+        .filter(tag => tag); // Filter out any undefined tags
+
+    // Remove existing pills (but keep the input)
+    const existingPills = wrapper.querySelectorAll('.tokenized-tag-pill');
+    existingPills.forEach(pill => pill.remove());
+
+    // Create pill elements for each selected tag
+    const removeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
+    selectedTagsArray.forEach(tag => {
+        const pill = document.createElement('div');
+        pill.className = 'tokenized-tag-pill';
+        pill.style.backgroundColor = tag.color;
+        pill.style.color = getContrastTextColor(tag.color);
+        pill.innerHTML = `
+            <span>${escapeHtml(tag.name)}</span>
+            <span class="remove-tag" data-tag-id="${escapeHtml(tag.id)}" title="Remove tag">
+                ${removeIcon}
+            </span>
+        `;
+
+        // Add click handler for remove button
+        const removeBtn = pill.querySelector('.remove-tag');
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeProfileTag(tag.id);
+            input.blur();
+        });
+
+        // Insert pill before the input
+        wrapper.insertBefore(pill, input);
+    });
+
+    // Update placeholder
+    if (selectedTagsArray.length > 0) {
+        input.placeholder = '';
+    } else {
+        input.placeholder = 'Search or create tags...';
+    }
+}
+
+/**
+ * Load tags for a specific profile when editing
+ * @param {string} profileId - The profile ID to load tags for
+ */
+async function loadProfileTags(profileId) {
+    try {
+        const tags = await invoke('get_profile_tags', { profileId });
+        selectedProfileTags = new Set(tags.map(t => t.id));
+        renderSelectedTags();
+    } catch (error) {
+        console.error('Failed to load profile tags:', error);
+        selectedProfileTags = new Set();
+        renderSelectedTags();
+    }
+}
+
+/**
+ * Handle keyboard navigation and actions in tag input
+ */
+async function handleProfileTagsKeydown(e) {
+    const input = document.getElementById('profile-tags-input');
+    const dropdown = document.getElementById('profile-tags-dropdown');
+    const query = input.value.trim();
+
+    // Handle Backspace to remove last tag when input is empty
+    if (e.key === 'Backspace' && input.value === '' && selectedProfileTags.size > 0) {
+        e.preventDefault();
+        const tagsArray = Array.from(selectedProfileTags);
+        const lastTagId = tagsArray[tagsArray.length - 1];
+        removeProfileTag(lastTagId);
+        return;
+    }
+
+    // Handle Enter key
+    if (e.key === 'Enter') {
+        e.preventDefault();
+
+        // Check if there's a matching tag in the dropdown with keyboard focus
+        const dropdown = document.getElementById('profile-tags-dropdown');
+        if (!dropdown.classList.contains('hidden')) {
+            const items = Array.from(dropdown.querySelectorAll('.tag-dropdown-item'));
+            const focusedItem = items.find(item => item.classList.contains('keyboard-focus'));
+
+            if (focusedItem) {
+                // Select the focused tag
+                focusedItem.click();
+                return;
+            }
+
+            // If no focus but items exist, select first item
+            if (items.length > 0) {
+                items[0].click();
+                return;
+            }
+        }
+
+        // Create new tag if query is valid and doesn't exist
+        if (query.length > 0) {
+            const exactMatch = allTags.find(tag => tag.name.toLowerCase() === query.toLowerCase());
+            if (!exactMatch && /^[a-zA-Z0-9_-]+$/.test(query)) {
+                await createTagQuick(query);
+            }
+        }
+        return;
+    }
+
+    // Handle dropdown navigation
+    if (!dropdown || dropdown.classList.contains('hidden')) return;
+
+    const items = Array.from(dropdown.querySelectorAll('.tag-dropdown-item'));
+    if (items.length === 0) return;
+
+    const currentIndex = items.findIndex(item => item.classList.contains('keyboard-focus'));
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        items.forEach((item, i) => item.classList.toggle('keyboard-focus', i === nextIndex));
+        items[nextIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        items.forEach((item, i) => item.classList.toggle('keyboard-focus', i === prevIndex));
+        items[prevIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideProfileTagsDropdown();
+        input.blur();
+    }
+}
+
+/**
+ * Quick tag creation from input field (with default color)
+ * @param {string} tagName - The name of the tag to create
+ */
+async function createTagQuick(tagName) {
+    const input = document.getElementById('profile-tags-input');
+    const defaultColor = '#3b82f6'; // Blue color to match theme
+
+    try {
+        const tagId = await invoke('create_tag', {
+            input: {
+                name: tagName,
+                color: defaultColor
+            }
+        });
+
+        // Reload tags to get the new tag
+        await loadTags();
+
+        // Add the newly created tag to selection
+        addProfileTag(tagId);
+
+        // Clear input and hide dropdown
+        input.value = '';
+        hideProfileTagsDropdown();
+
+        showToast(`Tag "${tagName}" created and added`, TOAST_DURATION_SHORT, 'success');
+    } catch (error) {
+        console.error('Failed to create tag:', error);
+        showToast(`Failed to create tag: ${cleanErrorMessage(error)}`, TOAST_DURATION_LONG, 'error');
     }
 }
 

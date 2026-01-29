@@ -1783,7 +1783,7 @@ form {
 }
 
 .tag-list-item .tag-usage {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-muted);
     flex-shrink: 0;
     margin-left: 8px;
@@ -1795,6 +1795,130 @@ form {
     text-align: center;
     color: var(--text-muted);
     font-size: 14px;
+}
+
+/* Tag Selector (Profile Editor) - Tokenized Input */
+.tokenized-input-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--input-bg);
+    cursor: text;
+    transition: border-color 0.2s;
+    line-height: 1;
+}
+
+.tokenized-input-wrapper:focus-within {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.tokenized-input-wrapper input {
+    flex: 1;
+    min-width: 50px;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    line-height: 19px;
+    height: 19px;
+    color: var(--text-color);
+}
+
+.tokenized-input-wrapper input::placeholder {
+    color: var(--text-muted);
+}
+
+.tokenized-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    /* color is set dynamically via JavaScript based on background luminance */
+    user-select: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.tokenized-tag-pill .remove-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    margin-left: 2px;
+}
+
+.tokenized-tag-pill .remove-tag:hover {
+    opacity: 1;
+}
+
+.tokenized-tag-pill .remove-tag svg {
+    width: 10px;
+    height: 10px;
+    stroke-width: 2.5;
+}
+
+.tag-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.tag-dropdown-item:hover {
+    background: var(--hover-bg);
+}
+
+.tag-dropdown-item.keyboard-focus {
+    background: var(--hover-bg);
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.tag-dropdown-item.selected {
+    background: var(--primary-color-light);
+}
+
+.tag-dropdown-color-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.tag-dropdown-item-name {
+    flex: 1;
+    font-size: 14px;
+}
+
+.tag-dropdown-item .check-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--success-color);
+    flex-shrink: 0;
+}
+
+.tag-dropdown-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
 }
 
 /* Toast Notification */
@@ -1846,6 +1970,9 @@ form {
 .input-group .btn-browse {
     flex-shrink: 0;
     white-space: nowrap;
+    width: 85px;
+    padding: 8px 12px;
+    text-align: center;
 }
 
 .input-group .btn-browse:focus {
@@ -1856,7 +1983,7 @@ form {
 
 .input-group .btn-toggle-password {
     flex-shrink: 0;
-    width: 65px;
+    width: 85px;
     padding: 8px 12px;
     text-align: center;
 }
@@ -1870,6 +1997,8 @@ form {
 .input-group .btn-icon-text {
     flex-shrink: 0;
     padding: 8px 12px;
+    width: 85px;
+    text-align: center;
 }
 
 .input-group .btn-icon-text:focus {

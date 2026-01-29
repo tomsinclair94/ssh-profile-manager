@@ -164,7 +164,7 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Styling: Gold/amber theme, star hover animations, highlight pulse animation
 - ✅ Icons: Added 'star' and 'star-off' to PROFILE_ICONS
 
-**Phase 5D (Tags & Search Integration):** 🔄 In Progress - 5D-1 Complete, 5D-2 Next
+**Phase 5D (Tags & Search Integration):** 🔄 In Progress - 5D-1 & 5D-2 Complete ✅ (2026-01-29)
 
 **Backend:** ✅ Complete (Phase 5A)
 **Implementation Order:** Tag Manager → Profile Editor → Display → Search
@@ -179,12 +179,43 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Optimized modal width (320px confirmation modal)
 - ✅ Updated default tag color to #3b82f6 (blue)
 
-**5D-2: Profile Editor Tag Selector** (Assign Tags)
-- [ ] Tag selector in profile modal (multi-select checkboxes)
-- [ ] Visual feedback for selected tags
-- [ ] Save profile updates tags via set_profile_tags command
+**5D-2: Profile Editor Tag Selector** (Assign Tags) ✅ COMPLETE
+- ✅ Tokenized input (tags as pills inside input field)
+- ✅ Searchable dropdown with multi-select
+- ✅ Visual feedback (checkmarks, color swatches)
+- ✅ + Tag button opens Tag Manager
+- ✅ Press Enter creates new tag with default color
+- ✅ Backspace removes last tag (when input empty)
+- ✅ Click × on pill to remove tag
+- ✅ Keyboard navigation (↑↓, Enter, Escape)
+- ✅ Save profile updates tags via set_profile_tags command
+- ✅ Tags load/save/duplicate correctly
 
-**5D-3: Tag Display on Cards** (Show Tags + Icon Centering)
+**5D-2: Polish & Refinements** ✅ ALL COMPLETE (2026-01-29)
+- ✅ Tag field height fixed (41px total: 10px + 19px + 10px + 2px border)
+- ✅ Input min-width reduced (120px → 50px) for better wrapping behavior
+- ✅ Explicit line-height and height controls prevent browser default spacing
+- ✅ Unfocus behavior: field blurs after tag selection/removal for clean state
+- ✅ Modal padding cleanup: defensive fallback prevents stuck padding
+- ✅ Consistent button widths: all modal buttons now 85px (Browse, Show/Hide, +Tag, +Group)
+- ✅ British spelling: "Color" → "Colour" in Tag Manager
+- ✅ Usage count font size increased (12px → 14px) for better readability
+- ✅ Form change detection fixed (typo: checkFormChanges → checkFormChanged)
+- ✅ Light-colored tags use black text (luminance calculation)
+- ✅ Tag dropdown has modal expand/auto-scroll behavior
+- ✅ Tag input and +Tag button in tab cycle
+- ✅ Tag Manager tab cycle streamlined (removed delete buttons from cycle)
+
+**Keyboard Shortcuts Reorganization** ✅ COMPLETE (2026-01-29)
+- ✅ **New scheme:** Modified keys (Cmd/Ctrl) for interface controls, single keys for quick actions
+- ✅ **Cmd+S** → Focus Search (removed / shortcut)
+- ✅ **Cmd+F** → Filter Groups
+- ✅ **Cmd+Left/Right Arrow** → Collapse/Expand All Groups (mirrors individual group arrows)
+- ✅ **T** → Open Tag Manager (single key)
+- ✅ **N, G, S** → New Profile, New Group, Settings (unchanged)
+- ✅ Help screen updated with cleaner spacing (Cmd + S instead of Cmd+S)
+
+**5D-3: Tag Display on Cards** (Show Tags + Icon Centering) - NEXT
 - [ ] Update grid layout - add "tags" area
 - [ ] Vertically center icon (align-items: center, remove padding-top: 2px)
 - [ ] Render tag badges between info and actions/path
