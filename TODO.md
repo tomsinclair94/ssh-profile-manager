@@ -126,7 +126,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Proper file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
 - ✅ All export/import testing completed successfully
 
-**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** Phase 5A ✅ | Phase 5B ✅ | Phase 5C ✅ | Phase 5D 🔄
+**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** Phase 5A ✅ | Phase 5B ✅ | Phase 5C ✅ | Phase 5D ✅ | Phase 5E 🔄
 
 See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-tracking.md` for full details.
 
@@ -164,7 +164,7 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Styling: Gold/amber theme, star hover animations, highlight pulse animation
 - ✅ Icons: Added 'star' and 'star-off' to PROFILE_ICONS
 
-**Phase 5D (Tags & Search Integration):** 🔄 In Progress - 5D-1 & 5D-2 Complete ✅ (2026-01-29)
+**Phase 5D (Tags & Search Integration):** ✅ Complete (2026-01-29)
 
 **Backend:** ✅ Complete (Phase 5A)
 **Implementation Order:** Tag Manager → Profile Editor → Display → Search
@@ -223,11 +223,24 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Fixed icon centering (align-items: center on .profile-card-body)
 - ✅ Fixed tag color timing (loadTags before loadProfiles)
 
-**5D-4: Tag Search Integration** (Filter by Tags) - NEXT
-- [ ] Clickable badges add to search
-- [ ] Parse `tag:` search prefix (OR logic)
-- [ ] Update search placeholder/tooltip with tag syntax
-- [ ] Filter profiles by tags in renderProfiles()
+**5D-4: Tag Search Integration** (Filter by Tags) ✅ COMPLETE
+- ✅ Clickable badges add to search
+- ✅ Parse `tag:` search prefix (OR logic, exact matching)
+- ✅ Update search placeholder/tooltip with tag syntax
+- ✅ Filter profiles by tags in renderProfiles()
+- ✅ Search tooltip behavior matches modal fields (hover only, hide on typing)
+- ✅ Search field autocorrect disabled (spellcheck/autocorrect/autocapitalize off)
+- ✅ Search clear (×) button with auto-show/hide
+- ✅ Hide empty groups during search (only show groups with matching profiles)
+
+**Phase 5E (Polish & Nice-to-Have Features):** 🔄 Next
+- [ ] Review and fix console warnings/errors
+- [ ] Multi-tag select in Tag Manager (checkboxes, delete selected, select/unselect all)
+- [ ] Confirmation modal button spacing (evenly spaced across bottom)
+- [ ] Settings modal UX improvements (tabs reorganization, delete all tags, minimize toggle)
+- [ ] Import/export tag handling (create tags on import if they don't exist)
+
+See `plans/v0.7.0-phase-5-progress-tracking.md` Phase 5E section for full details.
 
 ### v0.8.0 - Multi-Tab System
 **Status:** Planned

@@ -587,6 +587,7 @@ function validateAllFields() {
 // DOM Elements
 let profilesList;
 let searchInput;
+let searchClearBtn;
 let newProfileBtn;
 let profileModal;
 let profileForm;
@@ -2267,6 +2268,7 @@ async function init() {
     // Get DOM elements
     profilesList = document.getElementById('profiles-list');
     searchInput = document.getElementById('search-input');
+    searchClearBtn = document.getElementById('search-clear-btn');
     newProfileBtn = document.getElementById('new-profile-btn');
     profileModal = document.getElementById('profile-modal');
     profileForm = document.getElementById('profile-form');
@@ -3209,8 +3211,34 @@ function renderFavouriteProfileCard(profile) {
     `;
 }
 
+// Add tag to search input when tag badge is clicked
+function addTagToSearch(tagName) {
+    const currentSearch = searchInput.value.trim();
+    const tagSearchTerm = `tag:${tagName}`;
+
+    // Check if this tag is already in the search
+    const tagPattern = new RegExp(`\\btag:${tagName}\\b`, 'i');
+    if (tagPattern.test(currentSearch)) {
+        return; // Tag already in search, don't add again
+    }
+
+    // Add tag to search (with space separator if there's existing content)
+    const newSearch = currentSearch ? `${currentSearch} ${tagSearchTerm}` : tagSearchTerm;
+    searchInput.value = newSearch;
+
+    // Trigger search
+    renderProfiles(newSearch);
+
+    // Focus search input
+    searchInput.focus();
+}
+
 function renderProfiles(filter = '') {
-    const searchText = filter.toLowerCase();
+    // Parse search filter to extract tag searches and regular text search
+    const tagPattern = /tag:([^\s]+)/gi;
+    const tagMatches = [...filter.matchAll(tagPattern)];
+    const tagSearches = tagMatches.map(match => match[1].toLowerCase());
+    const regularSearch = filter.replace(tagPattern, '').trim().toLowerCase();
 
     // Filter profiles
     const filteredProfiles = profiles.filter(profile => {
@@ -3229,14 +3257,24 @@ function renderProfiles(filter = '') {
             return false;
         }
 
-        // Then apply search filter
-        if (!searchText) return true;
+        // Apply tag filter (OR logic - profile must have at least one of the searched tags)
+        // Uses exact matching, not wildcard
+        if (tagSearches.length > 0) {
+            const profileTags = (profile.tags || []).map(t => t.toLowerCase());
+            const hasMatchingTag = tagSearches.some(searchTag =>
+                profileTags.includes(searchTag)
+            );
+            if (!hasMatchingTag) return false;
+        }
+
+        // Apply regular text search filter
+        if (!regularSearch) return true;
 
         return (
-            profile.name.toLowerCase().includes(searchText) ||
-            profile.host.toLowerCase().includes(searchText) ||
-            profile.username.toLowerCase().includes(searchText) ||
-            (profile.description && profile.description.toLowerCase().includes(searchText))
+            profile.name.toLowerCase().includes(regularSearch) ||
+            profile.host.toLowerCase().includes(regularSearch) ||
+            profile.username.toLowerCase().includes(regularSearch) ||
+            (profile.description && profile.description.toLowerCase().includes(regularSearch))
         );
     });
 
@@ -3293,14 +3331,24 @@ function renderProfiles(filter = '') {
         // Only include favorited profiles
         if (!profile.is_favorite) return false;
 
-        // Apply search filter (same as regular profiles)
-        if (!searchText) return true;
+        // Apply tag filter (OR logic - profile must have at least one of the searched tags)
+        // Uses exact matching, not wildcard
+        if (tagSearches.length > 0) {
+            const profileTags = (profile.tags || []).map(t => t.toLowerCase());
+            const hasMatchingTag = tagSearches.some(searchTag =>
+                profileTags.includes(searchTag)
+            );
+            if (!hasMatchingTag) return false;
+        }
+
+        // Apply regular text search filter
+        if (!regularSearch) return true;
 
         return (
-            profile.name.toLowerCase().includes(searchText) ||
-            profile.host.toLowerCase().includes(searchText) ||
-            profile.username.toLowerCase().includes(searchText) ||
-            (profile.description && profile.description.toLowerCase().includes(searchText))
+            profile.name.toLowerCase().includes(regularSearch) ||
+            profile.host.toLowerCase().includes(regularSearch) ||
+            profile.username.toLowerCase().includes(regularSearch) ||
+            (profile.description && profile.description.toLowerCase().includes(regularSearch))
         );
     });
 
@@ -3318,7 +3366,7 @@ function renderProfiles(filter = '') {
     });
 
     topLevelGroups.forEach(group => {
-        html += renderGroupNode(group, profilesByGroupPath, 0);
+        html += renderGroupNode(group, profilesByGroupPath, 0, filter);
     });
 
     // Render ungrouped profiles
@@ -3360,7 +3408,7 @@ function countProfilesRecursive(groupPath, profilesByGroupPath) {
 }
 
 // Recursively render a group node and its children
-function renderGroupNode(group, profilesByGroupPath, depth) {
+function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
     // Skip rendering if this group is filtered out
     if (isGroupOrAncestorFiltered(group.id)) {
         return ''; // Don't render this group or its children
@@ -3380,6 +3428,11 @@ function renderGroupNode(group, profilesByGroupPath, depth) {
     // Skip rendering "Ungrouped" group if it has no profiles
     // (This handles the case where migration created an empty "Ungrouped" group)
     if (group.name.toLowerCase() === 'ungrouped' && totalProfileCount === 0) {
+        return '';
+    }
+
+    // Skip rendering groups with no matching profiles when search/filter is active
+    if (filter.trim() && totalProfileCount === 0) {
         return '';
     }
 
@@ -3407,7 +3460,7 @@ function renderGroupNode(group, profilesByGroupPath, depth) {
     // Render child groups
     const childGroups = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.name.localeCompare(b.name));
     childGroups.forEach(childGroup => {
-        html += renderGroupNode(childGroup, profilesByGroupPath, depth + 1);
+        html += renderGroupNode(childGroup, profilesByGroupPath, depth + 1, filter);
     });
 
     html += `
@@ -4159,6 +4212,20 @@ function setupEventListeners() {
 
     searchInput.addEventListener('input', (e) => {
         renderProfiles(e.target.value);
+        // Show/hide clear button based on input value
+        if (e.target.value.trim()) {
+            searchClearBtn.classList.remove('hidden');
+        } else {
+            searchClearBtn.classList.add('hidden');
+        }
+    });
+
+    // Clear search button
+    searchClearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        searchClearBtn.classList.add('hidden');
+        renderProfiles('');
+        searchInput.focus();
     });
 
     // Event delegation for profile card buttons (prevents memory leaks)
@@ -4171,6 +4238,9 @@ function setupEventListeners() {
         } else if (target.classList.contains('actions-btn')) {
             e.stopPropagation();
             showProfileActionMenu(target.dataset.id, target);
+        } else if (target.classList.contains('tag-badge')) {
+            e.stopPropagation();
+            addTagToSearch(target.dataset.tagName);
         }
     });
 
@@ -4931,8 +5001,8 @@ function setupEventListeners() {
 
 // Setup tooltip hide/show behavior when typing
 function setupTooltipPositioning() {
-    // Find all inputs and selects that have tooltips
-    const inputsWithTooltips = document.querySelectorAll('.form-group input, .form-group select');
+    // Find all inputs and selects that have tooltips (including search input)
+    const inputsWithTooltips = document.querySelectorAll('.form-group input, .form-group select, #search-input');
 
     inputsWithTooltips.forEach(input => {
         const tooltip = input.nextElementSibling;

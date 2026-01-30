@@ -38,12 +38,15 @@
         <div class="search-bar">
             <div class="search-controls">
                 <div class="search-input-wrapper">
-                    <input type="text" id="search-input" placeholder="Search profiles..." />
+                    <input type="text" id="search-input" placeholder="Search profiles (use tag:name for tags)..." spellcheck="false" autocorrect="off" autocapitalize="off" />
+                    <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">×</button>
                     <div class="input-tooltip search-tooltip">
                         <div class="tooltip-content">
                             <div class="tooltip-title">Search Scope</div>
                             <ul class="tooltip-rules">
                                 <li>Searches profile names, hosts, and usernames</li>
+                                <li>Use <code>tag:name</code> to filter by tags (e.g., <code>tag:prod tag:dev</code>)</li>
+                                <li>Click tags on profile cards to add them to search</li>
                                 <li>Results are filtered by active group filters</li>
                                 <li>Clear group filters to search all profiles</li>
                             </ul>

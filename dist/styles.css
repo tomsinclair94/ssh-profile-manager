@@ -234,18 +234,46 @@ body {
 
 .search-bar input[type="text"] {
     width: 100%;
-    padding: 10px 16px;
+    height: 41px; /* Fixed height to prevent growth */
+    padding: 10px 40px 10px 16px; /* Extra right padding for clear button */
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     color: var(--text-color);
     font-size: 14px;
+    box-sizing: border-box; /* Ensure padding is included in height */
 }
 
-/* Show tooltip on search input focus */
-.search-bar input[type="text"]:focus + .input-tooltip {
-    opacity: 1;
-    visibility: visible;
+/* Search clear button */
+.search-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-top: -2px; /* Fine-tune vertical centering */
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-clear-btn:hover {
+    background-color: var(--hover-color);
+    color: var(--text-color);
+}
+
+.search-clear-btn.hidden {
+    display: none;
 }
 
 /* Narrow screens: search input on separate row, buttons grow dynamically */
@@ -261,11 +289,6 @@ body {
         flex: 1;
         min-width: 0;
     }
-}
-
-.search-bar input[type="text"]:focus {
-    outline: none;
-    border-color: var(--primary-color);
 }
 
 /* Search control buttons */
@@ -2123,6 +2146,12 @@ form {
 
 /* Show tooltip when hovering over the label */
 .form-group label:hover ~ .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Show search tooltip on hover */
+#search-input:hover + .input-tooltip {
     opacity: 1;
     visibility: visible;
 }
