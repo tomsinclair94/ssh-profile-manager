@@ -126,9 +126,23 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Proper file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
 - ✅ All export/import testing completed successfully
 
-**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** Phase 5A ✅ | Phase 5B ✅ | Phase 5C ✅ | Phase 5D ✅ | Phase 5E ✅ COMPLETE
+**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** ✅ COMPLETE (2026-01-31)
 
-See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-tracking.md` for full details.
+**Phase 6 Progress (Encryption & Security):** ⏸️ PENDING
+
+**Phase 7 Progress (UI Polish & Settings Migration):** ✅ COMPLETE (2026-01-31)
+- ✅ Settings renamed: "Export/Import Settings" → "Backup/Restore Settings"
+- ✅ localStorage migration: filtered_groups names → IDs
+- ✅ localStorage migration: collapsed_groups names → IDs
+- ✅ Tooltips added to all new features (Group, Tag, Search)
+- ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
+- ✅ In-app help text updated across all sections
+- ✅ Final CSS polish (25+ transitions/animations)
+- ✅ All verification criteria met
+
+**Phase 8 Progress (Testing & Documentation):** ⏸️ PENDING
+
+---
 
 **Phase 5A (Backend Infrastructure):** ✅ Completed (2026-01-22)
 - ✅ Database schema: `profile_metadata`, `tags`, `profile_tags` tables (Migration 4)

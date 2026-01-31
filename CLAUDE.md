@@ -6,6 +6,12 @@ Lightweight, cross-platform SSH profile manager built with Tauri v2. Modern GUI 
 **Bundle Size:** ~3-5MB | **Platforms:** macOS (Apple Silicon), Windows
 **Tech Stack:** Vanilla JS/HTML/CSS frontend, Rust backend, SQLite database, system keychain
 
+**IMPORTANT: British English**
+- All user-facing text must use British English spelling and terminology
+- Examples: "Colour" not "Color", "Organising" not "Organizing", "Favourites" not "Favorites"
+- Settings labels, tooltips, help text, notifications, and error messages must follow British conventions
+- Code comments and developer documentation can use either variant
+
 ## Quick Start
 
 ```bash
@@ -20,13 +26,17 @@ bun run build    # Production build
 **In Development:** v0.7.0
 **See:** TODO.md for roadmap and feature backlog
 
-**v0.7.0 Focus:**
-- Hierarchical group system with sub-groups (up to 3 levels)
-- Separate group management with Add, Rename, Delete options
-- Enhanced group filter with hierarchical display
-- Improved keyboard navigation with arrow key support
-- Version splash screen for major release announcements
-- Migration system documentation
+**v0.7.0 Features (In Development - 75% Complete):**
+- ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
+- ✅ Individual profile/group export/import with duplicate detection
+- ✅ Favourites system for profiles with virtual group display
+- ✅ Icon picker with 40+ Lucide icons (inline SVG, CSP-compliant)
+- ✅ Tag system with colour-coding, search filtering, and multi-select management
+- ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
+- ✅ Settings renamed: Backup/Restore (instead of Export/Import)
+- ✅ Enhanced UI polish: tooltips, animations, responsive layouts
+- ⏸️ Encryption for exports (Phase 6 - pending)
+- ⏸️ Testing & documentation (Phase 8 - pending)
 
 ## Version Management
 
@@ -115,15 +125,75 @@ git commit -m "Bump version to X.X.X for dev branch"
 ## Key Implementation Patterns
 
 ### Tauri Commands
+
+**Profile Management:**
 ```rust
-get_profiles(), create_profile(), update_profile(), delete_profile()
-export_profiles(), import_profiles(data)
-export_settings(), import_settings(data)  // OS-specific filtering
-browse_ssh_key(), browse_terminal_app()
-connect_ssh(profileId, terminalPreference, customTerminalPath)
+get_profiles()  // Returns Vec<ProfileWithMetadata> (includes icon, is_favorite, tags)
+create_profile(input: CreateProfileInput)
+update_profile(input: UpdateProfileInput)
+delete_profile(id: String)
+export_profile(profile_id: String) // Individual profile export (v0.7.0)
+import_profile(data: String) // With duplicate detection (v0.7.0)
+```
+
+**Group Management (v0.7.0):**
+```rust
+get_groups() // Returns Vec<Group>
+get_group_tree() // Hierarchical structure
+create_group(name: String, parent_id: Option<String>)
+update_group(id: String, name: String)
+delete_group(id: String, mode: String) // "cascade" or "move"
+move_group(id: String, new_parent_id: Option<String>)
+export_group(group_id: String) // Recursive with sub-groups
+import_group(data: String, target_parent_id: Option<String>)
+get_profiles_by_group_path(group_path: String)
+```
+
+**Metadata & Favourites (v0.7.0):**
+```rust
+toggle_profile_favorite(profile_id: String) // Returns new state
+set_profile_favorite(profile_id: String, is_favorite: bool)
+update_profile_icon(profile_id: String, icon: Option<String>)
+get_profile_metadata(profile_id: String)
+```
+
+**Tags (v0.7.0):**
+```rust
+get_tags() // Returns Vec<Tag>
+create_tag(input: CreateTagInput) // name + color
+delete_tag(tag_id: String)
+get_tag_usage_counts() // Returns Vec<(Tag, i32)>
+get_profile_tags(profile_id: String)
+set_profile_tags(profile_id: String, tag_ids: Vec<String>)
+add_profile_tag(profile_id: String, tag_id: String)
+remove_profile_tag(profile_id: String, tag_id: String)
+```
+
+**Settings & Export/Import:**
+```rust
+export_profiles() // All profiles (legacy, now called "Export All Profiles")
+import_profiles(data: String) // With conflict resolution
+export_settings() // Now displayed as "Backup Settings" in UI
+import_settings(data: String) // Now displayed as "Restore Settings" in UI
+browse_ssh_key()
+browse_terminal_app()
+```
+
+**Connections & Terminal:**
+```rust
+connect_ssh(profile_id: String, terminal_preference: String, custom_terminal_path: Option<String>, should_minimize: bool)
+record_connection(profile_id: String)
+get_recent_connections()
+clear_recent_connections()
+create_terminal_session(profile_id: String)
+write_to_session(session_id: String, data: String)
+resize_session(session_id: String, cols: u16, rows: u16)
+close_session(session_id: String)
+```
+
+**Updates:**
+```rust
 check_for_updates()
-record_connection(profileId), get_recent_connections(), clear_recent_connections()
-create_terminal_session(profileId), write_to_session(), resize_session(), close_session()
 ```
 
 ### Critical Patterns
@@ -132,6 +202,8 @@ create_terminal_session(profileId), write_to_session(), resize_session(), close_
 - Action verbs (Delete/Import/Reset), not Yes/No
 - Secondary button: "Cancel"
 - Classes: `btn-danger` (destructive), `btn-primary` (safe)
+- Use `buildConfirmMessage()` for consistent formatting with highlighted names
+- British English in all text ("Colour", "Organising", "Favourites")
 
 **Adding Settings:**
 Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `backupSettings/restoreSettings` (JS) + `resetSettings` (JS)
@@ -176,7 +248,9 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Backend validation: XSS, command injection, path traversal
 - Custom confirm() for Tauri
 - Double-submit prevention: `isSubmitting` flag
-- Collapsible groups: localStorage
+- CSP-compliant: All styles applied via JavaScript (no inline `style=""` attributes)
+- Tag/group name validation: Alphanumeric + limited special chars only
+- localStorage: Group IDs (not names) for filter/collapse state
 
 **Migration System:**
 - Automatic version detection using `CURRENT_APP_VERSION` constant
@@ -186,8 +260,37 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - See detailed inline documentation in `dist/main.js` around line ~1920 for adding new migrations
 - Version splash screen automatically shows changelog on version changes
 
+**Tag System (v0.7.0):**
+- Tags stored in separate `tags` table with many-to-many relationship
+- Tag names: Alphanumeric + hyphens/underscores only (NO spaces), max 32 chars
+- Colours: Hex format `#RRGGBB`, validated and normalised to uppercase
+- Auto-create on import: Tags matched by name, created if missing
+- Search syntax: `tag:production tag:dev` (OR logic, exact match)
+- Display: Colour-coded badges with automatic text contrast (black/white based on luminance)
+
+**Favourites System (v0.7.0):**
+- Virtual "Favourites" group at top of profile list (auto-hides when empty)
+- Star icon toggle on all profile cards (filled gold when active, outlined grey when inactive)
+- Profiles sorted A-Z by group path in Favourites view
+- "Go to Profile" button navigates to real location in group hierarchy
+- Gold/amber theme (#f59e0b) throughout
+
+**Icon System (v0.7.0):**
+- 40+ Lucide icons as inline SVG paths (no CDN, CSP-compliant)
+- Default icon: 'server' for all profiles
+- Searchable dropdown with keyboard navigation
+- Icons excluded from picker: 'star', 'star-off', 'settings' (reserved for UI)
+- Display: 32px on profile cards, vertically centred with multi-row content
+
+**Keyboard Shortcuts (v0.7.0):**
+- Toggle via Settings (enabled by default)
+- 30+ shortcuts: N (New Profile), G (New Group), T (Tag Manager), S (Settings)
+- Cmd/Ctrl modifiers: Cmd+S (Search), Cmd+F (Filter), Cmd+Left/Right (Collapse/Expand All)
+- Help modal accessible with `?` key
+- Platform-aware (Cmd on macOS, Ctrl on Windows/Linux)
+
 **Password Authentication Limitations:**
-- Passwords are stored securely in the system keychain for reference and export purposes
+- Passwords stored securely in system keychain for reference and export purposes
 - **IMPORTANT:** Stored passwords are NOT automatically passed to SSH during connection
 - Users must manually enter passwords when prompted by SSH in the terminal
 - Automatic password passing would require additional tools (e.g., `sshpass`) which introduce security risks
@@ -250,9 +353,14 @@ CREATE TABLE recent_connections (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_i
 CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 ```
 
-**Important:** All profiles automatically receive default metadata on creation (icon='server', is_favorite=false, display_order=0). Migration 4 backfills metadata for existing profiles.
+**Important Notes:**
+- All profiles automatically receive default metadata on creation (icon='server', is_favorite=false, display_order=0)
+- Migration 4 backfills metadata for existing profiles and creates hierarchical group structure
+- Groups use semantic paths (e.g., "Work/Production") for hierarchy, max 3 levels deep
+- Profile names are unique within parent group only (allows "Server1" in multiple groups)
+- Tag names must be unique globally (case-sensitive)
 
-**Location:** `~/Library/Application Support/ssh-profile-manager/profiles.db`
+**Database Location:** `~/Library/Application Support/ssh-profile-manager/profiles.db` (macOS)
 **Keychain:** System keychain (service: "ssh-profile-manager")
 
 ## Dependencies
@@ -273,6 +381,9 @@ These warnings only affect Linux builds, which are not supported. Application ta
 **Add Tauri Command:** `#[tauri::command]` in lib.rs → `invoke_handler!` → `invoke('command_name', { params })`
 **Add Setting:** Update `SettingsData`/`SettingsOsSpecific` (Rust) + export/import + JS backup/restore/reset
 **Add Migration:** See inline docs in `dist/main.js` line ~1920 - use `< 'X.X.X'` pattern for version checks
+**Add Icon:** Add to `PROFILE_ICONS` object + update `PROFILE_ICON_VISIBILITY` if should be hidden from picker
+**Add Modal:** Call `pushModal('modalId')` on open, `popModal('modalId')` on close, add to `handleModalShortcuts()`
+**British English:** All user-facing text (tooltips, labels, notifications) must use British spelling
 
 ## Development Agents
 
