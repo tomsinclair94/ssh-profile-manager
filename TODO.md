@@ -126,7 +126,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Proper file naming: `sshpm-profile-{name}-{date}.json`, `sshpm-group-{name}-{date}.json`
 - ✅ All export/import testing completed successfully
 
-**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** Phase 5A ✅ | Phase 5B ✅ | Phase 5C ✅ | Phase 5D ✅ | Phase 5E 🔄
+**Phase 5 Progress (Metadata System - Favorites, Icons, Tags):** Phase 5A ✅ | Phase 5B ✅ | Phase 5C ✅ | Phase 5D ✅ | Phase 5E ✅ COMPLETE
 
 See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-tracking.md` for full details.
 
@@ -233,12 +233,13 @@ See `plans/v0.7.0-phase-5-detailed-plan.md` and `plans/v0.7.0-phase-5-progress-t
 - ✅ Search clear (×) button with auto-show/hide
 - ✅ Hide empty groups during search (only show groups with matching profiles)
 
-**Phase 5E (Polish & Nice-to-Have Features):** 🔄 Next
-- [ ] Review and fix console warnings/errors
-- [ ] Multi-tag select in Tag Manager (checkboxes, delete selected, select/unselect all)
-- [ ] Confirmation modal button spacing (evenly spaced across bottom)
-- [ ] Settings modal UX improvements (tabs reorganization, delete all tags, minimize toggle)
-- [ ] Import/export tag handling (create tags on import if they don't exist)
+**Phase 5E (Polish & Nice-to-Have Features):** ✅ Complete (2026-01-31)
+- ✅ Review and fix console warnings/errors (CSP violations fixed - 2026-01-31)
+- ✅ Confirmation modal button spacing (420px/480px widths, consistent formatting, British English - 2026-01-31)
+- ✅ Multi-tag select in Tag Manager (checkboxes, delete selected with dynamic count, select/unselect all, 600px modal width, 24px spacing - 2026-01-31)
+- ✅ Import/export tag handling (auto-create tags on import, match by name, frontend refresh fix - 2026-01-31)
+- ✅ Modifier key import shortcuts (Cmd/Ctrl transforms header buttons to Import Profile/Group, 120px fixed width - 2026-01-31)
+- ✅ Settings modal UX improvements (section reorganization, Tag Management, delete all tags, minimize toggle, default values, GitHub buttons, British English - 2026-01-31)
 
 See `plans/v0.7.0-phase-5-progress-tracking.md` Phase 5E section for full details.
 

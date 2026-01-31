@@ -275,7 +275,7 @@
                             </div>
                             <button type="button" class="btn btn-secondary btn-icon-text" id="add-tag-from-profile-btn" title="Manage tags">+ Tag</button>
                         </div>
-                        <small id="tag-create-hint" class="input-hint hidden" style="color: var(--text-muted); margin-top: 4px;"></small>
+                        <small id="tag-create-hint" class="input-hint hidden"></small>
                     </div>
                 </form>
             </div>
@@ -365,14 +365,14 @@
                     <div class="settings-section">
                         <h3>Appearance</h3>
                         <div class="form-group settings-gap">
-                            <label for="theme-select">Theme</label>
+                            <label for="theme-select">Theme <span class="default-value">(Default: Dark)</span></label>
                             <select id="theme-select">
                                 <option value="system">Follow System</option>
                                 <option value="dark">Dark Mode</option>
                                 <option value="light">Light Mode</option>
                             </select>
                         </div>
-                        <p class="settings-help">Choose your preferred color theme. System mode automatically matches your operating system's theme.</p>
+                        <p class="settings-help">Choose your preferred colour theme. System mode automatically matches your operating system's theme.</p>
                     </div>
 
                     <!-- Keyboard Shortcuts -->
@@ -382,6 +382,7 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="keyboard-shortcuts-check" checked>
                                 <span>Enable keyboard shortcuts</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
                         <button type="button" id="shortcuts-help-btn" class="btn btn-secondary settings-gap">View All Shortcuts</button>
@@ -392,7 +393,7 @@
                     <div class="settings-section">
                         <h3>Recent Connections</h3>
                         <div class="form-group settings-gap">
-                            <label for="recent-connections-limit">Number of recent connections to show (0 to disable)</label>
+                            <label for="recent-connections-limit">Number of recent connections to show (0 to disable) <span class="default-value">(Default: 5)</span></label>
                             <input type="number" id="recent-connections-limit" min="0" max="20" value="5">
                         </div>
                         <p class="settings-help">Display your most recent connections for quick reconnect. Set to 0 to hide the recent connections bar.</p>
@@ -402,7 +403,7 @@
                     <div class="settings-section">
                         <h3>Terminal</h3>
                         <div class="form-group settings-gap">
-                            <label for="terminal-select">Terminal Application</label>
+                            <label for="terminal-select">Terminal Application <span class="default-value">(Default: System Default)</span></label>
                             <select id="terminal-select">
                                 <!-- Options will be populated by JavaScript based on OS -->
                             </select>
@@ -418,9 +419,17 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="use-tabs-in-terminal-check" checked>
                                 <span>Open profiles in new tabs (when supported)</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).</p>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="minimize-on-launch-check" checked>
+                                <span>Minimize app when launching profile</span>
+                                <span class="default-value">(Default: On)</span>
+                            </label>
+                        </div>
+                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal). When minimize is enabled, the app will minimize after launching a connection.</p>
                     </div>
 
                     <!-- Import/Export Settings -->
@@ -430,6 +439,7 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="include-passwords-check" checked>
                                 <span>Include Passwords in Export</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
                         <div class="settings-actions">
@@ -441,6 +451,16 @@
                         <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles and groups permanently.<br><strong>Security Warning:</strong> When "Include Passwords in Export" is enabled, exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
                     </div>
 
+                    <!-- Tag Management -->
+                    <div class="settings-section">
+                        <h3>Tag Management</h3>
+                        <div class="settings-actions">
+                            <button id="open-tag-manager-btn" class="btn btn-secondary">Manage Tags</button>
+                            <button id="delete-all-tags-btn" class="btn btn-danger">Delete All</button>
+                        </div>
+                        <p class="settings-help">Create, manage, and delete tags for organising and filtering your SSH profiles.</p>
+                    </div>
+
                     <!-- Settings Management -->
                     <div class="settings-section">
                         <h3>Settings Management</h3>
@@ -448,6 +468,7 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="include-profiles-check" checked>
                                 <span>Include Profiles</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
                         <div class="settings-actions">
@@ -457,15 +478,6 @@
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
                         <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Warning:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups will contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
-                    </div>
-
-                    <!-- Tags Section -->
-                    <div class="settings-section">
-                        <h3>Tags</h3>
-                        <div class="settings-actions">
-                            <button id="open-tag-manager-btn" class="btn btn-secondary">Manage Tags</button>
-                        </div>
-                        <p class="settings-help">Create and manage tags for organizing and filtering your SSH profiles.</p>
                     </div>
 
                     <!-- Updates Section -->
@@ -516,6 +528,11 @@
                                 <span class="about-label">Built with:</span>
                                 <span class="about-value">Tauri + Rust</span>
                             </div>
+                        </div>
+                        <div class="github-actions">
+                            <button id="github-star-btn" class="btn btn-secondary">⭐ Star Project</button>
+                            <button id="github-bug-btn" class="btn btn-secondary">🐛 Report Bug</button>
+                            <button id="github-feature-btn" class="btn btn-secondary">💡 Request Feature</button>
                         </div>
                     </div>
                 </div>
@@ -583,7 +600,7 @@
 
         <!-- Tag Manager Modal -->
         <div id="tag-manager-modal" class="modal hidden">
-            <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-content">
                 <div class="modal-header">
                     <div class="modal-header-left">
                         <h2>Tag Manager</h2>
@@ -646,6 +663,11 @@
                         <h3>Existing Tags</h3>
                         <div id="tag-list-container" class="tag-list">
                             <!-- Populated dynamically -->
+                        </div>
+                        <!-- Bulk Actions -->
+                        <div id="tag-bulk-actions" class="tag-bulk-actions hidden">
+                            <button id="select-all-tags-btn" class="btn btn-secondary">Select All</button>
+                            <button id="delete-selected-tags-btn" class="btn btn-danger">Delete Selected</button>
                         </div>
                     </div>
                 </div>

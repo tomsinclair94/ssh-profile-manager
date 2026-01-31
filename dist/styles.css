@@ -101,6 +101,13 @@ body {
 }
 
 #new-profile-btn,
+#add-group-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+    width: 120px;
+    text-align: center;
+}
+
 #settings-btn {
     flex-shrink: 0;
     white-space: nowrap;
@@ -206,7 +213,7 @@ body {
 
 .btn-settings:hover {
     background-color: #5a6268;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(108, 117, 125, 0.4);
 }
 
@@ -998,7 +1005,7 @@ button.keyboard-selected {
 
 .btn-primary:hover {
     background-color: var(--primary-hover);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(0, 120, 212, 0.4);
 }
 
@@ -1023,7 +1030,7 @@ button.keyboard-selected {
 .btn-secondary-header:hover {
     background-color: rgba(108, 117, 125, 0.3);
     border-color: rgba(108, 117, 125, 0.6);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(108, 117, 125, 0.3);
 }
 
@@ -1036,7 +1043,7 @@ button.keyboard-selected {
 .btn-secondary:hover {
     background-color: var(--surface-hover);
     border-color: var(--primary-color);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(255, 255, 255, 0.1);
 }
 
@@ -1052,8 +1059,20 @@ button.keyboard-selected {
 
 .btn-danger:hover {
     background-color: #d00016;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(232, 17, 35, 0.4);
+}
+
+.btn-danger:disabled {
+    background-color: var(--border-color);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.btn-danger:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    background-color: var(--border-color);
 }
 
 .btn-success {
@@ -1063,7 +1082,7 @@ button.keyboard-selected {
 
 .btn-success:hover {
     background-color: #2A9F47;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(52, 199, 89, 0.4);
 }
 
@@ -1074,7 +1093,7 @@ button.keyboard-selected {
 
 .btn-info:hover {
     background-color: var(--primary-hover);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(0, 120, 212, 0.4);
 }
 
@@ -1129,12 +1148,12 @@ button.keyboard-selected {
 }
 
 .confirm-modal-content {
-    max-width: 320px;
+    max-width: 420px;
     padding-bottom: 0;
 }
 
 .delete-group-modal-content {
-    max-width: 460px;
+    max-width: 480px;
     padding-bottom: 0;
 }
 
@@ -1191,10 +1210,33 @@ button.keyboard-selected {
     padding-left: 24px;
 }
 
+/* Conflict dialog styling (replaces inline styles) */
+.conflict-message-first-line {
+    margin-bottom: 16px;
+}
+
+.conflict-question {
+    margin-bottom: 8px;
+}
+
+.conflict-list {
+    margin-left: 20px;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+.conflict-list-item {
+    margin-bottom: 4px;
+}
+
+.conflict-list-item:last-child {
+    margin-bottom: 0;
+}
+
 .confirm-modal-content .form-actions {
     padding: 12px 0 12px 0;
     margin-top: 0;
-    justify-content: center;
+    justify-content: center; /* Center button group */
 }
 
 .confirm-modal-content .form-actions-left {
@@ -1202,7 +1244,13 @@ button.keyboard-selected {
 }
 
 .confirm-modal-content .form-actions-right {
-    justify-content: center;
+    justify-content: center; /* Group buttons together */
+    gap: 40px; /* Generous gap between buttons */
+}
+
+/* Fixed width buttons for balanced appearance */
+.confirm-modal-content button {
+    min-width: 100px; /* Fixed width for visual balance */
 }
 
 /* Focus indicator for confirm modal buttons */
@@ -1217,7 +1265,7 @@ button.keyboard-selected {
     padding: 12px 0 12px 0;
     margin-top: 0;
     justify-content: center;
-    gap: 12px;
+    gap: 30px; /* Tighter spacing for 3-button layout */
 }
 
 .delete-group-modal-content .form-actions-left {
@@ -1226,7 +1274,12 @@ button.keyboard-selected {
 
 .delete-group-modal-content .form-actions-right {
     display: flex;
-    gap: 12px;
+    gap: 30px; /* Tighter spacing for 3-button layout */
+}
+
+/* Fixed width buttons for balanced appearance */
+.delete-group-modal-content button {
+    min-width: 100px; /* Match 2-button modal */
 }
 
 /* Colored action labels in delete group modal */
@@ -1564,6 +1617,13 @@ form {
     margin: 0;
 }
 
+.default-value {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+}
+
 /* Checkbox Label */
 .checkbox-label {
     display: flex;
@@ -1591,17 +1651,38 @@ form {
     margin-left: 8px;
 }
 
+/* Smaller default values inside checkbox labels */
+.checkbox-label span.default-value {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 0; /* Minimal spacing to match inline labels */
+}
+
 /* About Section */
 .settings-about {
     border-top: 1px solid var(--border-color);
     padding-top: 24px;
     margin-top: 8px;
+    margin-bottom: 0; /* Remove default margin */
+    padding-bottom: 0; /* No extra padding - settings-content already has 24px */
 }
 
 .about-content {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.github-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px; /* Space from "Built with" */
+    margin-bottom: 0; /* No extra margin below */
+}
+
+.github-actions .btn {
+    flex: 1;
+    min-width: 0;
 }
 
 .about-item {
@@ -1652,6 +1733,11 @@ form {
 }
 
 /* Tag Manager Modal */
+#tag-manager-modal .modal-content {
+    max-width: 600px;
+    padding-bottom: 0;
+}
+
 .tag-manager-content {
     padding: 24px 24px 0 24px; /* Consistent 24px spacing on top and sides */
     max-height: calc(100vh - 200px); /* Prevent whole modal from scrolling */
@@ -1738,7 +1824,7 @@ form {
     display: flex;
     flex-direction: column;
     min-height: 0; /* Allow flex child to shrink */
-    padding-bottom: 24px; /* Add bottom padding here instead of content wrapper */
+    padding-bottom: 0;
 }
 
 .tag-list-section h3 {
@@ -1768,7 +1854,7 @@ form {
 .tag-list-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 12px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-color);
     transition: background-color 0.2s ease;
@@ -1782,12 +1868,13 @@ form {
     background: var(--hover-bg);
 }
 
-.tag-list-item .tag-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-    min-width: 0;
+/* Layout: Checkbox > Colour > Name > Space > Count > Delete */
+.tag-list-item .tag-checkbox {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
 }
 
 .tag-list-item .tag-color-swatch {
@@ -1813,8 +1900,7 @@ form {
     font-size: 14px;
     color: var(--text-muted);
     flex-shrink: 0;
-    margin-left: 8px;
-    margin-right: 16px; /* Add gap before delete button */
+    margin-right: 8px;
 }
 
 .tag-list-empty {
@@ -1822,6 +1908,23 @@ form {
     text-align: center;
     color: var(--text-muted);
     font-size: 14px;
+}
+
+/* Bulk Actions */
+.tag-bulk-actions {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 24px 16px 24px 16px;
+}
+
+.tag-bulk-actions.hidden {
+    display: none;
+}
+
+.tag-bulk-actions .btn {
+    width: 145px;
+    white-space: nowrap;
 }
 
 /* Tag Selector (Profile Editor) - Tokenized Input */
@@ -2236,6 +2339,12 @@ form {
 .char-counter.over-limit {
     color: var(--danger-color);
     font-weight: 600;
+}
+
+/* Tag create hint (CSP-compliant) */
+#tag-create-hint {
+    color: var(--text-muted);
+    margin-top: 4px;
 }
 
 /* Keyboard Shortcuts Help Modal */
@@ -2790,7 +2899,7 @@ form {
 
 .recent-connection-delete:hover {
     background: #d00016;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(232, 17, 35, 0.4);
 }
 

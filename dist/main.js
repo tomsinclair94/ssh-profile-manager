@@ -276,6 +276,7 @@ let editingGroupId = null; // Currently editing group ID
 let isSubmitting = false;
 let collapsedGroups = new Set();
 let favouritesCollapsed = false; // Track Favourites group collapse state
+let isModifierKeyHeld = false; // Track Cmd/Ctrl key for New Profile button modifier
 let originalFormValues = {}; // Track original profile form values for change detection
 let originalSettingsValues = {}; // Track original settings values for change detection
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
@@ -709,6 +710,72 @@ function saveKeyboardShortcutsPreference() {
     }
 }
 
+function setupModifierKeyTracking() {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
+    // Update button text and tooltips based on modifier key state
+    function updateHeaderButtons() {
+        const profileBtn = document.getElementById('new-profile-btn');
+        const groupBtn = document.getElementById('add-group-btn');
+
+        if (profileBtn) {
+            if (isModifierKeyHeld) {
+                profileBtn.textContent = 'Import Profile';
+                profileBtn.title = 'Import a profile from JSON file';
+            } else {
+                profileBtn.textContent = '+ New Profile';
+                profileBtn.title = 'Create a new SSH profile';
+            }
+            // Force tooltip refresh by removing and re-adding title
+            const title = profileBtn.title;
+            profileBtn.removeAttribute('title');
+            setTimeout(() => profileBtn.setAttribute('title', title), 0);
+        }
+
+        if (groupBtn) {
+            if (isModifierKeyHeld) {
+                groupBtn.textContent = 'Import Group';
+                groupBtn.title = 'Import a group from JSON file';
+            } else {
+                groupBtn.textContent = '+ New Group';
+                groupBtn.title = 'Create a new group to organise profiles';
+            }
+            // Force tooltip refresh by removing and re-adding title
+            const title = groupBtn.title;
+            groupBtn.removeAttribute('title');
+            setTimeout(() => groupBtn.setAttribute('title', title), 0);
+        }
+    }
+
+    // Track modifier key state (Cmd on Mac, Ctrl on Windows/Linux)
+    document.addEventListener('keydown', (e) => {
+        const modifierPressed = isMac ? e.metaKey : e.ctrlKey;
+
+        if (modifierPressed && !isModifierKeyHeld) {
+            isModifierKeyHeld = true;
+            updateHeaderButtons();
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        // Check if the modifier key was released
+        const modifierPressed = isMac ? e.metaKey : e.ctrlKey;
+
+        if (!modifierPressed && isModifierKeyHeld) {
+            isModifierKeyHeld = false;
+            updateHeaderButtons();
+        }
+    });
+
+    // Reset state when window loses focus (modifier keys released outside window)
+    window.addEventListener('blur', () => {
+        if (isModifierKeyHeld) {
+            isModifierKeyHeld = false;
+            updateHeaderButtons();
+        }
+    });
+}
+
 function setupKeyboardShortcutListeners() {
     document.addEventListener('keydown', (e) => {
         if (!keyboardShortcutsEnabled) return;
@@ -1025,6 +1092,9 @@ function getSettingsModalTabbableItems() {
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     if (useTabsInTerminalCheck) items.push(useTabsInTerminalCheck);
 
+    const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
+    if (minimizeOnLaunchCheck) items.push(minimizeOnLaunchCheck);
+
     // Profile management
     const includePasswordsCheck = document.getElementById('include-passwords-check');
     if (includePasswordsCheck) items.push(includePasswordsCheck);
@@ -1038,6 +1108,13 @@ function getSettingsModalTabbableItems() {
 
     const deleteAllProfilesBtn = document.getElementById('delete-all-profiles-btn');
     if (deleteAllProfilesBtn) items.push(deleteAllProfilesBtn);
+
+    // Tag management
+    const openTagManagerBtn = document.getElementById('open-tag-manager-btn');
+    if (openTagManagerBtn) items.push(openTagManagerBtn);
+
+    const deleteAllTagsBtn = document.getElementById('delete-all-tags-btn');
+    if (deleteAllTagsBtn) items.push(deleteAllTagsBtn);
 
     // Settings management
     const includeProfilesCheck = document.getElementById('include-profiles-check');
@@ -1058,6 +1135,16 @@ function getSettingsModalTabbableItems() {
 
     const checkUpdatesBtn = document.getElementById('check-updates-btn');
     if (checkUpdatesBtn) items.push(checkUpdatesBtn);
+
+    // About - GitHub buttons
+    const githubStarBtn = document.getElementById('github-star-btn');
+    if (githubStarBtn) items.push(githubStarBtn);
+
+    const githubBugBtn = document.getElementById('github-bug-btn');
+    if (githubBugBtn) items.push(githubBugBtn);
+
+    const githubFeatureBtn = document.getElementById('github-feature-btn');
+    if (githubFeatureBtn) items.push(githubFeatureBtn);
 
     // Header buttons (Save/Close at the end)
     const saveBtn = document.getElementById('settings-save-btn');
@@ -1102,6 +1189,16 @@ function getTagManagerModalTabbableItems() {
 
     const createTagBtn = document.getElementById('create-tag-btn');
     if (createTagBtn) items.push(createTagBtn);
+
+    // Bulk action buttons (only if visible)
+    const bulkActions = document.getElementById('tag-bulk-actions');
+    if (bulkActions && !bulkActions.classList.contains('hidden')) {
+        const selectAllBtn = document.getElementById('select-all-tags-btn');
+        if (selectAllBtn) items.push(selectAllBtn);
+
+        const deleteSelectedBtn = document.getElementById('delete-selected-tags-btn');
+        if (deleteSelectedBtn) items.push(deleteSelectedBtn);
+    }
 
     // Close button
     const closeBtn = document.getElementById('tag-manager-close-btn');
@@ -2380,6 +2477,7 @@ async function init() {
     await setupWindowListeners();
     setupEventListeners();
     setupKeyboardShortcutListeners();
+    setupModifierKeyTracking();
 
     // Track actual mouse movement to distinguish from elements scrolling under cursor
     document.addEventListener('mousemove', () => {
@@ -4089,7 +4187,7 @@ async function deleteGroup(groupId) {
         lines,
         list: [
             `<span class="action-delete-all">Delete All:</span> Permanently deletes all profiles and subgroups`,
-            `<span class="action-move-to-parent">Move to Parent:</span> Moves profiles/subgroups to ${parentText}, then deletes group`
+            `<span class="action-move-to-parent">Move All:</span> Moves profiles/subgroups to ${parentText}, then deletes group`
         ]
     });
 
@@ -4110,7 +4208,7 @@ async function deleteGroup(groupId) {
                         <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
                     </div>
                     <div class="form-actions-right">
-                        <button id="move-to-parent-btn" class="btn btn-primary">Move to Parent</button>
+                        <button id="move-to-parent-btn" class="btn btn-primary">Move All</button>
                         <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
                     </div>
                 </div>
@@ -4245,8 +4343,15 @@ function setupEventListeners() {
     });
 
     newProfileBtn.addEventListener('click', () => {
-        debug.log('New profile button clicked!');
-        openModal();
+        if (isModifierKeyHeld) {
+            // Cmd/Ctrl held - trigger import
+            debug.log('Import profile triggered via modifier key');
+            importFileInput.click();
+        } else {
+            // Normal click - open new profile modal
+            debug.log('New profile button clicked!');
+            openModal();
+        }
     });
 
     cancelBtn.addEventListener('click', async () => {
@@ -4736,6 +4841,22 @@ function setupEventListeners() {
         updateTagNameCounter();
     });
 
+    // Bulk tag actions
+    const selectAllTagsBtn = document.getElementById('select-all-tags-btn');
+    const deleteSelectedTagsBtn = document.getElementById('delete-selected-tags-btn');
+
+    if (selectAllTagsBtn) {
+        selectAllTagsBtn.addEventListener('click', () => {
+            toggleSelectAllTags();
+        });
+    }
+
+    if (deleteSelectedTagsBtn) {
+        deleteSelectedTagsBtn.addEventListener('click', () => {
+            deleteSelectedTags();
+        });
+    }
+
     // Export/Import
     exportProfilesBtn.addEventListener('click', async () => {
         await exportProfiles();
@@ -4754,6 +4875,11 @@ function setupEventListeners() {
 
     deleteAllProfilesBtn.addEventListener('click', async () => {
         await deleteAllProfiles();
+    });
+
+    const deleteAllTagsBtn = document.getElementById('delete-all-tags-btn');
+    deleteAllTagsBtn.addEventListener('click', async () => {
+        await deleteAllTags();
     });
 
     // Browse for SSH key file
@@ -4781,6 +4907,28 @@ function setupEventListeners() {
         await checkForUpdates(false); // not silent, show notification
     });
 
+    // GitHub buttons
+    const githubStarBtn = document.getElementById('github-star-btn');
+    if (githubStarBtn) {
+        githubStarBtn.addEventListener('click', () => {
+            window.open('https://github.com/tomsinclair94/ssh-profile-manager', '_blank');
+        });
+    }
+
+    const githubBugBtn = document.getElementById('github-bug-btn');
+    if (githubBugBtn) {
+        githubBugBtn.addEventListener('click', () => {
+            window.open('https://github.com/tomsinclair94/ssh-profile-manager/issues/new?template=bug_report.md', '_blank');
+        });
+    }
+
+    const githubFeatureBtn = document.getElementById('github-feature-btn');
+    if (githubFeatureBtn) {
+        githubFeatureBtn.addEventListener('click', () => {
+            window.open('https://github.com/tomsinclair94/ssh-profile-manager/issues/new?template=feature_request.md', '_blank');
+        });
+    }
+
     includeProfilesCheck.addEventListener('change', () => {
         debouncedCheckSettingsChanged();
     });
@@ -4793,6 +4941,14 @@ function setupEventListeners() {
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     if (useTabsInTerminalCheck) {
         useTabsInTerminalCheck.addEventListener('change', () => {
+            debouncedCheckSettingsChanged();
+        });
+    }
+
+    // Minimize on launch checkbox
+    const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
+    if (minimizeOnLaunchCheck) {
+        minimizeOnLaunchCheck.addEventListener('change', () => {
             debouncedCheckSettingsChanged();
         });
     }
@@ -4812,7 +4968,14 @@ function setupEventListeners() {
 
     // Add Group button
     addGroupBtn.addEventListener('click', () => {
-        openGroupModal();
+        if (isModifierKeyHeld) {
+            // Cmd/Ctrl held - trigger import
+            debug.log('Import group triggered via modifier key');
+            importFileInput.click();
+        } else {
+            // Normal click - open new group modal
+            openGroupModal();
+        }
     });
 
     // Group modal close button
@@ -5193,31 +5356,30 @@ async function showProfileConflictDialog(profileName, groupName) {
     const messageDiv = document.createElement('div');
 
     const firstLine = document.createElement('p');
-    firstLine.style.marginBottom = '16px';
-    firstLine.innerHTML = `A profile named <span class="highlight-name">${profileName}</span> already exists in group <span class="highlight-name">${groupName || 'Top Level'}</span>.`;
+    firstLine.className = 'conflict-message-first-line';
+    firstLine.innerHTML = `A profile named <span class="profile-name">${profileName}</span> already exists in group <span class="profile-name">${groupName || 'Top Level'}</span>.`;
     messageDiv.appendChild(firstLine);
 
     const question = document.createElement('p');
+    question.className = 'conflict-question';
     question.textContent = 'How would you like to proceed?';
-    question.style.marginBottom = '8px';
     messageDiv.appendChild(question);
 
     const list = document.createElement('ul');
-    list.style.marginLeft = '20px';
-    list.style.marginTop = '8px';
-    list.style.marginBottom = '0';
+    list.className = 'conflict-list';
 
     const option1 = document.createElement('li');
+    option1.className = 'conflict-list-item';
     option1.innerHTML = '<span class="conflict-text-skip">Skip</span> - Cancel the import (no changes made)';
-    option1.style.marginBottom = '4px';
     list.appendChild(option1);
 
     const option2 = document.createElement('li');
+    option2.className = 'conflict-list-item';
     option2.innerHTML = '<span class="conflict-text-primary">Keep Both</span> - Import with renamed profile';
-    option2.style.marginBottom = '4px';
     list.appendChild(option2);
 
     const option3 = document.createElement('li');
+    option3.className = 'conflict-list-item';
     option3.innerHTML = '<span class="conflict-text-danger">Overwrite</span> - Replace the existing profile';
     list.appendChild(option3);
 
@@ -5241,31 +5403,30 @@ async function showGroupConflictDialog(groupName, parentName) {
     const messageDiv = document.createElement('div');
 
     const firstLine = document.createElement('p');
-    firstLine.style.marginBottom = '16px';
-    firstLine.innerHTML = `A group named <span class="highlight-name">${groupName}</span> already exists under group <span class="highlight-name">${parentName || 'Top Level'}</span>.`;
+    firstLine.className = 'conflict-message-first-line';
+    firstLine.innerHTML = `A group named <span class="profile-name">${groupName}</span> already exists under group <span class="profile-name">${parentName || 'Top Level'}</span>.`;
     messageDiv.appendChild(firstLine);
 
     const question = document.createElement('p');
+    question.className = 'conflict-question';
     question.textContent = 'How would you like to proceed?';
-    question.style.marginBottom = '8px';
     messageDiv.appendChild(question);
 
     const list = document.createElement('ul');
-    list.style.marginLeft = '20px';
-    list.style.marginTop = '8px';
-    list.style.marginBottom = '0';
+    list.className = 'conflict-list';
 
     const option1 = document.createElement('li');
+    option1.className = 'conflict-list-item';
     option1.innerHTML = '<span class="conflict-text-skip">Skip</span> - Cancel the import (no changes made)';
-    option1.style.marginBottom = '4px';
     list.appendChild(option1);
 
     const option2 = document.createElement('li');
+    option2.className = 'conflict-list-item';
     option2.innerHTML = '<span class="conflict-text-primary">Keep Both</span> - Import with renamed group';
-    option2.style.marginBottom = '4px';
     list.appendChild(option2);
 
     const option3 = document.createElement('li');
+    option3.className = 'conflict-list-item';
     option3.innerHTML = '<span class="conflict-text-warning">Merge</span> - Combine profiles and subgroups';
     list.appendChild(option3);
 
@@ -5326,6 +5487,7 @@ function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
+    const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
     return {
         theme: themeSelect.value,
         autoUpdateCheck: autoUpdateCheck.checked,
@@ -5335,7 +5497,8 @@ function getCurrentSettingsValues() {
         includePasswords: includePasswordsCheck.checked,
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
-        useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true
+        useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true,
+        minimizeOnLaunch: minimizeOnLaunchCheck ? minimizeOnLaunchCheck.checked : true
     };
 }
 
@@ -5381,6 +5544,7 @@ function openSettings() {
     loadKeyboardShortcutsCheckbox();
     loadIncludePasswordsPreference();
     loadUseTabsInTerminalPreference();
+    loadMinimizeOnLaunchPreference();
 
     // Capture original settings values and disable Save button initially
     captureSettingsValues();
@@ -5498,6 +5662,9 @@ function saveSettings() {
     // Save use tabs in terminal preference
     saveUseTabsInTerminalPreference();
 
+    // Save minimize on launch preference
+    saveMinimizeOnLaunchPreference();
+
     // Save recent connections limit
     saveRecentConnectionsLimit();
 
@@ -5578,6 +5745,27 @@ function saveUseTabsInTerminalPreference() {
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     if (useTabsInTerminalCheck) {
         localStorage.setItem('useTabsInTerminal', useTabsInTerminalCheck.checked);
+    }
+}
+
+function loadMinimizeOnLaunchPreference() {
+    const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
+    if (minimizeOnLaunchCheck) {
+        const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch');
+        // Default to true (checked) if not set
+        if (minimizeOnLaunch === null) {
+            minimizeOnLaunchCheck.checked = true;
+            saveMinimizeOnLaunchPreference();
+        } else {
+            minimizeOnLaunchCheck.checked = minimizeOnLaunch === 'true';
+        }
+    }
+}
+
+function saveMinimizeOnLaunchPreference() {
+    const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
+    if (minimizeOnLaunchCheck) {
+        localStorage.setItem('minimizeOnLaunch', minimizeOnLaunchCheck.checked);
     }
 }
 
@@ -6684,7 +6872,8 @@ async function importAllProfiles(data) {
         // Import profiles via backend (fixed bug: use JSON.stringify on data, not text)
         await invoke('import_profiles', { data: JSON.stringify(data) });
 
-        // Reload profiles and groups
+        // Reload profiles, groups, and tags
+        await loadTags(); // Load tags first so colors are available
         await loadProfiles();
         await loadGroups();
 
@@ -6767,7 +6956,8 @@ async function importSingleProfile(data) {
             });
         }
 
-        // Reload profiles and groups
+        // Reload profiles, groups, and tags
+        await loadTags(); // Load tags first so colors are available
         await loadProfiles();
         await loadGroups();
 
@@ -6846,7 +7036,8 @@ async function importSingleGroup(data) {
             });
         }
 
-        // Reload profiles and groups
+        // Reload profiles, groups, and tags
+        await loadTags(); // Load tags first so colors are available
         await loadProfiles();
         await loadGroups();
 
@@ -6939,6 +7130,81 @@ async function deleteAllProfiles() {
     }
 }
 
+// Delete all tags
+async function deleteAllTags() {
+    if (allTags.length === 0) {
+        showToast('No tags to delete!', TOAST_DURATION_SHORT, 'error');
+        return;
+    }
+
+    const count = allTags.length;
+    const tagText = count === 1 ? 'tag' : 'tags';
+
+    // Count profiles affected by tags
+    let affectedProfiles = new Set();
+    for (const profile of profiles) {
+        if (profile.tags && profile.tags.length > 0) {
+            affectedProfiles.add(profile.id);
+        }
+    }
+    const profileCount = affectedProfiles.size;
+
+    // Build message
+    const segments = profileCount > 0
+        ? [
+            { text: 'You currently have ' },
+            { highlight: `${count} ${tagText}` },
+            { text: ' assigned to ' },
+            { highlight: `${profileCount} ${profileCount === 1 ? 'profile' : 'profiles'}` },
+            { text: '.' }
+          ]
+        : [
+            { text: 'You currently have ' },
+            { highlight: `${count} ${tagText}` },
+            { text: '.' }
+          ];
+
+    const confirmMessage = buildConfirmMessage({
+        lines: [{ segments }],
+        warnings: [
+            'This will permanently delete all tags and remove them from all profiles.'
+        ],
+        question: 'Are you sure you want to delete all tags?'
+    });
+
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Delete All Tags',
+        okText: 'Delete All',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
+    });
+
+    if (!confirmed) {
+        debug.log('User cancelled delete all tags');
+        return;
+    }
+
+    // Close settings modal after confirmation
+    closeSettings();
+
+    try {
+        showToast('Deleting tags...', TOAST_DURATION_LOADING);
+
+        // Delete all tags (CASCADE will handle profile_tags)
+        for (const tag of allTags) {
+            await invoke('delete_tag', { tagId: tag.id });
+        }
+
+        await loadTags();
+        await loadProfiles();
+        showToast('All tags deleted successfully!');
+        debug.log('All tags deleted');
+    } catch (error) {
+        console.error('Failed to delete all tags:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
 // Backup settings to JSON file
 async function backupSettings() {
     try {
@@ -6954,6 +7220,7 @@ async function backupSettings() {
         // Always include terminal preference (OS-specific setting, will be tagged with OS)
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
         const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
+        const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch') !== 'false'; // Default to true
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -6977,6 +7244,7 @@ async function backupSettings() {
             collapsedGroups,
             terminalPreference: terminalPreference,
             useTabsInTerminal: useTabsInTerminal,
+            minimizeOnLaunch: minimizeOnLaunch,
             includeProfiles,
             includePasswords,
             windowWidth,
@@ -7215,10 +7483,15 @@ async function restoreSettings(file) {
             // Restore use_tabs_in_terminal if present (default to true if not specified)
             const useTabsInTerminal = result.settings_os_specific.use_tabs_in_terminal !== false;
             localStorage.setItem('useTabsInTerminal', useTabsInTerminal.toString());
+
+            // Restore minimize_on_launch if present (default to true if not specified)
+            const minimizeOnLaunch = result.settings_os_specific.minimize_on_launch !== false;
+            localStorage.setItem('minimizeOnLaunch', minimizeOnLaunch.toString());
         } else {
             // No OS-specific settings in backup (different OS or old format) - use defaults
             localStorage.setItem('terminalPreference', 'default');
             localStorage.setItem('useTabsInTerminal', 'true');
+            localStorage.setItem('minimizeOnLaunch', 'true');
         }
 
         // Restore window state if available with validation
@@ -7351,16 +7624,7 @@ async function restoreSettings(file) {
 async function resetSettings() {
     try {
         const confirmMessage = buildConfirmMessage({
-            warnings: ['This will reset all settings to their default values:'],
-            list: [
-                'Theme: System',
-                'Terminal: Default',
-                'Auto-update check: Enabled',
-                'Window size: 800 × 600',
-                'Recent connections limit: 5',
-                'Filtered groups: Cleared',
-                'Collapsed groups: Cleared'
-            ],
+            warnings: ['This will reset all settings to their default values.'],
             lines: ['Profiles will not be affected.'],
             question: 'Are you sure you want to reset all settings?'
         });
@@ -8632,6 +8896,7 @@ async function connectToProfile(id) {
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
         const customTerminalPath = localStorage.getItem('customTerminalPath') || null;
         const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
+        const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch') !== 'false'; // Default to true
 
         // Route to embedded terminal or external terminal
         if (terminalPreference === 'embedded') {
@@ -8641,7 +8906,8 @@ async function connectToProfile(id) {
                 profileId: id,
                 terminalPreference: terminalPreference,
                 customTerminalPath: customTerminalPath,
-                useTabsInTerminal: useTabsInTerminal
+                useTabsInTerminal: useTabsInTerminal,
+                minimizeOnLaunch: minimizeOnLaunch
             });
         }
 
@@ -8861,14 +9127,21 @@ function closeTagManager() {
     colorInput.value = '#3b82f6';
     counter.textContent = '0 / 32';
     counter.classList.remove('over-limit');
+
+    // Clear any selected checkboxes
+    document.querySelectorAll('.tag-checkbox:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
 }
 
 // Render tag list with usage counts
 function renderTagList(usageCounts) {
     const container = document.getElementById('tag-list-container');
+    const bulkActions = document.getElementById('tag-bulk-actions');
 
     if (!usageCounts || usageCounts.length === 0) {
         container.innerHTML = '<div class="tag-list-empty">No tags created yet.</div>';
+        bulkActions.classList.add('hidden');
         return;
     }
 
@@ -8880,11 +9153,10 @@ function renderTagList(usageCounts) {
 
     const html = usageCounts.map(([tag, count]) => `
         <div class="tag-list-item">
-            <div class="tag-info">
-                <div class="tag-color-swatch" data-color="${escapeHtml(tag.color)}"></div>
-                <span class="tag-name">${escapeHtml(tag.name)}</span>
-                <span class="tag-usage">(${count} profile${count !== 1 ? 's' : ''})</span>
-            </div>
+            <input type="checkbox" class="tag-checkbox" data-tag-id="${escapeHtml(tag.id)}" data-tag-name="${escapeHtml(tag.name)}" data-tag-count="${count}">
+            <div class="tag-color-swatch" data-color="${escapeHtml(tag.color)}"></div>
+            <span class="tag-name">${escapeHtml(tag.name)}</span>
+            <span class="tag-usage">(${count} profile${count !== 1 ? 's' : ''})</span>
             <button class="btn btn-danger btn-sm tag-delete-btn"
                     data-tag-id="${escapeHtml(tag.id)}"
                     data-tag-name="${escapeHtml(tag.name)}"
@@ -8904,6 +9176,9 @@ function renderTagList(usageCounts) {
         }
     });
 
+    // Show bulk actions
+    bulkActions.classList.remove('hidden');
+
     // Add event delegation for delete buttons
     container.querySelectorAll('.tag-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -8913,6 +9188,14 @@ function renderTagList(usageCounts) {
             deleteTag(tagId, tagName, usageCount);
         });
     });
+
+    // Add event delegation for checkboxes (update select all button text and delete button state)
+    container.querySelectorAll('.tag-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectAllButtonText);
+    });
+
+    // Reset select all button text and delete button state (initially disable delete button)
+    updateSelectAllButtonText();
 }
 
 // Create new tag
@@ -8968,8 +9251,7 @@ async function deleteTag(tagId, tagName, usageCount) {
         {
             segments: [
                 { text: 'Delete tag ' },
-                { highlight: tagName },
-                { text: '?' }
+                { highlight: tagName }
             ]
         }
     ];
@@ -8981,7 +9263,7 @@ async function deleteTag(tagId, tagName, usageCount) {
 
     const confirmMessage = buildConfirmMessage({
         lines: lines,
-        warning: warningText,
+        warnings: warningText ? [warningText] : [],
         question: 'Are you sure you want to delete this tag?'
     });
 
@@ -9008,6 +9290,122 @@ async function deleteTag(tagId, tagName, usageCount) {
     } catch (error) {
         console.error('Failed to delete tag:', error);
         showToast(`Failed to delete tag: ${error}`, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Update select all button text and delete button state based on checkbox states
+function updateSelectAllButtonText() {
+    const selectAllBtn = document.getElementById('select-all-tags-btn');
+    const deleteSelectedBtn = document.getElementById('delete-selected-tags-btn');
+    if (!selectAllBtn) return;
+
+    const checkboxes = document.querySelectorAll('.tag-checkbox');
+    const checkedCount = document.querySelectorAll('.tag-checkbox:checked').length;
+
+    // Update select all button text
+    if (checkedCount === checkboxes.length && checkboxes.length > 0) {
+        selectAllBtn.textContent = 'Unselect All';
+    } else {
+        selectAllBtn.textContent = 'Select All';
+    }
+
+    // Enable/disable delete selected button and update text
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.disabled = checkedCount === 0;
+
+        if (checkedCount === 0) {
+            deleteSelectedBtn.textContent = 'Delete Selected';
+        } else if (checkedCount === 1) {
+            deleteSelectedBtn.textContent = 'Delete 1 Tag';
+        } else {
+            deleteSelectedBtn.textContent = `Delete ${checkedCount} Tags`;
+        }
+    }
+}
+
+// Toggle select/unselect all tags
+function toggleSelectAllTags() {
+    const selectAllBtn = document.getElementById('select-all-tags-btn');
+    const checkboxes = document.querySelectorAll('.tag-checkbox');
+    const checkedCount = document.querySelectorAll('.tag-checkbox:checked').length;
+
+    // If all are selected, unselect all. Otherwise, select all.
+    const shouldSelect = checkedCount !== checkboxes.length;
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = shouldSelect;
+    });
+
+    updateSelectAllButtonText();
+}
+
+// Delete selected tags
+async function deleteSelectedTags() {
+    const checkboxes = document.querySelectorAll('.tag-checkbox:checked');
+
+    if (checkboxes.length === 0) {
+        showToast('No tags selected', TOAST_DURATION_SHORT, 'error');
+        return;
+    }
+
+    // Collect tag data
+    const tagsToDelete = Array.from(checkboxes).map(checkbox => ({
+        id: checkbox.dataset.tagId,
+        name: checkbox.dataset.tagName,
+        count: parseInt(checkbox.dataset.tagCount)
+    }));
+
+    const totalCount = tagsToDelete.length;
+    const totalProfiles = tagsToDelete.reduce((sum, tag) => sum + tag.count, 0);
+
+    // Build confirmation message
+    const lines = [
+        {
+            segments: [
+                { text: 'Delete ' },
+                { highlight: `${totalCount} tag${totalCount !== 1 ? 's' : ''}` }
+            ]
+        }
+    ];
+
+    const warnings = [];
+    if (totalProfiles > 0) {
+        warnings.push(`These tags are used by ${totalProfiles} profile${totalProfiles !== 1 ? 's' : ''} in total. They will be removed from all profiles.`);
+    }
+
+    const confirmMessage = buildConfirmMessage({
+        lines: lines,
+        warnings: warnings,
+        question: 'Are you sure you want to delete the selected tags?'
+    });
+
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Delete Selected Tags',
+        okText: 'Delete',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+        // Delete all selected tags
+        for (const tag of tagsToDelete) {
+            await invoke('delete_tag', { tagId: tag.id });
+        }
+
+        showToast(`${totalCount} tag${totalCount !== 1 ? 's' : ''} deleted successfully`, TOAST_DURATION_SHORT, 'success');
+
+        // Refresh tag list
+        await loadTags();
+        const usageCounts = await invoke('get_tag_usage_counts');
+        renderTagList(usageCounts);
+
+        // Reload profiles to update UI
+        await loadProfiles();
+    } catch (error) {
+        console.error('Failed to delete tags:', error);
+        showToast(`Failed to delete tags: ${error}`, TOAST_DURATION_LONG, 'error');
     }
 }
 
@@ -9056,12 +9454,20 @@ function showProfileTagsDropdown(searchQuery = '') {
             const isSelected = selectedProfileTags.has(tag.id);
             return `
                 <div class="tag-dropdown-item ${isSelected ? 'selected' : ''}" data-tag-id="${escapeHtml(tag.id)}">
-                    <div class="tag-dropdown-color-swatch" style="background-color: ${escapeHtml(tag.color)};"></div>
+                    <div class="tag-dropdown-color-swatch" data-tag-color="${escapeHtml(tag.color)}"></div>
                     <span class="tag-dropdown-item-name">${escapeHtml(tag.name)}</span>
                     ${isSelected ? checkIcon : ''}
                 </div>
             `;
         }).join('');
+
+        // Apply colors to swatches (CSP-compliant)
+        dropdown.querySelectorAll('.tag-dropdown-color-swatch').forEach(swatch => {
+            const color = swatch.dataset.tagColor;
+            if (color) {
+                swatch.style.backgroundColor = color;
+            }
+        });
 
         // Add click handlers
         dropdown.querySelectorAll('.tag-dropdown-item').forEach(item => {

@@ -1841,6 +1841,8 @@ struct SettingsOsSpecific {
     terminal_preference: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     use_tabs_in_terminal: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    minimize_on_launch: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -3151,6 +3153,7 @@ fn export_settings(
     collapsed_groups: Option<Vec<String>>,
     terminal_preference: String,
     use_tabs_in_terminal: Option<bool>,
+    minimize_on_launch: Option<bool>,
     include_profiles: bool,
     include_passwords: bool,
     db: State<Database>,
@@ -3178,6 +3181,7 @@ fn export_settings(
     let settings_os_specific = SettingsOsSpecific {
         terminal_preference,
         use_tabs_in_terminal,
+        minimize_on_launch,
     };
 
     // Validate before exporting
@@ -4647,6 +4651,7 @@ fn connect_ssh(
     terminal_preference: Option<String>,
     custom_terminal_path: Option<String>,
     use_tabs_in_terminal: Option<bool>,
+    minimize_on_launch: Option<bool>,
     app_handle: tauri::AppHandle
 ) -> Result<(), String> {
     // Load and validate profile
@@ -4665,6 +4670,7 @@ fn connect_ssh(
     // Get terminal preference (default to "default")
     let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
     let use_tabs = use_tabs_in_terminal.unwrap_or(true);
+    let should_minimize = minimize_on_launch.unwrap_or(true);
 
     // Launch terminal based on OS and preference
     #[cfg(target_os = "macos")]
@@ -4682,9 +4688,11 @@ fn connect_ssh(
             }
         }
 
-        // Minimize app window
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.minimize();
+        // Minimize app window if enabled
+        if should_minimize {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.minimize();
+            }
         }
     }
 
@@ -4704,9 +4712,11 @@ fn connect_ssh(
             "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs)?,
         }
 
-        // Minimize app window
-        if let Some(window) = app_handle.get_webview_window("main") {
-            let _ = window.minimize();
+        // Minimize app window if enabled
+        if should_minimize {
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.minimize();
+            }
         }
     }
 
