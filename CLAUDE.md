@@ -26,7 +26,7 @@ bun run build    # Production build
 **In Development:** v0.7.0
 **See:** TODO.md for roadmap and feature backlog
 
-**v0.7.0 Features (In Development - 75% Complete):**
+**v0.7.0 Features (In Development - 80% Complete):**
 - ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
 - ✅ Individual profile/group export/import with duplicate detection
 - ✅ Favourites system for profiles with virtual group display
@@ -35,7 +35,7 @@ bun run build    # Production build
 - ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
-- ⏸️ Encryption for exports (Phase 6 - pending)
+- 🔄 Encryption for exports (Phase 6 - in progress: 6A complete, 6B-6E pending)
 - ⏸️ Testing & documentation (Phase 8 - pending)
 
 ## Version Management
@@ -172,7 +172,9 @@ remove_profile_tag(profile_id: String, tag_id: String)
 **Settings & Export/Import:**
 ```rust
 export_profiles() // All profiles (legacy, now called "Export All Profiles")
+                  // Note: Phase 6B will add encryption_password parameter
 import_profiles(data: String) // With conflict resolution
+                               // Note: Phase 6C will add encryption_password parameter
 export_settings() // Now displayed as "Backup Settings" in UI
 import_settings(data: String) // Now displayed as "Restore Settings" in UI
 browse_ssh_key()
@@ -251,6 +253,17 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - CSP-compliant: All styles applied via JavaScript (no inline `style=""` attributes)
 - Tag/group name validation: Alphanumeric + limited special chars only
 - localStorage: Group IDs (not names) for filter/collapse state
+
+**Export Encryption (v0.7.0 - Phase 6):**
+- AES-256-GCM authenticated encryption for exports
+- PBKDF2-HMAC-SHA256 key derivation (600k iterations - OWASP 2023)
+- Additional HMAC-SHA256 integrity verification (fail-fast)
+- Mandatory encryption when password-authenticated profiles included
+- Password requirements: 12+ characters minimum
+- Zeroization: Passwords/keys cleared from memory after use
+- Random salt (16 bytes) and IV (12 bytes) per export
+- Constant-time HMAC comparison prevents timing attacks
+- Status: Phase 6A complete (backend infrastructure), 6B-6E pending (integration & UI)
 
 **Migration System:**
 - Automatic version detection using `CURRENT_APP_VERSION` constant

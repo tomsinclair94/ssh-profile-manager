@@ -30,6 +30,16 @@ use uuid::Uuid;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use unicode_normalization::UnicodeNormalization;
 
+// Cryptographic imports for export encryption (Phase 6)
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use hmac::{Hmac, Mac};
+use pbkdf2::pbkdf2_hmac;
+use sha2::Sha256;
+use zeroize::Zeroize;
+
 #[cfg(target_os = "windows")]
 use windows_acl::acl::ACL;
 
@@ -1822,6 +1832,20 @@ struct SingleGroupExportData {
     group: GroupExportDetailed,
 }
 
+// Encrypted export structure (Phase 6)
+#[derive(Debug, Serialize, Deserialize)]
+struct EncryptedExport {
+    version: String,          // Export format version (e.g., "2.0")
+    encrypted: bool,          // Always true for encrypted exports
+    cipher: String,           // "AES-256-GCM"
+    kdf: String,              // "PBKDF2-HMAC-SHA256"
+    kdf_iterations: u32,      // 600000 (OWASP 2023 recommendation)
+    salt: String,             // Base64-encoded 16-byte salt
+    iv: String,               // Base64-encoded 12-byte IV (nonce)
+    data: String,             // Base64-encoded ciphertext
+    hmac: String,             // Base64-encoded HMAC-SHA256
+}
+
 // Settings export/import structures
 #[derive(Debug, Serialize, Deserialize)]
 struct SettingsData {
@@ -1872,6 +1896,184 @@ struct SettingsImportResult {
     settings: SettingsData,
     settings_os_specific: Option<SettingsOsSpecific>,
     profiles: Option<Vec<ProfileExport>>,
+}
+
+// ============================================================================
+// Cryptographic Functions (Phase 6)
+// ============================================================================
+
+/// PBKDF2 iteration count (OWASP 2023 recommendation)
+const PBKDF2_ITERATIONS: u32 = 600_000;
+
+/// Salt size in bytes (16 bytes = 128 bits)
+const SALT_SIZE: usize = 16;
+
+/// IV/Nonce size in bytes for AES-GCM (12 bytes = 96 bits, recommended)
+const NONCE_SIZE: usize = 12;
+
+/// Validates encryption password meets minimum requirements
+fn validate_encryption_password(password: &str) -> Result<(), String> {
+    if password.len() < 12 {
+        return Err("Password too short: Encryption password must be at least 12 characters.".to_string());
+    }
+    Ok(())
+}
+
+/// Derives a 256-bit encryption key from a password using PBKDF2-HMAC-SHA256
+fn derive_key(password: &str, salt: &[u8]) -> Result<[u8; 32], String> {
+    if salt.len() != SALT_SIZE {
+        return Err(format!("Invalid salt length: expected {}, got {}", SALT_SIZE, salt.len()));
+    }
+
+    let mut key = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ITERATIONS, &mut key);
+
+    Ok(key)
+}
+
+/// Generates HMAC-SHA256 over salt + IV + ciphertext for integrity verification
+fn generate_hmac(salt: &[u8], iv: &[u8], ciphertext: &[u8], key: &[u8]) -> [u8; 32] {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
+        .expect("HMAC can take key of any size");
+
+    mac.update(salt);
+    mac.update(iv);
+    mac.update(ciphertext);
+
+    let result = mac.finalize();
+    result.into_bytes().into()
+}
+
+/// Verifies HMAC-SHA256 using constant-time comparison
+fn verify_hmac(expected: &[u8], salt: &[u8], iv: &[u8], ciphertext: &[u8], key: &[u8]) -> bool {
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
+        .expect("HMAC can take key of any size");
+
+    mac.update(salt);
+    mac.update(iv);
+    mac.update(ciphertext);
+
+    // verify() uses constant-time comparison to prevent timing attacks
+    mac.verify_slice(expected).is_ok()
+}
+
+/// Encrypts plaintext JSON data with AES-256-GCM and returns EncryptedExport
+fn encrypt_data(plaintext: &str, password: &str) -> Result<EncryptedExport, String> {
+    // Validate password
+    validate_encryption_password(password)?;
+
+    // Generate random salt
+    let mut salt = [0u8; SALT_SIZE];
+    rand::Rng::fill(&mut rand::thread_rng(), &mut salt);
+
+    // Derive encryption key from password
+    let mut key = derive_key(password, &salt)?;
+
+    // Generate random nonce (IV)
+    let mut nonce_bytes = [0u8; NONCE_SIZE];
+    rand::Rng::fill(&mut rand::thread_rng(), &mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    // Create cipher
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+
+    // Encrypt plaintext
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    // Generate HMAC for integrity verification
+    let hmac = generate_hmac(&salt, &nonce_bytes, &ciphertext, &key);
+
+    // Zeroize sensitive data from memory
+    key.zeroize();
+
+    // Base64 encode all components
+    let salt_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, salt);
+    let iv_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, nonce_bytes);
+    let data_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &ciphertext);
+    let hmac_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hmac);
+
+    Ok(EncryptedExport {
+        version: "2.0".to_string(),
+        encrypted: true,
+        cipher: "AES-256-GCM".to_string(),
+        kdf: "PBKDF2-HMAC-SHA256".to_string(),
+        kdf_iterations: PBKDF2_ITERATIONS,
+        salt: salt_b64,
+        iv: iv_b64,
+        data: data_b64,
+        hmac: hmac_b64,
+    })
+}
+
+/// Decrypts EncryptedExport with AES-256-GCM and returns plaintext JSON
+fn decrypt_data(encrypted: &EncryptedExport, password: &str) -> Result<String, String> {
+    // Verify encryption parameters
+    if encrypted.cipher != "AES-256-GCM" {
+        return Err(format!("Unsupported cipher: {}", encrypted.cipher));
+    }
+    if encrypted.kdf != "PBKDF2-HMAC-SHA256" {
+        return Err(format!("Unsupported KDF: {}", encrypted.kdf));
+    }
+
+    // Base64 decode all components
+    let salt = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encrypted.salt)
+        .map_err(|_| "Failed to decode salt: corrupted data".to_string())?;
+    let nonce_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encrypted.iv)
+        .map_err(|_| "Failed to decode IV: corrupted data".to_string())?;
+    let ciphertext = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encrypted.data)
+        .map_err(|_| "Failed to decode ciphertext: corrupted data".to_string())?;
+    let expected_hmac = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encrypted.hmac)
+        .map_err(|_| "Failed to decode HMAC: corrupted data".to_string())?;
+
+    // Validate sizes
+    if salt.len() != SALT_SIZE {
+        return Err("Invalid salt length: corrupted data".to_string());
+    }
+    if nonce_bytes.len() != NONCE_SIZE {
+        return Err("Invalid IV length: corrupted data".to_string());
+    }
+
+    // Derive encryption key from password
+    let mut key = derive_key(password, &salt)?;
+
+    // VERIFY HMAC FIRST (fail fast if tampered)
+    if !verify_hmac(&expected_hmac, &salt, &nonce_bytes, &ciphertext, &key) {
+        key.zeroize();
+        return Err("Import file is corrupted or has been tampered with. Cannot import.".to_string());
+    }
+
+    // Create cipher
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|e| {
+            key.zeroize();
+            format!("Failed to create cipher: {}", e)
+        })?;
+
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    // Decrypt ciphertext
+    let plaintext_bytes = cipher
+        .decrypt(nonce, ciphertext.as_ref())
+        .map_err(|_| {
+            key.zeroize();
+            "Incorrect password. Please try again.".to_string()
+        })?;
+
+    // Zeroize sensitive data from memory
+    key.zeroize();
+
+    // Convert to string
+    let plaintext = String::from_utf8(plaintext_bytes)
+        .map_err(|_| "Decryption produced invalid UTF-8: corrupted data".to_string())?;
+
+    Ok(plaintext)
 }
 
 // Tauri commands
