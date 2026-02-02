@@ -138,7 +138,15 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - ✅ Implemented encrypt_data() with AES-256-GCM + random salt/IV + zeroization
   - ✅ Implemented decrypt_data() with HMAC verification (fail-fast) + zeroization
   - ✅ Build successful
-- ⏸️ **Phase 6B (Export Command Integration):** Pending
+- ✅ **Phase 6B (Export Command Integration):** COMPLETE
+  - ✅ Added encryption_password: Option<String> parameter to export_profile, export_group, export_profiles
+  - ✅ Implemented export_requires_encryption() helper function
+  - ✅ Implemented collect_profiles_from_group_export() helper function for recursive profile collection
+  - ✅ Updated export_profile command with encryption logic (mandatory for password-auth profiles)
+  - ✅ Updated export_group command with encryption logic (checks all profiles recursively)
+  - ✅ Updated export_profiles command with encryption logic (checks all profiles)
+  - ✅ Added Clone derives to GroupPortable, ProfileExportDetailed, GroupExportDetailed
+  - ✅ Build successful with no errors
 - ⏸️ **Phase 6C (Import Command Integration):** Pending
 - ⏸️ **Phase 6D (Frontend UI for Encryption):** Pending
 - ⏸️ **Phase 6E (Security Validation & Testing):** Pending

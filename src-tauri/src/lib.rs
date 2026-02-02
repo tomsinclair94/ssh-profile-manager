@@ -1786,7 +1786,7 @@ struct ImportData {
 }
 
 // Portable group structure for export/import (uses semantic parent_path instead of parent_id UUID)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GroupPortable {
     pub id: String,  // Exported but regenerated on import
     pub name: String,
@@ -1798,7 +1798,7 @@ struct GroupPortable {
 }
 
 // Individual profile/group export structures (v0.7.0+)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ProfileExportDetailed {
     #[serde(flatten)]
     profile: Profile,  // Use Profile directly - group_path is already semantic
@@ -1807,7 +1807,7 @@ struct ProfileExportDetailed {
     tags: Vec<Tag>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GroupExportDetailed {
     #[serde(flatten)]
     group: GroupPortable,  // Groups still need conversion for parent_id -> parent_path
@@ -2074,6 +2074,29 @@ fn decrypt_data(encrypted: &EncryptedExport, password: &str) -> Result<String, S
         .map_err(|_| "Decryption produced invalid UTF-8: corrupted data".to_string())?;
 
     Ok(plaintext)
+}
+
+/// Helper function to check if any profile in a list requires encryption
+/// Returns true if ANY profile has password authentication
+fn export_requires_encryption(profiles: &[Profile]) -> bool {
+    profiles.iter().any(|p| p.auth_method == "password")
+}
+
+/// Helper function to recursively collect all profiles from a group export
+fn collect_profiles_from_group_export(group_export: &GroupExportDetailed) -> Vec<Profile> {
+    let mut all_profiles = Vec::new();
+
+    // Collect profiles from this group
+    for profile_export in &group_export.profiles {
+        all_profiles.push(profile_export.profile.clone());
+    }
+
+    // Recursively collect profiles from sub-groups
+    for subgroup in &group_export.subgroups {
+        all_profiles.extend(collect_profiles_from_group_export(subgroup));
+    }
+
+    all_profiles
 }
 
 // Tauri commands
@@ -2678,13 +2701,13 @@ fn get_group_tree(db: State<Database>) -> Result<Vec<GroupTreeNode>, String> {
 }
 
 #[tauri::command]
-fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<String, String> {
+fn export_profiles(db: State<Database>, include_passwords: bool, encryption_password: Option<String>) -> Result<String, String> {
     let profiles = db.get_all_profiles()
         .map_err(|e| format!("Failed to get profiles: {}", e))?;
 
     let mut export_profiles = Vec::new();
 
-    for profile in profiles {
+    for profile in &profiles {
         let password = if include_passwords && profile.auth_method == "password" {
             get_password(&profile.id).ok()
         } else {
@@ -2698,7 +2721,7 @@ fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<Strin
         let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
 
         export_profiles.push(ProfileExport {
-            profile,  // Use profile directly - group_path is already semantic
+            profile: profile.clone(),  // Use profile directly - group_path is already semantic
             password,
             metadata,
             tags,
@@ -2712,8 +2735,31 @@ fn export_profiles(db: State<Database>, include_passwords: bool) -> Result<Strin
         profiles: export_profiles,
     };
 
-    serde_json::to_string_pretty(&export_data)
-        .map_err(|e| format!("Failed to serialize profiles: {}", e))
+    // Serialize to JSON
+    let json_data = serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize profiles: {}", e))?;
+
+    // Check if encryption is required (any password-auth profile with include_passwords=true)
+    let requires_encryption = include_passwords && export_requires_encryption(&profiles);
+
+    // Handle encryption
+    match encryption_password {
+        Some(password) => {
+            // User provided encryption password - encrypt the export
+            let encrypted = encrypt_data(&json_data, &password)?;
+            serde_json::to_string_pretty(&encrypted)
+                .map_err(|e| format!("Failed to serialize encrypted export: {}", e))
+        },
+        None => {
+            // No encryption password provided
+            if requires_encryption {
+                Err("Encryption required: This export contains password-authenticated profiles. Please provide an encryption password.".to_string())
+            } else {
+                // Encryption not required - return plain JSON
+                Ok(json_data)
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -2902,7 +2948,7 @@ fn group_to_portable(db: &Database, group: &Group) -> Result<GroupPortable, Stri
 
 // Individual profile export (v0.7.0+)
 #[tauri::command]
-fn export_profile(db: State<Database>, profile_id: String, include_password: bool) -> Result<String, String> {
+fn export_profile(db: State<Database>, profile_id: String, include_password: bool, encryption_password: Option<String>) -> Result<String, String> {
     // Get the profile
     let profile = db.get_profile_by_id(&profile_id)
         .map_err(|e| format!("Failed to get profile: {}", e))?
@@ -2924,7 +2970,7 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
         .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
     let profile_export = ProfileExportDetailed {
-        profile,  // Use profile directly - group_path is already semantic
+        profile: profile.clone(),  // Use profile directly - group_path is already semantic
         password,
         metadata,
         tags,
@@ -2937,13 +2983,36 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
         profile: profile_export,
     };
 
-    serde_json::to_string_pretty(&export_data)
-        .map_err(|e| format!("Failed to serialize profile: {}", e))
+    // Serialize to JSON
+    let json_data = serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize profile: {}", e))?;
+
+    // Check if encryption is required (password-auth profile with include_password=true)
+    let requires_encryption = include_password && profile.auth_method == "password";
+
+    // Handle encryption
+    match encryption_password {
+        Some(password) => {
+            // User provided encryption password - encrypt the export
+            let encrypted = encrypt_data(&json_data, &password)?;
+            serde_json::to_string_pretty(&encrypted)
+                .map_err(|e| format!("Failed to serialize encrypted export: {}", e))
+        },
+        None => {
+            // No encryption password provided
+            if requires_encryption {
+                Err("Encryption required: This export contains a password-authenticated profile. Please provide an encryption password.".to_string())
+            } else {
+                // Encryption not required - return plain JSON
+                Ok(json_data)
+            }
+        }
+    }
 }
 
 // Individual group export (v0.7.0+) - recursive
 #[tauri::command]
-fn export_group(db: State<Database>, group_id: String, include_passwords: bool) -> Result<String, String> {
+fn export_group(db: State<Database>, group_id: String, include_passwords: bool, encryption_password: Option<String>) -> Result<String, String> {
     fn export_group_recursive(
         db: &Database,
         group_id: &str,
@@ -3011,11 +3080,35 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool) 
         export_format_version: "2.0".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         exported_at: chrono::Utc::now().to_rfc3339(),
-        group: group_export,
+        group: group_export.clone(),
     };
 
-    serde_json::to_string_pretty(&export_data)
-        .map_err(|e| format!("Failed to serialize group: {}", e))
+    // Serialize to JSON
+    let json_data = serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize group: {}", e))?;
+
+    // Collect all profiles from the group and sub-groups to check if encryption is required
+    let all_profiles = collect_profiles_from_group_export(&group_export);
+    let requires_encryption = include_passwords && export_requires_encryption(&all_profiles);
+
+    // Handle encryption
+    match encryption_password {
+        Some(password) => {
+            // User provided encryption password - encrypt the export
+            let encrypted = encrypt_data(&json_data, &password)?;
+            serde_json::to_string_pretty(&encrypted)
+                .map_err(|e| format!("Failed to serialize encrypted export: {}", e))
+        },
+        None => {
+            // No encryption password provided
+            if requires_encryption {
+                Err("Encryption required: This export contains password-authenticated profiles. Please provide an encryption password.".to_string())
+            } else {
+                // Encryption not required - return plain JSON
+                Ok(json_data)
+            }
+        }
+    }
 }
 
 // Helper function to create profile_metadata and profile_tags
