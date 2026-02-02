@@ -104,6 +104,34 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Note:** Auto-tag workflow uses PAT_TOKEN (fixed in v0.6.3) to properly trigger release builds.
 **Workflow:** See DEVELOPMENT.md for branch protection rules and PAT_TOKEN setup.
 
+## Phase Development Workflow
+
+**CRITICAL: Git Commit/Push Policy**
+- **NEVER** commit or push changes unless explicitly instructed by the user
+- When user requests a commit, follow the standard git workflow in Release Process section
+- Always ask for confirmation before committing changes
+
+**Documentation Updates After Phase Completion**
+After completing ANY phase or sub-phase (e.g., Phase 6, Phase 6A, Phase 6B), you MUST update ALL relevant documentation:
+
+**Required Updates:**
+1. **TODO.md** - Update phase progress tracker with completion status
+2. **Version-specific plan** (e.g., `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md`) - Update overall progress percentage and phase status
+3. **Phase-specific plan** (e.g., `plans/v0.7.0-phase-6-encryption.md`) - Mark sub-phase as complete with detailed notes
+4. **CLAUDE.md** - Update command signatures if APIs changed (e.g., new parameters)
+
+**Example: Completing Phase 6B (Export Command Integration)**
+- ✅ Update TODO.md: Mark Phase 6B complete, list accomplishments
+- ✅ Update plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md: Update progress percentage (e.g., 80% → 82%), mark Phase 6B complete
+- ✅ Update plans/v0.7.0-phase-6-encryption.md: Add completion date, mark all tasks as done
+- ✅ Update CLAUDE.md: Update export command signatures if parameters changed
+
+**Verification Checklist:**
+- [ ] All relevant plan files updated?
+- [ ] TODO.md reflects current status?
+- [ ] CLAUDE.md updated if APIs changed?
+- [ ] User explicitly requested commit/push?
+
 ## Dependabot Dependency Updates
 
 **Automatic Handling:**
@@ -132,7 +160,7 @@ get_profiles()  // Returns Vec<ProfileWithMetadata> (includes icon, is_favorite,
 create_profile(input: CreateProfileInput)
 update_profile(input: UpdateProfileInput)
 delete_profile(id: String)
-export_profile(profile_id: String) // Individual profile export (v0.7.0)
+export_profile(profile_id: String, include_password: bool, encryption_password: Option<String>) // Individual profile export (v0.7.0, encryption added Phase 6B)
 import_profile(data: String) // With duplicate detection (v0.7.0)
 ```
 
@@ -144,7 +172,7 @@ create_group(name: String, parent_id: Option<String>)
 update_group(id: String, name: String)
 delete_group(id: String, mode: String) // "cascade" or "move"
 move_group(id: String, new_parent_id: Option<String>)
-export_group(group_id: String) // Recursive with sub-groups
+export_group(group_id: String, include_passwords: bool, encryption_password: Option<String>) // Recursive with sub-groups (encryption added Phase 6B)
 import_group(data: String, target_parent_id: Option<String>)
 get_profiles_by_group_path(group_path: String)
 ```
@@ -171,8 +199,7 @@ remove_profile_tag(profile_id: String, tag_id: String)
 
 **Settings & Export/Import:**
 ```rust
-export_profiles() // All profiles (legacy, now called "Export All Profiles")
-                  // Note: Phase 6B will add encryption_password parameter
+export_profiles(include_passwords: bool, encryption_password: Option<String>) // All profiles (now called "Export All Profiles", encryption added Phase 6B)
 import_profiles(data: String) // With conflict resolution
                                // Note: Phase 6C will add encryption_password parameter
 export_settings() // Now displayed as "Backup Settings" in UI
