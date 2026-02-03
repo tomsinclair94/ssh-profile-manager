@@ -2082,6 +2082,32 @@ fn export_requires_encryption(profiles: &[Profile]) -> bool {
     profiles.iter().any(|p| p.auth_method == "password")
 }
 
+/// Phase 6C: Detect whether a JSON string is an encrypted export
+fn detect_encrypted_export(json: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(json)
+        .ok()
+        .and_then(|v| v.get("encrypted").and_then(|e| e.as_bool()))
+        .unwrap_or(false)
+}
+
+/// Phase 6C: Decrypt import data if encrypted, pass through unchanged if plain.
+/// Returns an error if encrypted but no password provided.
+fn decrypt_import_if_encrypted(data: &str, encryption_password: &Option<String>) -> Result<String, String> {
+    if !detect_encrypted_export(data) {
+        return Ok(data.to_string());
+    }
+
+    // Encrypted export detected - password is required
+    let password = encryption_password.as_deref()
+        .ok_or_else(|| "This import is encrypted. Please provide the decryption password.".to_string())?;
+
+    // Parse as EncryptedExport and decrypt
+    let encrypted: EncryptedExport = serde_json::from_str(data)
+        .map_err(|_| "Import file is corrupted or invalid. Cannot import.".to_string())?;
+
+    decrypt_data(&encrypted, password)
+}
+
 /// Helper function to recursively collect all profiles from a group export
 fn collect_profiles_from_group_export(group_export: &GroupExportDetailed) -> Vec<Profile> {
     let mut all_profiles = Vec::new();
@@ -2763,7 +2789,10 @@ fn export_profiles(db: State<Database>, include_passwords: bool, encryption_pass
 }
 
 #[tauri::command]
-fn import_profiles(db: State<Database>, data: String) -> Result<(), String> {
+fn import_profiles(db: State<Database>, data: String, encryption_password: Option<String>) -> Result<(), String> {
+    // Phase 6C: Decrypt if encrypted
+    let data = decrypt_import_if_encrypted(&data, &encryption_password)?;
+
     let import_data: ImportData = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
 
@@ -3170,7 +3199,11 @@ fn import_profile(
     data: String,
     target_group_path: Option<String>,  // Semantic path for target group
     duplicate_action: String, // "skip", "rename", or "overwrite"
+    encryption_password: Option<String>,
 ) -> Result<String, String> {
+    // Phase 6C: Decrypt if encrypted
+    let data = decrypt_import_if_encrypted(&data, &encryption_password)?;
+
     // Parse import data
     let import_data: SingleProfileExportData = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
@@ -3239,6 +3272,7 @@ fn import_group(
     data: String,
     parent_group_path: Option<String>,  // Changed from parent_group_id to semantic path
     duplicate_action: String, // "skip", "rename", or "merge"
+    encryption_password: Option<String>,
 ) -> Result<String, String> {
     fn import_group_recursive(
         db: &Database,
@@ -3389,6 +3423,9 @@ fn import_group(
 
         Ok(group_id)
     }
+
+    // Phase 6C: Decrypt if encrypted
+    let data = decrypt_import_if_encrypted(&data, &encryption_password)?;
 
     // Parse import data
     let import_data: SingleGroupExportData = serde_json::from_str(&data)

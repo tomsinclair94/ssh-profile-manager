@@ -161,7 +161,7 @@ create_profile(input: CreateProfileInput)
 update_profile(input: UpdateProfileInput)
 delete_profile(id: String)
 export_profile(profile_id: String, include_password: bool, encryption_password: Option<String>) // Individual profile export (v0.7.0, encryption added Phase 6B)
-import_profile(data: String) // With duplicate detection (v0.7.0)
+import_profile(data: String, encryption_password: Option<String>) // With duplicate detection (v0.7.0, decryption added Phase 6C)
 ```
 
 **Group Management (v0.7.0):**
@@ -173,7 +173,7 @@ update_group(id: String, name: String)
 delete_group(id: String, mode: String) // "cascade" or "move"
 move_group(id: String, new_parent_id: Option<String>)
 export_group(group_id: String, include_passwords: bool, encryption_password: Option<String>) // Recursive with sub-groups (encryption added Phase 6B)
-import_group(data: String, target_parent_id: Option<String>)
+import_group(data: String, target_parent_id: Option<String>, encryption_password: Option<String>) // Decryption added Phase 6C
 get_profiles_by_group_path(group_path: String)
 ```
 
@@ -200,8 +200,7 @@ remove_profile_tag(profile_id: String, tag_id: String)
 **Settings & Export/Import:**
 ```rust
 export_profiles(include_passwords: bool, encryption_password: Option<String>) // All profiles (now called "Export All Profiles", encryption added Phase 6B)
-import_profiles(data: String) // With conflict resolution
-                               // Note: Phase 6C will add encryption_password parameter
+import_profiles(data: String, encryption_password: Option<String>) // With conflict resolution (decryption added Phase 6C)
 export_settings() // Now displayed as "Backup Settings" in UI
 import_settings(data: String) // Now displayed as "Restore Settings" in UI
 browse_ssh_key()

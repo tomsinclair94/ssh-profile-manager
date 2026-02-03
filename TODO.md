@@ -147,7 +147,15 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - ✅ Updated export_profiles command with encryption logic (checks all profiles)
   - ✅ Added Clone derives to GroupPortable, ProfileExportDetailed, GroupExportDetailed
   - ✅ Build successful with no errors
-- ⏸️ **Phase 6C (Import Command Integration):** Pending
+- ✅ **Phase 6C (Import Command Integration):** COMPLETE
+  - ✅ Added `detect_encrypted_export()` helper (checks `encrypted: true` field via serde_json::Value)
+  - ✅ Added `decrypt_import_if_encrypted()` helper (single entry point: detect → require password → decrypt)
+  - ✅ Updated `import_profile` with `encryption_password: Option<String>` parameter
+  - ✅ Updated `import_group` with `encryption_password: Option<String>` parameter
+  - ✅ Updated `import_profiles` with `encryption_password: Option<String>` parameter
+  - ✅ Backward compatible: plain (v0.6.x / v0.7.0 unencrypted) imports pass through unchanged
+  - ✅ Error messages: no password provided, wrong password, HMAC mismatch, corrupted data
+  - ✅ Build successful with no errors or warnings
 - ⏸️ **Phase 6D (Frontend UI for Encryption):** Pending
 - ⏸️ **Phase 6E (Security Validation & Testing):** Pending
 
