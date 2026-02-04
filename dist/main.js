@@ -661,6 +661,23 @@ let newTagNameInput;
 let newTagColorInput;
 let createTagBtn;
 let tagListContainer;
+// Encryption/Decryption Password Modal Elements
+let encryptionPasswordModal;
+let encryptionPasswordInput;
+let encryptionPasswordConfirm;
+let encryptionStrengthBar;
+let encryptionStrengthLabel;
+let encryptionPasswordError;
+let encryptionPasswordCancel;
+let encryptionPasswordSubmit;
+let decryptionPasswordModal;
+let decryptionPasswordInput;
+let decryptionPasswordError;
+let decryptionPasswordCancel;
+let decryptionPasswordSubmit;
+// Encryption modal state
+let encryptionModalResolver = null;
+let decryptionModalResolver = null;
 
 // Modal Stack System - tracks which modal is topmost
 // When multiple modals are open (e.g., splash screen over settings),
@@ -1346,6 +1363,32 @@ async function handleModalShortcuts(e) {
                 return;
             }
 
+            case 'encryptionPassword': {
+                const items = [encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordCancel, encryptionPasswordSubmit];
+                const currentIndex = items.indexOf(document.activeElement);
+                let nextIndex;
+                if (e.shiftKey) {
+                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                } else {
+                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                }
+                items[nextIndex].focus();
+                return;
+            }
+
+            case 'decryptionPassword': {
+                const items = [decryptionPasswordInput, decryptionPasswordCancel, decryptionPasswordSubmit];
+                const currentIndex = items.indexOf(document.activeElement);
+                let nextIndex;
+                if (e.shiftKey) {
+                    nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                } else {
+                    nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                }
+                items[nextIndex].focus();
+                return;
+            }
+
             case 'terminal':
                 // Terminal modal handles Tab internally via xterm.js
                 // Don't prevent default, let xterm process it
@@ -1397,6 +1440,14 @@ async function handleModalShortcuts(e) {
 
             case 'tag-manager':
                 closeTagManager();
+                return;
+
+            case 'encryptionPassword':
+                closeEncryptionPasswordModal(null);
+                return;
+
+            case 'decryptionPassword':
+                closeDecryptionPasswordModal(null);
                 return;
         }
     }
@@ -2438,6 +2489,20 @@ async function init() {
     newTagColorInput = document.getElementById('new-tag-color-input');
     createTagBtn = document.getElementById('create-tag-btn');
     tagListContainer = document.getElementById('tag-list-container');
+    // Encryption/Decryption Password Modal Elements
+    encryptionPasswordModal = document.getElementById('encryption-password-modal');
+    encryptionPasswordInput = document.getElementById('encryption-password-input');
+    encryptionPasswordConfirm = document.getElementById('encryption-password-confirm');
+    encryptionStrengthBar = document.getElementById('encryption-strength-bar');
+    encryptionStrengthLabel = document.getElementById('encryption-strength-label');
+    encryptionPasswordError = document.getElementById('encryption-password-error');
+    encryptionPasswordCancel = document.getElementById('encryption-password-cancel');
+    encryptionPasswordSubmit = document.getElementById('encryption-password-submit');
+    decryptionPasswordModal = document.getElementById('decryption-password-modal');
+    decryptionPasswordInput = document.getElementById('decryption-password-input');
+    decryptionPasswordError = document.getElementById('decryption-password-error');
+    decryptionPasswordCancel = document.getElementById('decryption-password-cancel');
+    decryptionPasswordSubmit = document.getElementById('decryption-password-submit');
 
     debug.log('DOM elements retrieved');
 
@@ -4873,6 +4938,51 @@ function setupEventListeners() {
         }
     });
 
+    // Encryption Password Modal listeners
+    encryptionPasswordInput.addEventListener('input', () => {
+        updatePasswordStrengthMeter(encryptionPasswordInput.value);
+        encryptionPasswordError.classList.add('hidden');
+    });
+
+    encryptionPasswordConfirm.addEventListener('input', () => {
+        encryptionPasswordError.classList.add('hidden');
+    });
+
+    encryptionPasswordCancel.addEventListener('click', () => {
+        closeEncryptionPasswordModal(null);
+    });
+
+    encryptionPasswordSubmit.addEventListener('click', () => {
+        submitEncryptionPassword();
+    });
+
+    encryptionPasswordConfirm.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitEncryptionPassword();
+        }
+    });
+
+    // Decryption Password Modal listeners
+    decryptionPasswordInput.addEventListener('input', () => {
+        decryptionPasswordError.classList.add('hidden');
+    });
+
+    decryptionPasswordCancel.addEventListener('click', () => {
+        closeDecryptionPasswordModal(null);
+    });
+
+    decryptionPasswordSubmit.addEventListener('click', () => {
+        submitDecryptionPassword();
+    });
+
+    decryptionPasswordInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitDecryptionPassword();
+        }
+    });
+
     deleteAllProfilesBtn.addEventListener('click', async () => {
         await deleteAllProfiles();
     });
@@ -6454,6 +6564,169 @@ function sanitizeFilename(name) {
     return sanitized || 'unnamed';
 }
 
+// ─── Encryption UI Helpers ──────────────────────────────────────────────────
+
+// Check whether a profile list contains any password-authenticated profiles
+function exportNeedsEncryption(profileList) {
+    return profileList.some(p => p.auth_method === 'password');
+}
+
+// Get profiles that would be included in a given export scope
+function getProfilesForExportScope(type, id) {
+    if (type === 'single') {
+        const profile = profiles.find(p => p.id === id);
+        return profile ? [profile] : [];
+    }
+    if (type === 'group') {
+        const group = groups.find(g => g.id === id);
+        if (!group) return [];
+        return profiles.filter(p =>
+            p.group_path === group.path ||
+            (p.group_path && p.group_path.startsWith(group.path + '/'))
+        );
+    }
+    // 'all'
+    return profiles;
+}
+
+// Calculate password strength: score 0-4 based on length and character variety
+function calculatePasswordStrength(password) {
+    let score = 0;
+
+    // Length (0-2 points)
+    if (password.length >= 12) score += 1;
+    if (password.length >= 16) score += 1;
+
+    // Character variety (0-2 points)
+    const hasLower   = /[a-z]/.test(password);
+    const hasUpper   = /[A-Z]/.test(password);
+    const hasNumber  = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    const variety = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+    if (variety >= 3) score += 1;
+    if (variety === 4) score += 1;
+
+    const labels     = ['Weak', 'Fair', 'Good', 'Strong', 'Strong'];
+    const classNames = ['strength-weak', 'strength-fair', 'strength-good', 'strength-strong', 'strength-strong'];
+
+    return { score, label: labels[score], className: classNames[score] };
+}
+
+// Update the strength meter bar and label (CSS classes only, no inline styles)
+function updatePasswordStrengthMeter(password) {
+    encryptionStrengthBar.className = 'password-strength-bar';
+    encryptionStrengthLabel.className = 'password-strength-label';
+
+    if (password.length === 0) {
+        encryptionStrengthBar.classList.add('strength-empty');
+        encryptionStrengthLabel.textContent = '';
+        return;
+    }
+
+    const strength = calculatePasswordStrength(password);
+    const widthSteps = [0, 25, 50, 75, 100];
+
+    encryptionStrengthBar.classList.add(strength.className);
+    encryptionStrengthBar.classList.add(`strength-width-${widthSteps[strength.score]}`);
+    encryptionStrengthLabel.classList.add(strength.className);
+    encryptionStrengthLabel.textContent = strength.label;
+}
+
+// Open the encryption password modal. Resolves with password string or null (cancelled).
+function openEncryptionPasswordModal() {
+    return new Promise((resolve) => {
+        encryptionPasswordInput.value = '';
+        encryptionPasswordConfirm.value = '';
+        encryptionPasswordError.textContent = '';
+        encryptionPasswordError.classList.add('hidden');
+        updatePasswordStrengthMeter('');
+
+        encryptionPasswordModal.classList.remove('hidden');
+        pushModal('encryptionPassword');
+        encryptionModalResolver = resolve;
+
+        setTimeout(() => encryptionPasswordInput.focus(), 100);
+    });
+}
+
+function closeEncryptionPasswordModal(password) {
+    encryptionPasswordModal.classList.add('hidden');
+    popModal('encryptionPassword');
+    if (encryptionModalResolver) {
+        encryptionModalResolver(password);
+        encryptionModalResolver = null;
+    }
+}
+
+function submitEncryptionPassword() {
+    const password = encryptionPasswordInput.value;
+    const confirm  = encryptionPasswordConfirm.value;
+
+    if (password.length < 12) {
+        encryptionPasswordError.textContent = 'Password must be at least 12 characters.';
+        encryptionPasswordError.classList.remove('hidden');
+        encryptionPasswordInput.focus();
+        return;
+    }
+
+    if (password !== confirm) {
+        encryptionPasswordError.textContent = 'Passwords do not match. Please re-enter.';
+        encryptionPasswordError.classList.remove('hidden');
+        encryptionPasswordConfirm.focus();
+        return;
+    }
+
+    closeEncryptionPasswordModal(password);
+}
+
+// Open the decryption password modal. Resolves with password string or null (cancelled).
+function openDecryptionPasswordModal() {
+    return new Promise((resolve) => {
+        decryptionPasswordInput.value = '';
+        decryptionPasswordError.textContent = '';
+        decryptionPasswordError.classList.add('hidden');
+
+        decryptionPasswordModal.classList.remove('hidden');
+        pushModal('decryptionPassword');
+        decryptionModalResolver = resolve;
+
+        setTimeout(() => decryptionPasswordInput.focus(), 100);
+    });
+}
+
+function closeDecryptionPasswordModal(password) {
+    decryptionPasswordModal.classList.add('hidden');
+    popModal('decryptionPassword');
+    if (decryptionModalResolver) {
+        decryptionModalResolver(password);
+        decryptionModalResolver = null;
+    }
+}
+
+function submitDecryptionPassword() {
+    const password = decryptionPasswordInput.value;
+
+    if (password.length === 0) {
+        decryptionPasswordError.textContent = 'Please enter the decryption password.';
+        decryptionPasswordError.classList.remove('hidden');
+        decryptionPasswordInput.focus();
+        return;
+    }
+
+    closeDecryptionPasswordModal(password);
+}
+
+// Returns true if the error is a crypto/decryption error (vs a parse/structure error)
+function isCryptoError(e) {
+    const s = String(e);
+    return s.includes('Incorrect password') ||
+           s.includes('corrupted or has been tampered') ||
+           s.includes('corrupted or invalid') ||
+           s.includes('is encrypted');
+}
+
+// ─── Export / Import ─────────────────────────────────────────────────────────
+
 // Export single profile
 async function exportSingleProfile(profileId) {
     try {
@@ -6463,21 +6736,26 @@ async function exportSingleProfile(profileId) {
             return;
         }
 
-        // Show loading feedback
-        showToast('Exporting profile...', TOAST_DURATION_LOADING);
-
-        // Check if passwords should be included (read from localStorage)
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+
+        // Prompt for encryption password if this profile uses password auth
+        let encryptionPassword = null;
+        if (includePasswords && profile.auth_method === 'password') {
+            encryptionPassword = await openEncryptionPasswordModal();
+            if (encryptionPassword === null) return; // User cancelled
+        }
+
+        showToast('Exporting profile...', TOAST_DURATION_LOADING);
 
         const data = await invoke('export_profile', {
             profileId: profileId,
-            includePassword: includePasswords
+            includePassword: includePasswords,
+            encryptionPassword: encryptionPassword
         });
 
         const sanitizedName = sanitizeFilename(profile.name);
         const defaultFilename = `sshpm-profile-${sanitizedName}-${new Date().toISOString().split('T')[0]}.json`;
 
-        // Call Tauri backend to show save dialog and write file
         const success = await invoke('save_profiles_to_file', {
             data: data,
             defaultFilename: defaultFilename
@@ -6487,7 +6765,6 @@ async function exportSingleProfile(profileId) {
             showToast('Profile exported successfully!');
             debug.log('Profile exported successfully');
         } else {
-            // Hide the loading toast
             toastElement.classList.add('hidden');
             debug.log('User cancelled save dialog');
         }
@@ -6506,21 +6783,29 @@ async function exportSingleGroup(groupId) {
             return;
         }
 
-        // Show loading feedback
-        showToast('Exporting group...', TOAST_DURATION_LOADING);
-
-        // Check if passwords should be included (read from localStorage)
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+
+        // Prompt for encryption password if the group contains password-auth profiles
+        let encryptionPassword = null;
+        if (includePasswords) {
+            const groupProfiles = getProfilesForExportScope('group', groupId);
+            if (exportNeedsEncryption(groupProfiles)) {
+                encryptionPassword = await openEncryptionPasswordModal();
+                if (encryptionPassword === null) return; // User cancelled
+            }
+        }
+
+        showToast('Exporting group...', TOAST_DURATION_LOADING);
 
         const data = await invoke('export_group', {
             groupId: groupId,
-            includePasswords: includePasswords
+            includePasswords: includePasswords,
+            encryptionPassword: encryptionPassword
         });
 
         const sanitizedGroupName = sanitizeFilename(group.name);
         const defaultFilename = `sshpm-group-${sanitizedGroupName}-${new Date().toISOString().split('T')[0]}.json`;
 
-        // Call Tauri backend to show save dialog and write file
         const success = await invoke('save_profiles_to_file', {
             data: data,
             defaultFilename: defaultFilename
@@ -6530,7 +6815,6 @@ async function exportSingleGroup(groupId) {
             showToast('Group exported successfully!');
             debug.log('Group exported successfully');
         } else {
-            // Hide the loading toast
             toastElement.classList.add('hidden');
             debug.log('User cancelled save dialog');
         }
@@ -6543,16 +6827,24 @@ async function exportSingleGroup(groupId) {
 // Export all profiles
 async function exportProfiles() {
     try {
-        // Show loading feedback
-        showToast('Exporting profiles...', TOAST_DURATION_LOADING);
-
-        // Check if passwords should be included (read from localStorage)
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
-        const data = await invoke('export_profiles', { includePasswords });
+        // Prompt for encryption password if any profile uses password auth
+        let encryptionPassword = null;
+        if (includePasswords && exportNeedsEncryption(profiles)) {
+            encryptionPassword = await openEncryptionPasswordModal();
+            if (encryptionPassword === null) return; // User cancelled
+        }
+
+        showToast('Exporting profiles...', TOAST_DURATION_LOADING);
+
+        const data = await invoke('export_profiles', {
+            includePasswords: includePasswords,
+            encryptionPassword: encryptionPassword
+        });
+
         const defaultFilename = `sshpm-profile-all-${new Date().toISOString().split('T')[0]}.json`;
 
-        // Call Tauri backend to show save dialog and write file
         const success = await invoke('save_profiles_to_file', {
             data: data,
             defaultFilename: defaultFilename
@@ -6562,7 +6854,6 @@ async function exportProfiles() {
             showToast('Profiles exported successfully!');
             debug.log('Profiles exported successfully');
         } else {
-            // Hide the loading toast
             toastElement.classList.add('hidden');
             debug.log('User cancelled save dialog');
         }
@@ -6759,7 +7050,16 @@ async function importProfiles(file) {
             return;
         }
 
-        // Detect import type
+        // Encrypted import: prompt for password then route via backend
+        if (data.encrypted === true) {
+            toastElement.classList.add('hidden');
+            const password = await openDecryptionPasswordModal();
+            if (password === null) return; // User cancelled
+            await routeEncryptedImport(text, password);
+            return;
+        }
+
+        // Plain import: detect type and route as before
         const importType = detectImportType(data);
 
         if (importType === 'profile') {
@@ -6773,6 +7073,177 @@ async function importProfiles(file) {
         }
     } catch (error) {
         console.error('Failed to import:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Route an encrypted import by probing each backend command in order of specificity.
+// Each command decrypts server-side then parses: parse failures fall through to the next type,
+// crypto errors (wrong password / HMAC) are surfaced immediately.
+async function routeEncryptedImport(rawText, encryptionPassword) {
+    showToast('Decrypting import...', TOAST_DURATION_LOADING);
+
+    // --- Probe: single profile (non-destructive: only imports if no conflict) ---
+    try {
+        const result = await invoke('import_profile', {
+            data: rawText,
+            targetGroupPath: null,
+            duplicateAction: 'skip',
+            encryptionPassword: encryptionPassword
+        });
+        // Matched single-profile format. Handle conflict resolution if needed.
+        await handleEncryptedSingleProfileImport(rawText, encryptionPassword, result);
+        return;
+    } catch (e) {
+        if (isCryptoError(e)) { showToast(cleanErrorMessage(e), TOAST_DURATION_LONG, 'error'); return; }
+        // Parse error — try next type
+    }
+
+    // --- Probe: single group (non-destructive: only imports if no conflict) ---
+    try {
+        const result = await invoke('import_group', {
+            data: rawText,
+            parentGroupPath: null,
+            duplicateAction: 'skip',
+            encryptionPassword: encryptionPassword
+        });
+        await handleEncryptedSingleGroupImport(rawText, encryptionPassword, result);
+        return;
+    } catch (e) {
+        if (isCryptoError(e)) { showToast(cleanErrorMessage(e), TOAST_DURATION_LONG, 'error'); return; }
+    }
+
+    // --- Must be "all profiles" format — show confirmation then import ---
+    await importAllProfilesEncrypted(rawText, encryptionPassword);
+}
+
+// Handle conflict resolution for an encrypted single-profile import.
+// initialResult is either the new profile ID (already imported) or 'skipped' (conflict).
+async function handleEncryptedSingleProfileImport(rawText, encryptionPassword, initialResult) {
+    try {
+        if (initialResult === 'skipped') {
+            toastElement.classList.add('hidden');
+
+            const action = await showProfileConflictDialog('the imported profile', 'its original group');
+            if (!action) {
+                debug.log('User chose to skip duplicate profile');
+                return;
+            }
+
+            showToast('Importing profile...', TOAST_DURATION_LOADING);
+            await invoke('import_profile', {
+                data: rawText,
+                targetGroupPath: null,
+                duplicateAction: action,
+                encryptionPassword: encryptionPassword
+            });
+        }
+        // If not skipped, the profile was already imported by the probe call
+
+        await loadTags();
+        await loadProfiles();
+        await loadGroups();
+        showToast('Profile imported successfully!');
+        debug.log('Encrypted profile imported successfully');
+    } catch (error) {
+        console.error('Failed to import encrypted profile:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Handle conflict resolution for an encrypted single-group import.
+async function handleEncryptedSingleGroupImport(rawText, encryptionPassword, initialResult) {
+    try {
+        if (initialResult === 'skipped') {
+            toastElement.classList.add('hidden');
+
+            const action = await showGroupConflictDialog('the imported group', 'its original location');
+            if (!action) {
+                debug.log('User chose to skip duplicate group');
+                return;
+            }
+
+            showToast('Importing group...', TOAST_DURATION_LOADING);
+            await invoke('import_group', {
+                data: rawText,
+                parentGroupPath: null,
+                duplicateAction: action,
+                encryptionPassword: encryptionPassword
+            });
+        }
+
+        await loadTags();
+        await loadProfiles();
+        await loadGroups();
+        showToast('Group imported successfully!');
+        debug.log('Encrypted group imported successfully');
+    } catch (error) {
+        console.error('Failed to import encrypted group:', error);
+        showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Import all profiles from an encrypted export — shows the existing confirmation dialog first.
+async function importAllProfilesEncrypted(rawText, encryptionPassword) {
+    try {
+        closeSettings();
+
+        if (profiles.length > 0) {
+            toastElement.classList.add('hidden');
+
+            const existingCount = profiles.length;
+            const profileText = existingCount === 1 ? 'profile' : 'profiles';
+            const groupCount = groups.length;
+            const groupText = groupCount === 1 ? 'group' : 'groups';
+
+            const segments = groupCount > 0
+                ? [
+                    { text: 'You currently have ' },
+                    { highlight: `${existingCount} ${profileText}` },
+                    { text: ' and ' },
+                    { highlight: `${groupCount} ${groupText}` },
+                    { text: '.' }
+                  ]
+                : [
+                    { text: 'You currently have ' },
+                    { highlight: `${existingCount} ${profileText}` },
+                    { text: '.' }
+                  ];
+
+            const confirmMessage = buildConfirmMessage({
+                lines: [{ segments }],
+                warnings: [
+                    'Importing will override all existing profiles and groups.'
+                ],
+                question: 'Are you sure you want to import?'
+            });
+
+            const confirmImport = await customConfirm(confirmMessage, {
+                title: 'Confirm Import',
+                okText: 'Import',
+                cancelText: 'Cancel',
+                okClass: 'btn-danger'
+            });
+
+            if (!confirmImport) {
+                debug.log('User cancelled encrypted import');
+                return;
+            }
+        }
+
+        showToast('Importing profiles...', TOAST_DURATION_LOADING);
+        await invoke('import_profiles', {
+            data: rawText,
+            encryptionPassword: encryptionPassword
+        });
+
+        await loadTags();
+        await loadProfiles();
+        await loadGroups();
+        showToast('Profiles imported successfully!');
+        debug.log('Encrypted profiles imported successfully');
+    } catch (error) {
+        console.error('Failed to import encrypted profiles:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
 }

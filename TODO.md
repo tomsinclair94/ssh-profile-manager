@@ -29,10 +29,10 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 - ✅ Hierarchical group system with sub-groups (up to 3 levels)
 - ✅ Separate group management (Add, Rename, Delete with cascade/move options)
 - ✅ Individual profile/group export/import with append mode
-- Encrypted exports with AES-256-GCM and HMAC integrity verification
+- 🔄 Encrypted exports with AES-256-GCM and HMAC integrity verification
 - ✅ Favorites system for profiles and groups
 - ✅ Icon picker for profiles (predefined library)
-- Tag system with color-coding and filtering
+- ✅ Tag system with color-coding and filtering
 - ✅ Profile name uniqueness scoped to parent group (allows same name in different groups)
 - ✅ Settings Export/Import renamed to Backup/Restore
 
@@ -156,7 +156,17 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
   - ✅ Backward compatible: plain (v0.6.x / v0.7.0 unencrypted) imports pass through unchanged
   - ✅ Error messages: no password provided, wrong password, HMAC mismatch, corrupted data
   - ✅ Build successful with no errors or warnings
-- ⏸️ **Phase 6D (Frontend UI for Encryption):** Pending
+- ✅ **Phase 6D (Frontend UI for Encryption):** COMPLETE (2026-02-04)
+  - ✅ Added Encryption Password Modal: password + confirm inputs, strength meter, help text
+  - ✅ Added Decryption Password Modal: single password input, shown on encrypted file detection
+  - ✅ Password strength meter: Weak/Fair/Good/Strong (CSS classes, no inline styles, CSP-compliant)
+  - ✅ Updated exportSingleProfile, exportSingleGroup, exportProfiles to prompt for encryption password when password-auth profiles are included
+  - ✅ Updated importProfiles router: detects `encrypted: true`, shows decryption modal, routes via backend
+  - ✅ routeEncryptedImport: probes import_profile → import_group → import_profiles (crypto errors surfaced immediately, parse errors fall through)
+  - ✅ Conflict resolution works for encrypted single-profile and single-group imports
+  - ✅ Modal stack integration: Tab trapping + Escape handling for both modals
+  - ✅ Updated Profile Management security warning text (plaintext → encrypted)
+  - ✅ British English throughout
 - ⏸️ **Phase 6E (Security Validation & Testing):** Pending
 
 **Phase 7 Progress (UI Polish & Settings Migration):** ✅ COMPLETE (2026-01-31)

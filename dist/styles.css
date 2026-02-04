@@ -1157,6 +1157,93 @@ button.keyboard-selected {
     padding-bottom: 0;
 }
 
+/* Encryption/Decryption Password Modals */
+.encryption-password-modal-content,
+.decryption-password-modal-content {
+    max-width: 460px;
+    padding-bottom: 0;
+}
+
+.encryption-password-body,
+.decryption-password-body {
+    padding: 20px 24px 12px 24px;
+}
+
+.encryption-password-intro,
+.decryption-password-intro {
+    font-size: 14px;
+    color: var(--text-color);
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.encryption-password-help {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 12px;
+    margin-bottom: 0;
+}
+
+.encryption-password-error,
+.decryption-password-error {
+    font-size: 13px;
+    color: var(--danger-color);
+    margin-top: 6px;
+    margin-bottom: 0;
+    line-height: 1.4;
+}
+
+/* Encryption modal form actions - override global .form-actions layout */
+.encryption-password-modal-content .form-actions,
+.decryption-password-modal-content .form-actions {
+    margin-top: 0;
+    padding: 12px 24px 16px 24px;
+}
+
+/* Password Strength Meter */
+.password-strength-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    margin-bottom: 16px;
+}
+
+.password-strength-track {
+    flex: 1;
+    height: 4px;
+    background-color: var(--border-color);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.password-strength-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.25s ease, background-color 0.25s ease;
+    width: 0%;
+    background-color: transparent;
+}
+
+.password-strength-bar.strength-empty     { width: 0%;   background-color: transparent; }
+.password-strength-bar.strength-width-0   { width: 0%;   background-color: var(--danger-color); }
+.password-strength-bar.strength-width-25  { width: 25%;  background-color: var(--danger-color); }
+.password-strength-bar.strength-width-50  { width: 50%;  background-color: #f97316; }
+.password-strength-bar.strength-width-75  { width: 75%;  background-color: #eab308; }
+.password-strength-bar.strength-width-100 { width: 100%; background-color: var(--success-color); }
+
+.password-strength-label {
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 44px;
+}
+
+.password-strength-label.strength-weak   { color: var(--danger-color); }
+.password-strength-label.strength-fair   { color: #f97316; }
+.password-strength-label.strength-good   { color: #eab308; }
+.password-strength-label.strength-strong { color: var(--success-color); }
+
 /* Ensure input fields are constrained within their containers */
 .modal-content input[type="text"],
 .modal-content input[type="password"],
