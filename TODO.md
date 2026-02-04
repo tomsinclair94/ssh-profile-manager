@@ -50,7 +50,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 
 **Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
 
-**Phase 8 Progress (Testing & Documentation):** ⏸️ PENDING
+**Phase 8 Progress (Testing & Documentation):** ⏸️ PENDING — Automated test foundation started in Phase 6E: encryption unit tests in `lib.rs` (`mod tests::encryption`, run via `cargo test`). Phase 8 to expand with DB-layer tests (`Database::new_in_memory()`), coverage gaps identified via `cargo-llvm-cov`, and sibling modules for profiles, groups, tags.
 
 ---
 
