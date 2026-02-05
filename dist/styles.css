@@ -1164,8 +1164,24 @@ button.keyboard-selected {
     padding-bottom: 0;
 }
 
+/* Fixed width for modal action buttons */
+#encryption-password-submit,
+#encryption-password-cancel,
+#decryption-password-submit,
+#decryption-password-cancel {
+    min-width: 80px;
+}
+
 .encryption-password-body {
     padding: 20px 24px 24px 24px;
+}
+
+.encryption-password-body .form-group:first-of-type {
+    margin-bottom: 7px;  /* Reduced from default 20px for compact spacing above strength bar */
+}
+
+.encryption-password-body .form-group:last-of-type {
+    margin-bottom: 12px;  /* Reduced from default 20px for more compact spacing */
 }
 
 /* Decryption body uses a split: 8px form-group margin + 16px body padding = 24px
@@ -1192,7 +1208,7 @@ button.keyboard-selected {
     font-size: 13px;
     color: var(--text-muted);
     line-height: 1.5;
-    margin-top: 12px;
+    margin-top: -22px;  /* Negative margin to pull up closer to confirm password field */
     margin-bottom: 0;
 }
 
@@ -1215,8 +1231,8 @@ button.keyboard-selected {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 8px;
-    margin-bottom: 16px;
+    margin-top: 1px;   /* Reduced from 8px for more compact spacing */
+    margin-bottom: 14px;  /* Reduced from 16px for more compact spacing */
 }
 
 .password-strength-track {

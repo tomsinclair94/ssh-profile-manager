@@ -26,7 +26,7 @@ bun run build    # Production build
 **In Development:** v0.7.0
 **See:** TODO.md for roadmap and feature backlog
 
-**v0.7.0 Features (In Development - 80% Complete):**
+**v0.7.0 Features (In Development - 90% Complete):**
 - ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
 - ✅ Individual profile/group export/import with duplicate detection
 - ✅ Favourites system for profiles with virtual group display
@@ -35,7 +35,7 @@ bun run build    # Production build
 - ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
-- 🔄 Encryption for exports (Phase 6 - 6A–6D complete, 6E in progress: 1 known issue pending)
+- ✅ Encryption for exports (Phase 6 - all sub-phases 6A-6E complete)
 - ⏸️ Testing & documentation (Phase 8 - pending)
 
 ## Version Management
@@ -280,7 +280,7 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Tag/group name validation: Alphanumeric + limited special chars only
 - localStorage: Group IDs (not names) for filter/collapse state
 
-**Export Encryption (v0.7.0 - Phase 6):**
+**Export Encryption (v0.7.0 - Phase 6 - ✅ Complete):**
 - AES-256-GCM authenticated encryption for exports
 - PBKDF2-HMAC-SHA256 key derivation (600k iterations - OWASP 2023)
 - Additional HMAC-SHA256 integrity verification (fail-fast)
@@ -290,7 +290,7 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Random salt (16 bytes) and IV (12 bytes) per export
 - Constant-time HMAC comparison prevents timing attacks
 - Strength meter: 5-level scale (Weak / Fair / Good / Strong / Stronger), non-enforcing
-- Status: 6A–6D complete, 6E in progress (1 known issue pending: decrypt modal spinner in WKWebView)
+- WKWebView-compatible spinner: Fixed negative margins instead of transform-based centering
 
 **Migration System:**
 - Automatic version detection using `CURRENT_APP_VERSION` constant

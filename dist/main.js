@@ -4962,6 +4962,7 @@ function setupEventListeners() {
 
         // Re-validate confirm whenever the main password changes
         validateEncryptionConfirm();
+        validateEncryptionPasswordModal();
     });
 
     encryptionPasswordConfirm.addEventListener('input', () => {
@@ -4970,6 +4971,7 @@ function setupEventListeners() {
         encryptionPasswordConfirmCounter.classList.toggle('over-limit', val.length > 128);
         encryptionPasswordError.classList.add('hidden');
         validateEncryptionConfirm();
+        validateEncryptionPasswordModal();
     });
 
     encryptionPasswordCancel.addEventListener('click', () => {
@@ -4991,6 +4993,7 @@ function setupEventListeners() {
     decryptionPasswordInput.addEventListener('input', () => {
         decryptionPasswordError.classList.add('hidden');
         decryptionPasswordInput.classList.remove('input-error');
+        validateDecryptionPasswordModal();
     });
 
     decryptionPasswordCancel.addEventListener('click', () => {
@@ -6684,6 +6687,7 @@ function openEncryptionPasswordModal() {
         encryptionPasswordCounter.classList.remove('over-limit');
         encryptionPasswordConfirmCounter.textContent = '0 / 128';
         encryptionPasswordConfirmCounter.classList.remove('over-limit');
+        encryptionPasswordSubmit.disabled = true;  // Start disabled until validation passes
 
         encryptionPasswordModal.classList.remove('hidden');
         pushModal('encryptionPassword');
@@ -6711,6 +6715,22 @@ function validateEncryptionConfirm() {
     } else {
         encryptionPasswordConfirm.classList.remove('input-error');
     }
+}
+
+// Enable/disable the Export button based on password validation:
+// - Password must be 12+ characters
+// - Confirmation password must match
+function validateEncryptionPasswordModal() {
+    const password = encryptionPasswordInput.value;
+    const confirm = encryptionPasswordConfirm.value;
+    const isValid = password.length >= 12 && password === confirm;
+    encryptionPasswordSubmit.disabled = !isValid;
+}
+
+// Enable/disable the Import button based on whether a password has been entered
+function validateDecryptionPasswordModal() {
+    const password = decryptionPasswordInput.value;
+    decryptionPasswordSubmit.disabled = password.length === 0;
 }
 
 function submitEncryptionPassword() {
@@ -6760,8 +6780,7 @@ function openDecryptionPasswordModal(tryDecrypt) {
         decryptionPasswordInput.classList.remove('input-error');
         decryptionPasswordError.textContent = '';
         decryptionPasswordError.classList.add('hidden');
-        decryptionPasswordSubmit.disabled = false;
-        decryptionPasswordSubmit.classList.remove('btn-loading');
+        decryptionPasswordSubmit.disabled = true;  // Start disabled until a password is entered
         decryptionPasswordCancel.disabled = false;
 
         decryptionPasswordModal.classList.remove('hidden');
@@ -6787,7 +6806,8 @@ function closeDecryptionPasswordModal(password) {
 function setDecryptionLoading(isLoading) {
     decryptionPasswordInput.disabled = isLoading;
     decryptionPasswordSubmit.disabled = isLoading;
-    decryptionPasswordSubmit.classList.toggle('btn-loading', isLoading);
+    // Don't show button spinner - the toast already shows "Decrypting import..."
+    // decryptionPasswordSubmit.classList.toggle('btn-loading', isLoading);
     decryptionPasswordCancel.disabled = isLoading;
 }
 
