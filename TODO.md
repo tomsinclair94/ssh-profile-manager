@@ -46,7 +46,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 
 **Phase 5 (Metadata System — Favourites, Icons, Tags):** ✅ Complete (2026-01-31) — 5A backend schema, 5B Lucide icons (40+ inline SVG), 5C favourites with virtual group, 5D tags with search (`tag:` syntax), 5E polish. See `plans/v0.7.0-phase-5-progress-tracking.md` for full detail.
 
-**Phase 6 (Encryption & Security):** 🔄 In Progress — 6A backend crypto ✅, 6B export integration ✅, 6C import integration ✅, 6D frontend UI ✅, 6E security validation & testing ⏸️ current. See `plans/v0.7.0-phase-6-encryption.md` for testing checklists.
+**Phase 6 (Encryption & Security):** 🔄 In Progress — 6A backend crypto ✅, 6B export integration ✅, 6C import integration ✅, 6D frontend UI ✅, 6E security validation & testing 🔄 fixes applied 2026-02-05 (strength meter 5-level scale, character counters, 128-char max, byte→char password validation), 1 known issue pending (decrypt modal spinner in WKWebView). See `plans/v0.7.0-phase-6-encryption.md` for testing checklists.
 
 **Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
 

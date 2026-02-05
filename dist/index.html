@@ -300,65 +300,6 @@
             </div>
         </div>
 
-        <!-- Encryption Password Modal (shown before export when passwords are included) -->
-        <div id="encryption-password-modal" class="modal hidden">
-            <div class="modal-content encryption-password-modal-content">
-                <div class="modal-header">
-                    <h2>Encrypt Export</h2>
-                </div>
-                <div class="encryption-password-body">
-                    <p class="encryption-password-intro">This export contains password-authenticated profiles. An encryption password is required to protect sensitive data.</p>
-                    <div class="form-group">
-                        <label for="encryption-password-input">Encryption Password <span class="required">*</span></label>
-                        <input type="password" id="encryption-password-input" placeholder="Enter encryption password (12+ characters)" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
-                    </div>
-                    <div class="password-strength-container">
-                        <div class="password-strength-track">
-                            <div class="password-strength-bar" id="encryption-strength-bar"></div>
-                        </div>
-                        <span class="password-strength-label" id="encryption-strength-label"></span>
-                    </div>
-                    <div class="form-group">
-                        <label for="encryption-password-confirm">Confirm Password <span class="required">*</span></label>
-                        <input type="password" id="encryption-password-confirm" placeholder="Re-enter encryption password" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
-                    </div>
-                    <p class="encryption-password-error hidden" id="encryption-password-error"></p>
-                    <p class="encryption-password-help">Use a strong password you will remember. <strong>If you forget this password, the exported data cannot be recovered.</strong> Recommended: 16+ characters with mixed letters, numbers, and symbols.</p>
-                </div>
-                <div class="form-actions">
-                    <div class="form-actions-left"></div>
-                    <div class="form-actions-right">
-                        <button type="button" class="btn btn-secondary" id="encryption-password-cancel">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="encryption-password-submit">Export</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Decryption Password Modal (shown when importing an encrypted file) -->
-        <div id="decryption-password-modal" class="modal hidden">
-            <div class="modal-content decryption-password-modal-content">
-                <div class="modal-header">
-                    <h2>Decrypt Import</h2>
-                </div>
-                <div class="decryption-password-body">
-                    <p class="decryption-password-intro">This import file is encrypted. Enter the password that was used to encrypt it.</p>
-                    <div class="form-group">
-                        <label for="decryption-password-input">Decryption Password <span class="required">*</span></label>
-                        <input type="password" id="decryption-password-input" placeholder="Enter decryption password" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
-                    </div>
-                    <p class="decryption-password-error hidden" id="decryption-password-error"></p>
-                </div>
-                <div class="form-actions">
-                    <div class="form-actions-left"></div>
-                    <div class="form-actions-right">
-                        <button type="button" class="btn btn-secondary" id="decryption-password-cancel">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="decryption-password-submit">Import</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Group Management Modal -->
         <div id="group-modal" class="modal hidden">
             <div class="modal-content">
@@ -536,7 +477,7 @@
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Warning:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups will contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Note:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups are automatically encrypted with a password you provide.</p>
                     </div>
 
                     <!-- Updates Section -->
@@ -594,6 +535,75 @@
                             <button id="github-feature-btn" class="btn btn-secondary">💡 Request Feature</button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Encryption Password Modal (shown before export when passwords are included) -->
+        <div id="encryption-password-modal" class="modal hidden">
+            <div class="modal-content encryption-password-modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Encrypt Export</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-primary" id="encryption-password-submit">Export</button>
+                        <button type="button" class="btn btn-secondary" id="encryption-password-cancel">Cancel</button>
+                    </div>
+                </div>
+                <div class="encryption-password-body">
+                    <p class="encryption-password-intro">This export contains password-authenticated profiles. An encryption password is required to protect sensitive data.</p>
+                    <div class="form-group">
+                        <label for="encryption-password-input">Encryption Password <span class="required">*</span></label>
+                        <input type="password" id="encryption-password-input" placeholder="Enter encryption password (12+ characters)" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
+                        <div class="input-tooltip">
+                            <div class="tooltip-content">
+                                <div class="tooltip-title">Password Recommendations</div>
+                                <ul class="tooltip-rules">
+                                    <li>16+ characters for maximum security</li>
+                                    <li>Mix letters, numbers, and symbols</li>
+                                    <li>Maximum 128 characters</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <span class="char-counter" id="encryption-password-counter">0 / 128</span>
+                    </div>
+                    <div class="password-strength-container">
+                        <div class="password-strength-track">
+                            <div class="password-strength-bar" id="encryption-strength-bar"></div>
+                        </div>
+                        <span class="password-strength-label" id="encryption-strength-label"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="encryption-password-confirm">Confirm Password <span class="required">*</span></label>
+                        <input type="password" id="encryption-password-confirm" placeholder="Re-enter encryption password" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
+                        <span class="char-counter" id="encryption-password-confirm-counter">0 / 128</span>
+                    </div>
+                    <p class="encryption-password-error hidden" id="encryption-password-error"></p>
+                    <p class="encryption-password-help">Use a strong password you will remember.<br><strong>If you forget this password, the exported data cannot be recovered.</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decryption Password Modal (shown when importing an encrypted file) -->
+        <div id="decryption-password-modal" class="modal hidden">
+            <div class="modal-content decryption-password-modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Decrypt Import</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-primary" id="decryption-password-submit"><span class="btn-spinner"></span>Import</button>
+                        <button type="button" class="btn btn-secondary" id="decryption-password-cancel">Cancel</button>
+                    </div>
+                </div>
+                <div class="decryption-password-body">
+                    <p class="decryption-password-intro">This import file is encrypted. Enter the password that was used to encrypt it.</p>
+                    <div class="form-group">
+                        <label for="decryption-password-input">Decryption Password <span class="required">*</span></label>
+                        <input type="password" id="decryption-password-input" placeholder="Enter decryption password" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
+                    </div>
+                    <p class="decryption-password-error hidden" id="decryption-password-error"></p>
                 </div>
             </div>
         </div>

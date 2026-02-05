@@ -35,7 +35,7 @@ bun run build    # Production build
 - ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
-- 🔄 Encryption for exports (Phase 6 - in progress: 6A complete, 6B-6E pending)
+- 🔄 Encryption for exports (Phase 6 - 6A–6D complete, 6E in progress: 1 known issue pending)
 - ⏸️ Testing & documentation (Phase 8 - pending)
 
 ## Version Management
@@ -285,11 +285,12 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - PBKDF2-HMAC-SHA256 key derivation (600k iterations - OWASP 2023)
 - Additional HMAC-SHA256 integrity verification (fail-fast)
 - Mandatory encryption when password-authenticated profiles included
-- Password requirements: 12+ characters minimum
+- Password requirements: 12–128 characters (character count, not byte count; enforced front- and back-end)
 - Zeroization: Passwords/keys cleared from memory after use
 - Random salt (16 bytes) and IV (12 bytes) per export
 - Constant-time HMAC comparison prevents timing attacks
-- Status: Phase 6A complete (backend infrastructure), 6B-6E pending (integration & UI)
+- Strength meter: 5-level scale (Weak / Fair / Good / Strong / Stronger), non-enforcing
+- Status: 6A–6D complete, 6E in progress (1 known issue pending: decrypt modal spinner in WKWebView)
 
 **Migration System:**
 - Automatic version detection using `CURRENT_APP_VERSION` constant

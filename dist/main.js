@@ -615,6 +615,7 @@ let deleteAllProfilesBtn;
 let confirmTitle;
 let toastElement;
 let toastMessage;
+let toastTimeoutId = null;
 let saveProfileBtn;
 let browseKeyBtn;
 let togglePasswordBtn;
@@ -678,6 +679,7 @@ let decryptionPasswordSubmit;
 // Encryption modal state
 let encryptionModalResolver = null;
 let decryptionModalResolver = null;
+let decryptionModalTryDecrypt = null;
 
 // Modal Stack System - tracks which modal is topmost
 // When multiple modals are open (e.g., splash screen over settings),
@@ -823,7 +825,9 @@ function setupKeyboardShortcutListeners() {
                        !confirmModal.classList.contains('hidden') ||
                        !versionSplashModal.classList.contains('hidden') ||
                        !groupModal.classList.contains('hidden') ||
-                       !tagManagerModal.classList.contains('hidden');
+                       !tagManagerModal.classList.contains('hidden') ||
+                       !encryptionPasswordModal.classList.contains('hidden') ||
+                       !decryptionPasswordModal.classList.contains('hidden');
 
         // Handle modal shortcuts (always active in modals)
         if (inModal) {
@@ -1364,7 +1368,7 @@ async function handleModalShortcuts(e) {
             }
 
             case 'encryptionPassword': {
-                const items = [encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordCancel, encryptionPasswordSubmit];
+                const items = [encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordSubmit, encryptionPasswordCancel];
                 const currentIndex = items.indexOf(document.activeElement);
                 let nextIndex;
                 if (e.shiftKey) {
@@ -1377,7 +1381,7 @@ async function handleModalShortcuts(e) {
             }
 
             case 'decryptionPassword': {
-                const items = [decryptionPasswordInput, decryptionPasswordCancel, decryptionPasswordSubmit];
+                const items = [decryptionPasswordInput, decryptionPasswordSubmit, decryptionPasswordCancel];
                 const currentIndex = items.indexOf(document.activeElement);
                 let nextIndex;
                 if (e.shiftKey) {
@@ -1447,6 +1451,7 @@ async function handleModalShortcuts(e) {
                 return;
 
             case 'decryptionPassword':
+                setDecryptionLoading(false);
                 closeDecryptionPasswordModal(null);
                 return;
         }
@@ -2498,6 +2503,8 @@ async function init() {
     encryptionPasswordError = document.getElementById('encryption-password-error');
     encryptionPasswordCancel = document.getElementById('encryption-password-cancel');
     encryptionPasswordSubmit = document.getElementById('encryption-password-submit');
+    encryptionPasswordCounter = document.getElementById('encryption-password-counter');
+    encryptionPasswordConfirmCounter = document.getElementById('encryption-password-confirm-counter');
     decryptionPasswordModal = document.getElementById('decryption-password-modal');
     decryptionPasswordInput = document.getElementById('decryption-password-input');
     decryptionPasswordError = document.getElementById('decryption-password-error');
@@ -4940,12 +4947,29 @@ function setupEventListeners() {
 
     // Encryption Password Modal listeners
     encryptionPasswordInput.addEventListener('input', () => {
-        updatePasswordStrengthMeter(encryptionPasswordInput.value);
+        const val = encryptionPasswordInput.value;
+        updatePasswordStrengthMeter(val);
+        encryptionPasswordCounter.textContent = `${val.length} / 128`;
+        encryptionPasswordCounter.classList.toggle('over-limit', val.length > 128);
         encryptionPasswordError.classList.add('hidden');
+
+        // Live red border: show while the field has text but is too short
+        if (val.length > 0 && val.length < 12) {
+            encryptionPasswordInput.classList.add('input-error');
+        } else {
+            encryptionPasswordInput.classList.remove('input-error');
+        }
+
+        // Re-validate confirm whenever the main password changes
+        validateEncryptionConfirm();
     });
 
     encryptionPasswordConfirm.addEventListener('input', () => {
+        const val = encryptionPasswordConfirm.value;
+        encryptionPasswordConfirmCounter.textContent = `${val.length} / 128`;
+        encryptionPasswordConfirmCounter.classList.toggle('over-limit', val.length > 128);
         encryptionPasswordError.classList.add('hidden');
+        validateEncryptionConfirm();
     });
 
     encryptionPasswordCancel.addEventListener('click', () => {
@@ -4966,6 +4990,7 @@ function setupEventListeners() {
     // Decryption Password Modal listeners
     decryptionPasswordInput.addEventListener('input', () => {
         decryptionPasswordError.classList.add('hidden');
+        decryptionPasswordInput.classList.remove('input-error');
     });
 
     decryptionPasswordCancel.addEventListener('click', () => {
@@ -5556,6 +5581,12 @@ async function showGroupConflictDialog(groupName, parentName) {
 
 // Toast notification
 function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
+    // Cancel any pending auto-hide from the previous toast
+    if (toastTimeoutId) {
+        clearTimeout(toastTimeoutId);
+        toastTimeoutId = null;
+    }
+
     // Clear previous content
     toastMessage.textContent = '';
 
@@ -5569,18 +5600,25 @@ function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
         toastMessage.textContent = message;
     }
 
-    toastElement.classList.remove('hidden', 'toast-error', 'toast-success');
+    toastElement.classList.remove('hidden', 'toast-error', 'toast-success', 'toast-loading');
 
     // Add appropriate class based on type
     if (type === 'error') {
         toastElement.classList.add('toast-error');
+    } else if (type === 'loading') {
+        toastElement.classList.add('toast-loading');
     } else {
         toastElement.classList.add('toast-success');
     }
 
-    setTimeout(() => {
-        toastElement.classList.add('hidden');
-    }, duration);
+    // Loading toasts persist until the next showToast call replaces them —
+    // no auto-hide.  All other types auto-hide after their duration.
+    if (type !== 'loading') {
+        toastTimeoutId = setTimeout(() => {
+            toastElement.classList.add('hidden');
+            toastTimeoutId = null;
+        }, duration);
+    }
 }
 
 // Update form based on selected auth method
@@ -6606,8 +6644,8 @@ function calculatePasswordStrength(password) {
     if (variety >= 3) score += 1;
     if (variety === 4) score += 1;
 
-    const labels     = ['Weak', 'Fair', 'Good', 'Strong', 'Strong'];
-    const classNames = ['strength-weak', 'strength-fair', 'strength-good', 'strength-strong', 'strength-strong'];
+    const labels     = ['Weak', 'Fair', 'Good', 'Strong', 'Stronger'];
+    const classNames = ['strength-weak', 'strength-fair', 'strength-good', 'strength-strong', 'strength-stronger'];
 
     return { score, label: labels[score], className: classNames[score] };
 }
@@ -6624,7 +6662,7 @@ function updatePasswordStrengthMeter(password) {
     }
 
     const strength = calculatePasswordStrength(password);
-    const widthSteps = [0, 25, 50, 75, 100];
+    const widthSteps = [20, 40, 60, 80, 100];
 
     encryptionStrengthBar.classList.add(strength.className);
     encryptionStrengthBar.classList.add(`strength-width-${widthSteps[strength.score]}`);
@@ -6637,9 +6675,15 @@ function openEncryptionPasswordModal() {
     return new Promise((resolve) => {
         encryptionPasswordInput.value = '';
         encryptionPasswordConfirm.value = '';
+        encryptionPasswordInput.classList.remove('input-error');
+        encryptionPasswordConfirm.classList.remove('input-error');
         encryptionPasswordError.textContent = '';
         encryptionPasswordError.classList.add('hidden');
         updatePasswordStrengthMeter('');
+        encryptionPasswordCounter.textContent = '0 / 128';
+        encryptionPasswordCounter.classList.remove('over-limit');
+        encryptionPasswordConfirmCounter.textContent = '0 / 128';
+        encryptionPasswordConfirmCounter.classList.remove('over-limit');
 
         encryptionPasswordModal.classList.remove('hidden');
         pushModal('encryptionPassword');
@@ -6658,13 +6702,37 @@ function closeEncryptionPasswordModal(password) {
     }
 }
 
+// Live red border on the confirm field: shown only when the field has a value
+// that doesn't match the main password.  Re-run whenever either field changes.
+function validateEncryptionConfirm() {
+    const confirm = encryptionPasswordConfirm.value;
+    if (confirm.length > 0 && confirm !== encryptionPasswordInput.value) {
+        encryptionPasswordConfirm.classList.add('input-error');
+    } else {
+        encryptionPasswordConfirm.classList.remove('input-error');
+    }
+}
+
 function submitEncryptionPassword() {
     const password = encryptionPasswordInput.value;
     const confirm  = encryptionPasswordConfirm.value;
 
+    // Clear previous error states
+    encryptionPasswordInput.classList.remove('input-error');
+    encryptionPasswordConfirm.classList.remove('input-error');
+
     if (password.length < 12) {
         encryptionPasswordError.textContent = 'Password must be at least 12 characters.';
         encryptionPasswordError.classList.remove('hidden');
+        encryptionPasswordInput.classList.add('input-error');
+        encryptionPasswordInput.focus();
+        return;
+    }
+
+    if (password.length > 128) {
+        encryptionPasswordError.textContent = 'Password must not exceed 128 characters.';
+        encryptionPasswordError.classList.remove('hidden');
+        encryptionPasswordInput.classList.add('input-error');
         encryptionPasswordInput.focus();
         return;
     }
@@ -6672,6 +6740,7 @@ function submitEncryptionPassword() {
     if (password !== confirm) {
         encryptionPasswordError.textContent = 'Passwords do not match. Please re-enter.';
         encryptionPasswordError.classList.remove('hidden');
+        encryptionPasswordConfirm.classList.add('input-error');
         encryptionPasswordConfirm.focus();
         return;
     }
@@ -6679,41 +6748,87 @@ function submitEncryptionPassword() {
     closeEncryptionPasswordModal(password);
 }
 
-// Open the decryption password modal. Resolves with password string or null (cancelled).
-function openDecryptionPasswordModal() {
+// Open the decryption password modal.
+// tryDecrypt: async (password) => errorString | null
+//   — called when the user submits; return null on success, an error string to
+//     show inline and keep the modal open for another attempt.
+// Resolves with the password that succeeded, or null if the user cancelled.
+function openDecryptionPasswordModal(tryDecrypt) {
     return new Promise((resolve) => {
         decryptionPasswordInput.value = '';
+        decryptionPasswordInput.disabled = false;
+        decryptionPasswordInput.classList.remove('input-error');
         decryptionPasswordError.textContent = '';
         decryptionPasswordError.classList.add('hidden');
+        decryptionPasswordSubmit.disabled = false;
+        decryptionPasswordSubmit.classList.remove('btn-loading');
+        decryptionPasswordCancel.disabled = false;
 
         decryptionPasswordModal.classList.remove('hidden');
         pushModal('decryptionPassword');
         decryptionModalResolver = resolve;
+        decryptionModalTryDecrypt = tryDecrypt;
 
         setTimeout(() => decryptionPasswordInput.focus(), 100);
     });
 }
 
 function closeDecryptionPasswordModal(password) {
+    setDecryptionLoading(false);
     decryptionPasswordModal.classList.add('hidden');
     popModal('decryptionPassword');
     if (decryptionModalResolver) {
         decryptionModalResolver(password);
         decryptionModalResolver = null;
     }
+    decryptionModalTryDecrypt = null;
 }
 
-function submitDecryptionPassword() {
+function setDecryptionLoading(isLoading) {
+    decryptionPasswordInput.disabled = isLoading;
+    decryptionPasswordSubmit.disabled = isLoading;
+    decryptionPasswordSubmit.classList.toggle('btn-loading', isLoading);
+    decryptionPasswordCancel.disabled = isLoading;
+}
+
+async function submitDecryptionPassword() {
     const password = decryptionPasswordInput.value;
 
     if (password.length === 0) {
         decryptionPasswordError.textContent = 'Please enter the decryption password.';
         decryptionPasswordError.classList.remove('hidden');
+        decryptionPasswordInput.classList.add('input-error');
         decryptionPasswordInput.focus();
         return;
     }
 
-    closeDecryptionPasswordModal(password);
+    setDecryptionLoading(true);
+
+    try {
+        const error = await decryptionModalTryDecrypt(password);
+
+        // Modal may have been closed via Escape while the operation was in
+        // flight — if so, just drop the result silently.
+        if (decryptionPasswordModal.classList.contains('hidden')) return;
+
+        if (!error) {
+            closeDecryptionPasswordModal(password);
+        } else {
+            setDecryptionLoading(false);
+            decryptionPasswordError.textContent = error;
+            decryptionPasswordError.classList.remove('hidden');
+            decryptionPasswordInput.classList.add('input-error');
+            decryptionPasswordInput.value = '';
+            decryptionPasswordInput.focus();
+        }
+    } catch (e) {
+        // Non-crypto error (e.g. backend crash) — surface as toast and abort
+        setDecryptionLoading(false);
+        if (!decryptionPasswordModal.classList.contains('hidden')) {
+            closeDecryptionPasswordModal(null);
+        }
+        showToast(cleanErrorMessage(e), TOAST_DURATION_LONG, 'error');
+    }
 }
 
 // Returns true if the error is a crypto/decryption error (vs a parse/structure error)
@@ -6745,7 +6860,8 @@ async function exportSingleProfile(profileId) {
             if (encryptionPassword === null) return; // User cancelled
         }
 
-        showToast('Exporting profile...', TOAST_DURATION_LOADING);
+        showToast('Exporting profile...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         const data = await invoke('export_profile', {
             profileId: profileId,
@@ -6795,7 +6911,8 @@ async function exportSingleGroup(groupId) {
             }
         }
 
-        showToast('Exporting group...', TOAST_DURATION_LOADING);
+        showToast('Exporting group...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         const data = await invoke('export_group', {
             groupId: groupId,
@@ -6836,7 +6953,8 @@ async function exportProfiles() {
             if (encryptionPassword === null) return; // User cancelled
         }
 
-        showToast('Exporting profiles...', TOAST_DURATION_LOADING);
+        showToast('Exporting profiles...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         const data = await invoke('export_profiles', {
             includePasswords: includePasswords,
@@ -7050,12 +7168,14 @@ async function importProfiles(file) {
             return;
         }
 
-        // Encrypted import: prompt for password then route via backend
+        // Encrypted import: modal stays open until password is correct or user cancels
         if (data.encrypted === true) {
             toastElement.classList.add('hidden');
-            const password = await openDecryptionPasswordModal();
+            const password = await openDecryptionPasswordModal(async (pw) => {
+                return await routeEncryptedImport(text, pw);
+            });
             if (password === null) return; // User cancelled
-            await routeEncryptedImport(text, password);
+            // Success path already handled inside routeEncryptedImport
             return;
         }
 
@@ -7080,8 +7200,10 @@ async function importProfiles(file) {
 // Route an encrypted import by probing each backend command in order of specificity.
 // Each command decrypts server-side then parses: parse failures fall through to the next type,
 // crypto errors (wrong password / HMAC) are surfaced immediately.
+// Returns null on success, or the crypto error string for the caller to retry.
 async function routeEncryptedImport(rawText, encryptionPassword) {
-    showToast('Decrypting import...', TOAST_DURATION_LOADING);
+    showToast('Decrypting import...', TOAST_DURATION_LOADING, 'loading');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     // --- Probe: single profile (non-destructive: only imports if no conflict) ---
     try {
@@ -7093,9 +7215,9 @@ async function routeEncryptedImport(rawText, encryptionPassword) {
         });
         // Matched single-profile format. Handle conflict resolution if needed.
         await handleEncryptedSingleProfileImport(rawText, encryptionPassword, result);
-        return;
+        return null;
     } catch (e) {
-        if (isCryptoError(e)) { showToast(cleanErrorMessage(e), TOAST_DURATION_LONG, 'error'); return; }
+        if (isCryptoError(e)) return cleanErrorMessage(e);
         // Parse error — try next type
     }
 
@@ -7108,13 +7230,13 @@ async function routeEncryptedImport(rawText, encryptionPassword) {
             encryptionPassword: encryptionPassword
         });
         await handleEncryptedSingleGroupImport(rawText, encryptionPassword, result);
-        return;
+        return null;
     } catch (e) {
-        if (isCryptoError(e)) { showToast(cleanErrorMessage(e), TOAST_DURATION_LONG, 'error'); return; }
+        if (isCryptoError(e)) return cleanErrorMessage(e);
     }
 
     // --- Must be "all profiles" format — show confirmation then import ---
-    await importAllProfilesEncrypted(rawText, encryptionPassword);
+    return await importAllProfilesEncrypted(rawText, encryptionPassword);
 }
 
 // Handle conflict resolution for an encrypted single-profile import.
@@ -7231,7 +7353,9 @@ async function importAllProfilesEncrypted(rawText, encryptionPassword) {
             }
         }
 
-        showToast('Importing profiles...', TOAST_DURATION_LOADING);
+        showToast('Importing profiles...', TOAST_DURATION_LOADING, 'loading');
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         await invoke('import_profiles', {
             data: rawText,
             encryptionPassword: encryptionPassword
@@ -7242,9 +7366,12 @@ async function importAllProfilesEncrypted(rawText, encryptionPassword) {
         await loadGroups();
         showToast('Profiles imported successfully!');
         debug.log('Encrypted profiles imported successfully');
+        return null;
     } catch (error) {
+        if (isCryptoError(error)) return cleanErrorMessage(error);
         console.error('Failed to import encrypted profiles:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+        return null;
     }
 }
 
@@ -7679,8 +7806,6 @@ async function deleteAllTags() {
 // Backup settings to JSON file
 async function backupSettings() {
     try {
-        showToast('Backing up settings...', TOAST_DURATION_LOADING);
-
         const theme = localStorage.getItem('theme') || 'system';
         const autoUpdateCheck = localStorage.getItem('autoUpdateCheck') === 'true';
         const includeProfiles = includeProfilesCheck.checked;
@@ -7707,6 +7832,16 @@ async function backupSettings() {
         // Check if passwords should be included (from Profile Management setting)
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
+        // Prompt for encryption if backup includes password-authenticated profiles
+        let encryptionPassword = null;
+        if (includeProfiles && includePasswords && exportNeedsEncryption(profiles)) {
+            encryptionPassword = await openEncryptionPasswordModal();
+            if (encryptionPassword === null) return; // User cancelled
+        }
+
+        showToast('Backing up settings...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         const data = await invoke('export_settings', {
             theme,
             autoUpdateCheck,
@@ -7718,6 +7853,7 @@ async function backupSettings() {
             minimizeOnLaunch: minimizeOnLaunch,
             includeProfiles,
             includePasswords,
+            encryptionPassword: encryptionPassword,
             windowWidth,
             windowHeight
         });
@@ -7832,20 +7968,40 @@ async function restoreSettings(file) {
             return;
         }
 
-        // Validate the JSON structure
-        const validation = validateSettingsRestoreData(data);
-        if (!validation.valid) {
-            showToast(`Invalid settings file: ${validation.error}`, TOAST_DURATION_LONG, 'error');
-            return;
+        // Route encrypted and plain restores separately
+        let result;
+        if (data.encrypted === true) {
+            toastElement.classList.add('hidden');
+            const password = await openDecryptionPasswordModal(async (pw) => {
+                try {
+                    result = await invoke('import_settings', { data: text, encryptionPassword: pw });
+                    return null; // Success
+                } catch (error) {
+                    if (isCryptoError(error)) return cleanErrorMessage(error);
+                    throw error; // Non-crypto error — bubbles to modal's catch
+                }
+            });
+            if (password === null) return; // User cancelled
+            closeSettings();
+        } else {
+            // Validate the JSON structure (only for non-encrypted data)
+            const validation = validateSettingsRestoreData(data);
+            if (!validation.valid) {
+                showToast(`Invalid settings file: ${validation.error}`, TOAST_DURATION_LONG, 'error');
+                return;
+            }
+
+            closeSettings();
+
+            showToast('Restoring settings...', TOAST_DURATION_LOADING);
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+            result = await invoke('import_settings', { data: text, encryptionPassword: null });
         }
-
-        closeSettings();
-
-        const result = await invoke('import_settings', { data: text });
         const includesProfiles = result.profiles && result.profiles.length > 0;
 
-        // Check if backup OS matches current OS
-        const backupOS = data.os || 'unknown';
+        // Check if backup OS matches current OS (encrypted backups can't be inspected client-side)
+        const backupOS = data.encrypted ? getOS() : (data.os || 'unknown');
         const currentOS = getOS();
         const osMatches = backupOS === currentOS;
 

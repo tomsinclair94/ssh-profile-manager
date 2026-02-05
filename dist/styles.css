@@ -1164,9 +1164,20 @@ button.keyboard-selected {
     padding-bottom: 0;
 }
 
-.encryption-password-body,
+.encryption-password-body {
+    padding: 20px 24px 24px 24px;
+}
+
+/* Decryption body uses a split: 8px form-group margin + 16px body padding = 24px
+   when the error is hidden.  When the error appears the 8px margin collapses with
+   the error's 6px margin-top (→ 8px gap above error), and 16px padding sits below
+   the error — keeping the modal proportions balanced either way. */
 .decryption-password-body {
-    padding: 20px 24px 12px 24px;
+    padding: 20px 24px 16px 24px;
+}
+
+.decryption-password-body .form-group {
+    margin-bottom: 8px;
 }
 
 .encryption-password-intro,
@@ -1194,11 +1205,9 @@ button.keyboard-selected {
     line-height: 1.4;
 }
 
-/* Encryption modal form actions - override global .form-actions layout */
-.encryption-password-modal-content .form-actions,
-.decryption-password-modal-content .form-actions {
-    margin-top: 0;
-    padding: 12px 24px 16px 24px;
+/* Red border on invalid password inputs */
+.input-error {
+    border-color: var(--danger-color) !important;
 }
 
 /* Password Strength Meter */
@@ -1226,23 +1235,30 @@ button.keyboard-selected {
     background-color: transparent;
 }
 
-.password-strength-bar.strength-empty     { width: 0%;   background-color: transparent; }
-.password-strength-bar.strength-width-0   { width: 0%;   background-color: var(--danger-color); }
-.password-strength-bar.strength-width-25  { width: 25%;  background-color: var(--danger-color); }
-.password-strength-bar.strength-width-50  { width: 50%;  background-color: #f97316; }
-.password-strength-bar.strength-width-75  { width: 75%;  background-color: #eab308; }
-.password-strength-bar.strength-width-100 { width: 100%; background-color: var(--success-color); }
+.password-strength-bar.strength-empty      { width: 0%;   background-color: transparent; }
+.password-strength-bar.strength-width-20   { width: 20%; }
+.password-strength-bar.strength-width-40   { width: 40%; }
+.password-strength-bar.strength-width-60   { width: 60%; }
+.password-strength-bar.strength-width-80   { width: 80%; }
+.password-strength-bar.strength-width-100  { width: 100%; }
+.password-strength-bar.strength-weak       { background-color: var(--danger-color); }
+.password-strength-bar.strength-fair       { background-color: #f97316; }
+.password-strength-bar.strength-good       { background-color: #eab308; }
+.password-strength-bar.strength-strong     { background-color: var(--success-color); }
+.password-strength-bar.strength-stronger   { background-color: #16a34a; }
 
 .password-strength-label {
     font-size: 12px;
     font-weight: 500;
-    min-width: 44px;
+    min-width: 56px;
+    min-height: 16px;
 }
 
-.password-strength-label.strength-weak   { color: var(--danger-color); }
-.password-strength-label.strength-fair   { color: #f97316; }
-.password-strength-label.strength-good   { color: #eab308; }
-.password-strength-label.strength-strong { color: var(--success-color); }
+.password-strength-label.strength-weak     { color: var(--danger-color); }
+.password-strength-label.strength-fair     { color: #f97316; }
+.password-strength-label.strength-good     { color: #eab308; }
+.password-strength-label.strength-strong   { color: var(--success-color); }
+.password-strength-label.strength-stronger { color: #16a34a; }
 
 /* Ensure input fields are constrained within their containers */
 .modal-content input[type="text"],
@@ -2161,6 +2177,56 @@ form {
 
 .toast.toast-error {
     background-color: var(--danger-color);
+}
+
+.toast.toast-loading {
+    background-color: #374151;
+    display: flex;
+    align-items: center;
+}
+
+.toast.toast-loading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: toast-spinner 0.6s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes toast-spinner {
+    to { transform: rotate(360deg); }
+}
+
+/* Button loading state — spinner centred, text hidden, pointer disabled.
+   Uses a real <span class="btn-spinner"> rather than ::before because
+   WKWebView (Tauri on macOS) does not position pseudo-elements correctly
+   inside <button> elements. */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.btn-spinner {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: toast-spinner 0.6s linear infinite;
+}
+
+.btn-loading .btn-spinner {
+    display: block;
 }
 
 .toast.hidden {

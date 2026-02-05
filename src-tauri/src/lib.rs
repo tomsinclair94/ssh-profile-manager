@@ -1913,8 +1913,12 @@ const NONCE_SIZE: usize = 12;
 
 /// Validates encryption password meets minimum requirements
 fn validate_encryption_password(password: &str) -> Result<(), String> {
-    if password.len() < 12 {
+    let char_count = password.chars().count();
+    if char_count < 12 {
         return Err("Password too short: Encryption password must be at least 12 characters.".to_string());
+    }
+    if char_count > 128 {
+        return Err("Password too long: Encryption password must not exceed 128 characters.".to_string());
     }
     Ok(())
 }
@@ -2046,7 +2050,7 @@ fn decrypt_data(encrypted: &EncryptedExport, password: &str) -> Result<String, S
     // VERIFY HMAC FIRST (fail fast if tampered)
     if !verify_hmac(&expected_hmac, &salt, &nonce_bytes, &ciphertext, &key) {
         key.zeroize();
-        return Err("Import file is corrupted or has been tampered with. Cannot import.".to_string());
+        return Err("Incorrect password, or the file has been tampered with.".to_string());
     }
 
     // Create cipher
@@ -3488,6 +3492,7 @@ fn export_settings(
     minimize_on_launch: Option<bool>,
     include_profiles: bool,
     include_passwords: bool,
+    encryption_password: Option<String>,
     db: State<Database>,
 ) -> Result<String, String> {
     // Detect current OS
@@ -3555,6 +3560,16 @@ fn export_settings(
         None
     };
 
+    // Enforce mandatory encryption when backup includes password-authenticated profiles
+    if include_profiles && include_passwords && encryption_password.is_none() {
+        if let Some(ref prof_list) = profiles_data {
+            let has_password_profile = prof_list.iter().any(|p| p.profile.auth_method == "password" && p.password.is_some());
+            if has_password_profile {
+                return Err("Encryption required: This backup contains password-authenticated profiles. Please provide an encryption password.".to_string());
+            }
+        }
+    }
+
     let export_data = SettingsExport {
         version: env!("CARGO_PKG_VERSION").to_string(),
         os: current_os,
@@ -3564,12 +3579,21 @@ fn export_settings(
         profiles: profiles_data,
     };
 
-    serde_json::to_string_pretty(&export_data)
-        .map_err(|e| format!("Failed to serialize settings: {}", e))
+    let json = serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    // Encrypt if password provided
+    if let Some(ref password) = encryption_password {
+        let encrypted = encrypt_data(&json, password)?;
+        serde_json::to_string_pretty(&encrypted)
+            .map_err(|e| format!("Failed to serialize encrypted settings: {}", e))
+    } else {
+        Ok(json)
+    }
 }
 
 #[tauri::command]
-fn import_settings(data: String) -> Result<SettingsImportResult, String> {
+fn import_settings(data: String, encryption_password: Option<String>) -> Result<SettingsImportResult, String> {
     // SECURITY: Validate payload size to prevent resource exhaustion
     const MAX_SETTINGS_JSON_SIZE: usize = 1024 * 1024; // 1MB
     if data.len() > MAX_SETTINGS_JSON_SIZE {
@@ -3594,6 +3618,9 @@ fn import_settings(data: String) -> Result<SettingsImportResult, String> {
         }
         *last_time = now;
     }
+
+    // Phase 6: Decrypt if encrypted
+    let data = decrypt_import_if_encrypted(&data, &encryption_password)?;
 
     let import_data: SettingsImport = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse settings data: {}", e))?;
@@ -5180,21 +5207,48 @@ mod tests {
 
         #[test]
         fn test_password_validation_too_short() {
-            // 11 ASCII bytes — one short of the 12-byte minimum
+            // 11 characters — one short of the 12-character minimum
             assert!(validate_encryption_password("abcdefghijk").is_err());
         }
 
         #[test]
         fn test_password_validation_minimum_length() {
-            // Exactly 12 ASCII bytes — the boundary that should pass
+            // Exactly 12 characters — the lower boundary that should pass
             assert!(validate_encryption_password("abcdefghijkl").is_ok());
         }
 
         #[test]
         fn test_password_validation_unicode() {
-            // str::len() counts bytes: 6 Cyrillic chars (12 bytes) + 6 ASCII
-            // chars (6 bytes) = 18 bytes total, comfortably valid.
+            // 6 Cyrillic chars + 6 ASCII chars = 12 characters exactly (lower boundary)
             assert!(validate_encryption_password("пароль123456").is_ok());
+        }
+
+        #[test]
+        fn test_password_validation_max_length() {
+            // Exactly 128 characters — the upper boundary that should pass
+            let password: String = "a".repeat(128);
+            assert!(validate_encryption_password(&password).is_ok());
+        }
+
+        #[test]
+        fn test_password_validation_too_long() {
+            // 129 characters — one over the 128-character maximum
+            let password: String = "a".repeat(129);
+            assert!(validate_encryption_password(&password).is_err());
+        }
+
+        #[test]
+        fn test_password_validation_max_length_unicode() {
+            // 128 multibyte characters — max boundary with non-ASCII (chars, not bytes)
+            let password: String = "п".repeat(128);
+            assert!(validate_encryption_password(&password).is_ok());
+        }
+
+        #[test]
+        fn test_password_validation_too_long_unicode() {
+            // 129 multibyte characters — confirms the limit is on chars, not bytes
+            let password: String = "п".repeat(129);
+            assert!(validate_encryption_password(&password).is_err());
         }
 
         // --------------------------------------------------------------
@@ -5345,7 +5399,7 @@ mod tests {
             // AES-GCM is attempted (fail-fast).  Wrong-password and tampering
             // intentionally produce the same error to avoid information leakage.
             let err = decrypt_data(&encrypted, "wrong_password__").unwrap_err();
-            assert!(err.contains("corrupted or has been tampered"));
+            assert!(err.contains("has been tampered with"));
         }
 
         // --------------------------------------------------------------
