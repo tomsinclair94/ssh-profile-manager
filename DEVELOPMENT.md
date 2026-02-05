@@ -35,8 +35,8 @@
    ```
 
 4. **Prepare for Release** - Before creating PR, ensure:
-   - ✅ Code review completed (use code-reviewer agent)
-   - ✅ Security review completed (use security-engineer agent)
+   - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
+   - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
    - ✅ Version updated in ALL 7 locations:
      1. `src-tauri/tauri.conf.json` (line 4)

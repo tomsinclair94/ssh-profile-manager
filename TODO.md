@@ -50,7 +50,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 
 **Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
 
-**Phase 8 Progress (Testing & Documentation):** ⏸️ PENDING — Automated test foundation started in Phase 6E: encryption unit tests in `lib.rs` (`mod tests::encryption`, run via `cargo test`). Phase 8 to expand with DB-layer tests (`Database::new_in_memory()`), coverage gaps identified via `cargo-llvm-cov`, and sibling modules for profiles, groups, tags.
+**Phase 8 (Testing & Documentation):** ⏸️ PENDING — Comprehensive testing, code quality validation, security review, and documentation updates. Sub-phases (A→E): 8A (Automated Testing with voltagent-qa-sec:test-automator), 8B (Agent Reviews - voltagent-qa-sec:code-reviewer + voltagent-infra:security-engineer), 8C (Integration + Windows VM Testing), 8D (Migration Validation), 8E (Documentation). Includes: 30+ Rust tests via test-automator agent, 60%+ coverage, macOS + Windows VM validation, v0.6.5 → v0.7.0 migration testing. See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
 
 ---
 

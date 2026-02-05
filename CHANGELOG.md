@@ -305,9 +305,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Path filtering skips expensive checks for documentation-only changes
   - Always runs on `v*-dev` branches for full pre-release validation
   - Multi-platform testing (macOS aarch64 + Windows x86_64)
-- **Development Agents**: Added `refactoring-specialist` agent to development workflow
+- **Development Agents**: Added `voltagent-dev-exp:refactoring-specialist` agent to development workflow
   - Integrated into release process: Code Review → Refactoring → Security Review
-  - Available in `~/.claude/agents/` alongside code-reviewer, security-engineer, rust-engineer, performance-engineer, and debugger
+  - Available alongside `voltagent-qa-sec:code-reviewer`, `voltagent-infra:security-engineer`, `voltagent-lang:rust-engineer`, `voltagent-qa-sec:performance-engineer`, and `voltagent-qa-sec:debugger`
 
 ## [0.6.0] - 2025-01-01
 

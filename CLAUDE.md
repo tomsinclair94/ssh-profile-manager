@@ -83,9 +83,9 @@ git commit -m "Bump version to X.X.X for dev branch"
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes
 3. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
-4. Code review (`code-reviewer` agent)
-5. Refactor (`refactoring-specialist` agent) - optional, skip if not needed
-6. Security review (`security-engineer` agent)
+4. Code review (`voltagent-qa-sec:code-reviewer` agent)
+5. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
+6. Security review (`voltagent-infra:security-engineer` agent)
 7. Fix CRITICAL/HIGH/MEDIUM issues
 8. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
 9. Commit & push
@@ -427,11 +427,23 @@ These warnings only affect Linux builds, which are not supported. Application ta
 
 ## Development Agents
 
-Available in `~/.claude/agents/`:
-- **code-reviewer**, **refactoring-specialist**, **security-engineer** (release process)
-- **rust-engineer**, **performance-engineer**, **debugger** (development)
+Specialized agents for code quality, security, and development tasks:
 
-Usage: `Task(subagent_type='agent-name')`
+**Testing & QA (Phase 8):**
+- `voltagent-qa-sec:test-automator` - Design and implement automated test frameworks (Phase 8A)
+- `voltagent-qa-sec:code-reviewer` - Code quality, design patterns, best practices (Phase 8B)
+- `voltagent-infra:security-engineer` - Security audit, vulnerability assessment (Phase 8B)
+
+**Development Support:**
+- `voltagent-lang:rust-engineer` - Rust-specific development and optimization
+- `voltagent-qa-sec:performance-engineer` - Performance testing and optimization
+- `voltagent-qa-sec:debugger` - Complex issue diagnosis and troubleshooting
+- `voltagent-qa-sec:qa-expert` - QA strategy, test planning, quality metrics
+
+**Future (v1.0.0):**
+- `voltagent-dev-exp:refactoring-specialist` - Code complexity reduction (40-50% target)
+
+**Usage:** `Task(subagent_type='voltagent-qa-sec:test-automator', prompt='...')`
 
 ## Resources
 
