@@ -81,14 +81,16 @@ git commit -m "Bump version to X.X.X for dev branch"
 
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
-2. Develop features/fixes
-3. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
-4. Code review (`voltagent-qa-sec:code-reviewer` agent)
-5. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
-6. Security review (`voltagent-infra:security-engineer` agent)
-7. Fix CRITICAL/HIGH/MEDIUM issues
-8. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
-9. Commit & push
+2. Develop features/fixes (with tests for all new features)
+3. **RUN ALL TESTS** before code reviews: `cargo test --lib` (all 106 tests must pass)
+4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
+5. Code review (`voltagent-qa-sec:code-reviewer` agent)
+6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
+7. Security review (`voltagent-infra:security-engineer` agent)
+8. Fix CRITICAL/HIGH/MEDIUM issues
+9. **RE-RUN TESTS** after fixes: `cargo test --lib` (ensure no regressions)
+10. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
+11. Commit & push
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled
@@ -416,13 +418,169 @@ CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 
 These warnings only affect Linux builds, which are not supported. Application targets macOS (Apple Silicon) and Windows (x86_64) only.
 
+## Testing
+
+### Test Structure
+
+All backend tests are located in `src-tauri/src/tests/` with a modular structure (refactored from monolithic to separate modules for maintainability):
+
+```
+src-tauri/src/tests/
+├── helpers.rs        # Shared test utilities
+├── encryption.rs     # 38 tests - AES-256-GCM encryption
+├── validation.rs     # 27 tests - Input validation
+├── profiles.rs       # 11 tests - Profile CRUD
+├── groups.rs         #  8 tests - Hierarchical groups
+├── tags.rs           #  9 tests - Tag system
+├── connections.rs    #  5 tests - Recent connections
+├── settings.rs       #  3 tests - User settings
+└── migrations.rs     #  5 tests - Schema migrations
+
+Total: 106 tests (all must pass before release)
+```
+
+**Test declaration in lib.rs:**
+```rust
+#[cfg(test)]
+mod tests {
+    mod helpers;      // Shared utilities
+    mod encryption;   // Individual test modules
+    mod validation;
+    // ... etc
+}
+```
+
+### Test Helpers (helpers.rs)
+
+**Shared test utilities used across all test modules:**
+
+- `create_test_db() -> Database` - Creates in-memory SQLite database with full schema
+- `make_test_profile(name, group_path) -> Profile` - Profile factory with defaults
+- `make_test_group(name, parent_id, path) -> Group` - Group factory
+- `make_test_tag(name, color) -> Tag` - Tag factory
+
+**Pattern:** All tests use in-memory databases for isolation (no shared state between tests)
+
+### Running Tests
+
+```bash
+cd src-tauri
+
+# Run all tests (required before every release)
+cargo test --lib
+
+# Run specific module
+cargo test --lib tests::encryption
+cargo test --lib tests::profiles
+
+# Run specific test
+cargo test --lib test_create_profile_success
+
+# Run with output
+cargo test --lib -- --nocapture
+
+# Coverage analysis (requires cargo-llvm-cov)
+cargo llvm-cov --lib --open
+```
+
+**Expected result:** `106 passed; 0 failed` in ~27 seconds
+
+### Writing Tests for New Features
+
+**CRITICAL: All new features MUST include tests before merging to main.**
+
+**1. Choose the appropriate test module:**
+- Profile operations → `tests/profiles.rs`
+- Group operations → `tests/groups.rs`
+- Validation → `tests/validation.rs`
+- New feature domain → Create new module (e.g., `tests/new_feature.rs`)
+
+**2. Follow existing patterns:**
+
+```rust
+// In tests/your_module.rs
+use super::helpers::*;  // Import test utilities
+use crate::X;           // Import lib.rs functions
+
+#[test]
+fn test_feature_success() {
+    let db = create_test_db();
+    let profile = make_test_profile("Test", None);
+
+    // Test implementation
+    assert!(db.your_function(&profile).is_ok());
+}
+
+#[test]
+fn test_feature_validation_fails() {
+    // Test failure case
+    assert!(validate_input("").is_err());
+}
+```
+
+**3. Test both success and failure paths:**
+- Happy path (valid input, successful operation)
+- Edge cases (empty, max length, boundary values)
+- Validation failures (invalid input, missing data)
+- Error conditions (not found, conflicts, cascades)
+
+**4. Descriptive test names:**
+- `test_create_profile_success` ✅
+- `test_create_profile_duplicate_in_same_group` ✅
+- `test_delete_group_cascade_deletes_children` ✅
+- `test1` ❌
+
+**5. If creating a new test module:**
+
+```rust
+// In lib.rs #[cfg(test)] mod tests block:
+mod your_new_module;  // Add declaration
+
+// Create src-tauri/src/tests/your_new_module.rs
+use super::helpers::*;
+
+#[test]
+fn test_something() {
+    // Your tests
+}
+```
+
+**6. Verify tests pass:**
+```bash
+cargo test --lib
+```
+
+### Coverage Goals
+
+- **60%+ coverage** on critical functions (Tauri commands, DB operations, validation)
+- **All Tauri commands** should have at least basic success/failure tests
+- **Security-critical code** (encryption, validation) requires comprehensive tests
+
+### Test Philosophy
+
+- **Fast:** In-memory databases, no I/O, no network (~27s for 106 tests)
+- **Isolated:** Each test uses fresh database (no shared state)
+- **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
+- **Readable:** Clear test names, focused assertions, minimal setup
+
+### Pre-Release Testing Checklist
+
+Before creating a release PR:
+
+- [ ] Run `cargo test --lib` → All 106 tests pass
+- [ ] New features have corresponding tests
+- [ ] Tests run in <30 seconds (performance check)
+- [ ] No warnings from test compilation
+- [ ] CI/CD tests pass on both macOS and Windows
+
 ## Quick Reference
 
-**Add Tauri Command:** `#[tauri::command]` in lib.rs → `invoke_handler!` → `invoke('command_name', { params })`
+**Add Tauri Command:** `#[tauri::command]` in lib.rs → `invoke_handler!` → `invoke('command_name', { params })` → **Write tests!**
 **Add Setting:** Update `SettingsData`/`SettingsOsSpecific` (Rust) + export/import + JS backup/restore/reset
 **Add Migration:** See inline docs in `dist/main.js` line ~1920 - use `< 'X.X.X'` pattern for version checks
 **Add Icon:** Add to `PROFILE_ICONS` object + update `PROFILE_ICON_VISIBILITY` if should be hidden from picker
 **Add Modal:** Call `pushModal('modalId')` on open, `popModal('modalId')` on close, add to `handleModalShortcuts()`
+**Add Test:** Create in appropriate `src-tauri/src/tests/*.rs` module, use helpers, test success + failure, run `cargo test --lib`
 **British English:** All user-facing text (tooltips, labels, notifications) must use British spelling
 
 ## Development Agents
