@@ -516,6 +516,29 @@ fn validate_group(group: &str) -> Result<(), String> {
     Ok(())
 }
 
+// Validate all profile fields (used during import to prevent injection attacks)
+fn validate_profile_fields(profile: &Profile) -> Result<(), String> {
+    validate_profile_name(&profile.name)?;
+    validate_host_or_ip(&profile.host)?;
+    validate_username(&profile.username)?;
+    validate_port(profile.port as i64)?;
+
+    if let Some(ref desc) = profile.description {
+        validate_description(desc)?;
+    }
+
+    if let Some(ref gp) = profile.group_path {
+        validate_group(gp)?;
+    }
+
+    // Validate auth_method
+    if !matches!(profile.auth_method.as_str(), "key" | "password" | "none") {
+        return Err(format!("Invalid auth_method: '{}' (must be 'key', 'password', or 'none')", profile.auth_method));
+    }
+
+    Ok(())
+}
+
 fn validate_settings(settings: &SettingsData) -> Result<(), String> {
     // Validate theme
     if !matches!(settings.theme.as_str(), "system" | "dark" | "light") {
@@ -1637,37 +1660,27 @@ impl Database {
 
     // Set profile tags (replaces all existing tags)
     fn set_profile_tags_db(&self, profile_id: &str, tag_ids: &[String]) -> SqlResult<()> {
-        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut conn = self.conn.lock().expect("Database lock poisoned");
 
-        // Start transaction
-        conn.execute("BEGIN TRANSACTION", [])?;
+        // Use RAII transaction guard for automatic rollback on panic or error
+        let tx = conn.transaction()?;
 
         // Delete existing tags
-        let result = conn.execute(
+        tx.execute(
             "DELETE FROM profile_tags WHERE profile_id = ?1",
             [profile_id],
-        );
-
-        if result.is_err() {
-            conn.execute("ROLLBACK", [])?;
-            return result.map(|_| ());
-        }
+        )?;
 
         // Insert new tags
         for tag_id in tag_ids {
-            let result = conn.execute(
+            tx.execute(
                 "INSERT INTO profile_tags (profile_id, tag_id) VALUES (?1, ?2)",
                 (profile_id, tag_id),
-            );
-
-            if result.is_err() {
-                conn.execute("ROLLBACK", [])?;
-                return result.map(|_| ());
-            }
+            )?;
         }
 
-        // Commit transaction
-        conn.execute("COMMIT", [])?;
+        // Commit transaction (explicit commit, auto-rollback on drop if not committed)
+        tx.commit()?;
         Ok(())
     }
 
@@ -2442,12 +2455,15 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
         }
 
         // CASCADE UPDATE: Update all profile group_paths that reference this group or its descendants
+        // Use SUBSTR instead of REPLACE to avoid corrupting paths with overlapping prefixes
+        // Example: Renaming "Dev" to "Development" should not affect "DevOps"
         let conn = db.conn.lock().expect("Database lock poisoned");
+        let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
         conn.execute(
             "UPDATE profiles
-             SET group_path = REPLACE(group_path, ?1, ?2)
-             WHERE group_path = ?1 OR group_path LIKE ?3",
-            (&old_path, &group.path, format!("{}/%", old_path)),
+             SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
+             WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
+            (&old_path, &group.path, format!("{}/%", escaped_path)),
         ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
     } else {
         // Just update icon
@@ -2478,12 +2494,14 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         let conn = db.conn.lock().expect("Database lock poisoned");
 
         // Get all descendant group paths (including the group itself)
+        // Escape LIKE wildcards to prevent unintended matches
+        let escaped_path = group.path.replace('%', "\\%").replace('_', "\\_");
         let descendant_paths: Vec<String> = {
             let mut stmt = conn.prepare(
-                "SELECT path FROM groups WHERE path LIKE ?1 OR path = ?2"
+                "SELECT path FROM groups WHERE path LIKE ?1 ESCAPE '\\' OR path = ?2"
             ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-            let rows = stmt.query_map([format!("{}/%", group.path), group.path.clone()], |row| row.get(0))
+            let rows = stmt.query_map([format!("{}/%", escaped_path), group.path.clone()], |row| row.get(0))
                 .map_err(|e| format!("Failed to query descendants: {}", e))?;
 
             let result: Result<Vec<_>, _> = rows.collect();
@@ -2508,12 +2526,14 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         let conn = db.conn.lock().expect("Database lock poisoned");
 
         // Get all descendant group paths (including the group itself)
+        // Escape LIKE wildcards to prevent unintended matches
+        let escaped_path = group.path.replace('%', "\\%").replace('_', "\\_");
         let descendant_paths: Vec<String> = {
             let mut stmt = conn.prepare(
-                "SELECT path FROM groups WHERE path LIKE ?1 OR path = ?2"
+                "SELECT path FROM groups WHERE path LIKE ?1 ESCAPE '\\' OR path = ?2"
             ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-            let rows = stmt.query_map([format!("{}/%", group.path), group.path.clone()], |row| row.get(0))
+            let rows = stmt.query_map([format!("{}/%", escaped_path), group.path.clone()], |row| row.get(0))
                 .map_err(|e| format!("Failed to query descendants: {}", e))?;
 
             let result: Result<Vec<_>, _> = rows.collect();
@@ -2660,12 +2680,15 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
     }
 
     // CASCADE UPDATE: Update all profile group_paths that reference this group or its descendants
+    // Use SUBSTR instead of REPLACE to avoid corrupting paths with overlapping prefixes
+    // Example: Moving "Dev" should not affect "DevOps"
     let conn = db.conn.lock().expect("Database lock poisoned");
+    let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
     conn.execute(
         "UPDATE profiles
-         SET group_path = REPLACE(group_path, ?1, ?2)
-         WHERE group_path = ?1 OR group_path LIKE ?3",
-        (&old_path, &new_path, format!("{}/%", old_path)),
+         SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
+         WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
+        (&old_path, &new_path, format!("{}/%", escaped_path)),
     ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
 
     Ok(())
@@ -2828,6 +2851,7 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
     let mut unique_group_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
     for profile_export in &import_data.profiles {
         if let Some(ref group_path) = profile_export.profile.group_path {
+            #[cfg(debug_assertions)]
             println!("Found profile with group_path: {}", group_path);
             unique_group_paths.insert(group_path.clone());
         }
@@ -2836,13 +2860,15 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
     // Create groups in sorted order (parent before child)
     let mut sorted_paths: Vec<String> = unique_group_paths.into_iter().collect();
     sorted_paths.sort();
+    #[cfg(debug_assertions)]
     println!("Creating {} groups from import", sorted_paths.len());
+
+    // PERFORMANCE: Load existing groups once to avoid N+1 query pattern
+    let mut existing_groups = db.get_all_groups()
+        .map_err(|e| format!("Failed to get groups: {}", e))?;
 
     for group_path in sorted_paths {
         // Check if group already exists
-        let existing_groups = db.get_all_groups()
-            .map_err(|e| format!("Failed to get groups: {}", e))?;
-
         if !existing_groups.iter().any(|g| g.path == group_path) {
             // Extract name from path (last component)
             let name = group_path.split('/').last().unwrap_or(&group_path).to_string();
@@ -2870,15 +2896,29 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
 
             db.create_group(&group)
                 .map_err(|e| format!("Failed to create group '{}': {}", group.path, e))?;
+
+            // Update local collection after insert
+            existing_groups.push(group.clone());
+
+            #[cfg(debug_assertions)]
             println!("Created group: {} (id: {})", group.path, group.id);
         } else {
+            #[cfg(debug_assertions)]
             println!("Group already exists: {}", group_path);
         }
     }
 
+    // PERFORMANCE: Load existing tags once before loop to avoid N+1 query pattern
+    let mut existing_tags = db.get_all_tags()
+        .map_err(|e| format!("Failed to get tags: {}", e))?;
+
     // Now import the new profiles
     for profile_export in import_data.profiles {
         let mut profile = profile_export.profile;
+
+        // SECURITY: Validate all profile fields to prevent injection attacks
+        validate_profile_fields(&profile)
+            .map_err(|e| format!("Invalid profile '{}': {}", profile.name, e))?;
 
         // Generate new ID for imported profile to avoid conflicts
         profile.id = Uuid::new_v4().to_string();
@@ -2909,10 +2949,7 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
             let mut tag_ids = Vec::new();
 
             for import_tag in profile_export.tags {
-                // Try to find existing tag by name
-                let existing_tags = db.get_all_tags()
-                    .map_err(|e| format!("Failed to get tags: {}", e))?;
-
+                // Try to find existing tag by name using pre-loaded tags
                 let tag_id = if let Some(existing) = existing_tags.iter().find(|t| t.name == import_tag.name) {
                     // Tag exists - use existing tag (preserve color)
                     existing.id.clone()
@@ -2920,6 +2957,10 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
                     // Tag doesn't exist - create new tag with imported color
                     db.create_tag_db(&import_tag)
                         .map_err(|e| format!("Failed to create tag '{}': {}", import_tag.name, e))?;
+
+                    // Update local collection after insert
+                    existing_tags.push(import_tag.clone());
+
                     import_tag.id.clone()
                 };
 
@@ -3218,6 +3259,10 @@ fn import_profile(
     // Set target group_path (overriding the imported value)
     profile.group_path = target_group_path.clone();
 
+    // SECURITY: Validate all profile fields to prevent injection attacks
+    validate_profile_fields(&profile)
+        .map_err(|e| format!("Invalid profile '{}': {}", profile.name, e))?;
+
     // Check for duplicates: same name + semantic group path
     // Profile names must be unique within their group (allows same name in different groups)
     let existing_profiles = db.get_all_profiles()
@@ -3284,12 +3329,13 @@ fn import_group(
         parent_id: Option<String>,
         parent_path: Option<String>,
         duplicate_action: &str,
+        existing_groups: &mut Vec<Group>, // Pass existing groups to avoid N+1 queries
+        existing_profiles: &mut Vec<Profile>, // Pass existing profiles to avoid N+1 queries
     ) -> Result<String, String> {
         let mut group_portable = group_export.group;
 
         // Check for duplicate group (same name under same parent) using semantic paths
-        let existing_groups = db.get_all_groups()
-            .map_err(|e| format!("Failed to get existing groups: {}", e))?;
+        // Use pre-loaded existing_groups instead of querying
 
         let duplicate = existing_groups.iter().find(|g| {
             if g.name != group_portable.name {
@@ -3299,9 +3345,9 @@ fn import_group(
             // Compare by semantic parent paths instead of UUIDs
             let existing_parent_path = get_group_path_by_id(db, &g.parent_id).ok().flatten();
             existing_parent_path == parent_path
-        });
+        }).cloned(); // Clone to avoid borrow checker issues
 
-        let (group_id, actual_path) = match (duplicate, duplicate_action) {
+        let (group_id, actual_path) = match (duplicate.clone(), duplicate_action) {
             (Some(_), "skip") => {
                 return Ok("skipped".to_string());
             }
@@ -3337,6 +3383,9 @@ fn import_group(
 
                 db.create_group(&group)
                     .map_err(|e| format!("Failed to create group '{}': {}", group.name, e))?;
+
+                // Update local collection after insert
+                existing_groups.push(group.clone());
 
                 // Import group tags
                 let conn = db.conn.lock().expect("Database lock poisoned");
@@ -3376,12 +3425,13 @@ fn import_group(
             // Set group_path
             profile.group_path = Some(actual_path.clone());
 
+            // SECURITY: Validate all profile fields to prevent injection attacks
+            validate_profile_fields(&profile)
+                .map_err(|e| format!("Invalid profile '{}' in group '{}': {}", profile.name, actual_path, e))?;
+
             // Check for duplicate profile when merging
             let profile_id = if duplicate_action == "merge" {
-                // Get existing profiles to check for duplicates
-                let existing_profiles = db.get_all_profiles()
-                    .map_err(|e| format!("Failed to get existing profiles: {}", e))?;
-
+                // Use pre-loaded existing profiles to check for duplicates
                 let existing = existing_profiles.iter().find(|p| {
                     p.name == profile.name && p.group_path.as_ref() == Some(&actual_path)
                 });
@@ -3420,9 +3470,9 @@ fn import_group(
             import_profile_metadata_and_tags(db, &profile_id, profile_export.metadata, profile_export.tags)?;
         }
 
-        // Import subgroups recursively
+        // Import subgroups recursively, passing collections to avoid N+1 queries
         for subgroup in group_export.subgroups {
-            import_group_recursive(db, subgroup, Some(group_id.clone()), Some(actual_path.clone()), duplicate_action)?;
+            import_group_recursive(db, subgroup, Some(group_id.clone()), Some(actual_path.clone()), duplicate_action, existing_groups, existing_profiles)?;
         }
 
         Ok(group_id)
@@ -3438,7 +3488,13 @@ fn import_group(
     // Resolve parent group path to group_id
     let parent_group_id = resolve_group_path_to_id(&db, &parent_group_path)?;
 
-    import_group_recursive(&db, import_data.group, parent_group_id, parent_group_path, &duplicate_action)
+    // PERFORMANCE: Load existing groups and profiles once to avoid N+1 query pattern
+    let mut existing_groups = db.get_all_groups()
+        .map_err(|e| format!("Failed to get existing groups: {}", e))?;
+    let mut existing_profiles = db.get_all_profiles()
+        .map_err(|e| format!("Failed to get existing profiles: {}", e))?;
+
+    import_group_recursive(&db, import_data.group, parent_group_id, parent_group_path, &duplicate_action, &mut existing_groups, &mut existing_profiles)
 }
 
 
@@ -3986,14 +4042,14 @@ fn create_tag(db: State<Database>, input: CreateTagInput) -> Result<String, Stri
     }
 
     // Validate name: alphanumeric, hyphens, underscores only (NO spaces)
-    let name_regex = regex::Regex::new(r"^[a-zA-Z0-9\-_]+$").unwrap();
-    if !name_regex.is_match(&input.name) {
+    // Using character-by-character validation instead of regex for performance
+    if input.name.is_empty() || !input.name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
         return Err("Tag name can only contain letters, numbers, hyphens, and underscores (no spaces)".to_string());
     }
 
     // Validate color format (#RRGGBB)
-    let color_regex = regex::Regex::new(r"^#[0-9A-Fa-f]{6}$").unwrap();
-    if !color_regex.is_match(&input.color) {
+    // Using character-by-character validation instead of regex for performance
+    if input.color.len() != 7 || !input.color.starts_with('#') || !input.color[1..].chars().all(|c| c.is_ascii_hexdigit()) {
         return Err("Invalid color format. Use hex format like #FF5733".to_string());
     }
 
@@ -4136,29 +4192,8 @@ async fn create_terminal_session(
         })
         .map_err(|e| format!("Failed to create PTY: {}", e))?;
 
-    // Build SSH command arguments (reuse logic from connect_ssh)
-    let mut ssh_args: Vec<String> = vec!["ssh".to_string()];
-
-    // Add port if not default
-    if profile.port != 22 {
-        ssh_args.push("-p".to_string());
-        ssh_args.push(profile.port.to_string());
-    }
-
-    // Add key path if specified and validated
-    if profile.auth_method == "key" {
-        if let Some(key_path) = &profile.key_path {
-            if !key_path.is_empty() {
-                let validated_path = validate_key_path(key_path)?;
-                ssh_args.push("-i".to_string());
-                ssh_args.push(validated_path.to_string_lossy().to_string());
-            }
-        }
-    }
-
-    // Build connection string
-    let connection = format!("{}@{}", profile.username, profile.host);
-    ssh_args.push(connection);
+    // Build SSH command arguments using shared helper (ensures StrictHostKeyChecking is included)
+    let ssh_args = build_ssh_args(&profile)?;
 
     // Create command builder for PTY
     let mut cmd = CommandBuilder::new(&ssh_args[0]);

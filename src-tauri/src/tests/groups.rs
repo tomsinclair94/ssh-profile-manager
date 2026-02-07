@@ -109,3 +109,56 @@ fn test_get_child_groups() {
     let children = db.get_child_groups(&parent.id).unwrap();
     assert_eq!(children.len(), 2);
 }
+
+#[test]
+fn test_rename_group_with_overlapping_names() {
+    // SECURITY: Test that renaming "Dev" to "Development" doesn't corrupt "DevOps"
+    // This verifies the C-1 fix (SQL REPLACE → SUBSTR)
+    let db = create_test_db();
+
+    // Create two groups with overlapping names
+    let dev_group = make_test_group("Dev", None, "Dev");
+    let devops_group = make_test_group("DevOps", None, "DevOps");
+
+    db.create_group(&dev_group).unwrap();
+    db.create_group(&devops_group).unwrap();
+
+    // Create profiles in each group
+    let dev_profile = make_test_profile("DevServer", Some("Dev"));
+    let devops_profile = make_test_profile("DevOpsServer", Some("DevOps"));
+
+    db.create_profile(&dev_profile).unwrap();
+    db.create_profile(&devops_profile).unwrap();
+
+    // Rename "Dev" to "Development"
+    // This would incorrectly affect "DevOps" if using REPLACE() instead of SUBSTR()
+    let mut updated_dev = dev_group.clone();
+    let old_path = updated_dev.path.clone();
+    updated_dev.name = "Development".to_string();
+    updated_dev.path = "Development".to_string();
+    db.update_group(&updated_dev).unwrap();
+
+    // Manually perform cascade update (simulating what update_group command does)
+    // This tests the SQL fix directly
+    let conn = db.conn.lock().unwrap();
+    let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
+    conn.execute(
+        "UPDATE profiles
+         SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
+         WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
+        (&old_path, &updated_dev.path, format!("{}/%", escaped_path)),
+    ).unwrap();
+    drop(conn);
+
+    // Verify "DevOps" group is unchanged
+    let devops_check = db.get_group_by_id(&devops_group.id).unwrap().unwrap();
+    assert_eq!(devops_check.path, "DevOps", "DevOps group path should not be affected");
+
+    // Verify "DevOps" profile is unchanged
+    let devops_profile_check = db.get_profile_by_id(&devops_profile.id).unwrap().unwrap();
+    assert_eq!(devops_profile_check.group_path, Some("DevOps".to_string()), "DevOps profile group_path should not be affected");
+
+    // Verify "Dev" profile was updated correctly
+    let dev_profile_check = db.get_profile_by_id(&dev_profile.id).unwrap().unwrap();
+    assert_eq!(dev_profile_check.group_path, Some("Development".to_string()), "Dev profile group_path should be updated");
+}

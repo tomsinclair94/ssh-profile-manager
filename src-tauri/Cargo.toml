@@ -38,7 +38,6 @@ portable-pty = "0.8"
 base64 = "0.22"
 rand = "0.8"
 unicode-normalization = "0.1"
-regex = "1.11"
 
 # Cryptographic dependencies for export encryption (Phase 6)
 aes-gcm = "0.10"                    # AES-256-GCM authenticated encryption

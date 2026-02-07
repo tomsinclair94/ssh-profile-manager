@@ -50,7 +50,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 
 **Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
 
-**Phase 8 (Testing & Documentation):** 🔄 IN PROGRESS — Comprehensive testing, code quality validation, security review, and documentation updates. Sub-phases (A→E): ✅ 8A Complete (Automated Testing - 106 tests across 8 modules, refactored to modular structure, all passing in ~27s, documentation updated), 🔄 8B In Progress (Agent Reviews Complete - 32 findings documented in plans/v0.7.0-phase-8B-findings.md; fixes pending: 1 CRITICAL, 6 HIGH, 15 MEDIUM, 10 LOW), 8C (Integration + Windows VM Testing), 8D (Migration Validation), 8E (Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
+**Phase 8 (Testing & Documentation):** 🔄 IN PROGRESS — Comprehensive testing, code quality validation, security review, and documentation updates. Sub-phases (A→E): ✅ 8A Complete (Automated Testing - 107 tests across 8 modules, refactored to modular structure, all passing in ~29s, documentation updated), 🔄 8B In Progress (Agent Reviews & Fixes - CRITICAL+HIGH fixed (7 issues), MEDIUM+LOW review pending (25 issues); regex dependency removed; build successful), 8C (Integration + Windows VM Testing), 8D (Migration Validation), 8E (Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
 
 ---
 
