@@ -74,7 +74,7 @@ fn test_get_all_profiles_with_metadata() {
     let profiles = db.get_all_profiles_with_metadata().unwrap();
 
     assert_eq!(profiles.len(), 1);
-    assert_eq!(profiles[0].name, "Test Server");
+    assert_eq!(profiles[0].profile.name, "Test Server");
     assert_eq!(profiles[0].icon, Some("server".to_string()));
     assert!(!profiles[0].is_favorite);
 }

@@ -300,6 +300,13 @@ function debounce(func, wait) {
     };
 }
 
+// M-1: HTML escaping utility to prevent XSS in dynamic content
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Validation Functions
 
 // IPv4 octet range validator
@@ -5506,7 +5513,8 @@ async function showProfileConflictDialog(profileName, groupName) {
 
     const firstLine = document.createElement('p');
     firstLine.className = 'conflict-message-first-line';
-    firstLine.innerHTML = `A profile named <span class="profile-name">${profileName}</span> already exists in group <span class="profile-name">${groupName || 'Top Level'}</span>.`;
+    // M-1: Escape HTML to prevent XSS from crafted import files
+    firstLine.innerHTML = `A profile named <span class="profile-name">${escapeHtml(profileName)}</span> already exists in group <span class="profile-name">${escapeHtml(groupName || 'Top Level')}</span>.`;
     messageDiv.appendChild(firstLine);
 
     const question = document.createElement('p');
@@ -5553,7 +5561,8 @@ async function showGroupConflictDialog(groupName, parentName) {
 
     const firstLine = document.createElement('p');
     firstLine.className = 'conflict-message-first-line';
-    firstLine.innerHTML = `A group named <span class="profile-name">${groupName}</span> already exists under group <span class="profile-name">${parentName || 'Top Level'}</span>.`;
+    // M-1: Escape HTML to prevent XSS from crafted import files
+    firstLine.innerHTML = `A group named <span class="profile-name">${escapeHtml(groupName)}</span> already exists under group <span class="profile-name">${escapeHtml(parentName || 'Top Level')}</span>.`;
     messageDiv.appendChild(firstLine);
 
     const question = document.createElement('p');

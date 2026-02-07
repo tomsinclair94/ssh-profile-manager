@@ -50,7 +50,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 
 **Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
 
-**Phase 8 (Testing & Documentation):** 🔄 IN PROGRESS — Comprehensive testing, code quality validation, security review, and documentation updates. Sub-phases (A→E): ✅ 8A Complete (Automated Testing - 107 tests across 8 modules, refactored to modular structure, all passing in ~29s, documentation updated), 🔄 8B In Progress (Agent Reviews & Fixes - CRITICAL+HIGH fixed (7 issues), MEDIUM+LOW review pending (25 issues); regex dependency removed; build successful), 8C (Integration + Windows VM Testing), 8D (Migration Validation), 8E (Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
+**Phase 8 (Testing & Documentation):** 🔄 IN PROGRESS — Comprehensive testing, code quality validation, security review, and documentation updates. Sub-phases (A→F): ✅ 8A Complete (Automated Testing - 107 tests across 8 modules), ✅ 8B Complete (Agent Reviews - 20 issues fixed: CRITICAL SQL corruption, HIGH security gaps, MEDIUM XSS/validation/performance/refactoring, LOW optimizations; 12 issues deferred to v1.0.0; all tests passing in ~29s), 8C (Integration Tests - export/import round-trip, group cascade, duplicate detection), 8D (Integration + Windows VM Testing), 8E (Migration Validation), 8F (Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
 
 ---
 
@@ -69,6 +69,23 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 ### v1.0.0 - Major Refactoring Sprint
 **Status:** Planned
 **Focus:** 40-50% complexity reduction, stable release
+
+**Key Refactoring Tasks:**
+- **Modularize Backend (M-13):** Split `lib.rs` (5190 lines) into modules:
+  - `db.rs` (~700 lines) - Database operations
+  - `validation.rs` (~200 lines) - Input validation
+  - `crypto.rs` (~200 lines) - Encryption/decryption
+  - `export_import.rs` (~900 lines) - Export/import logic
+  - `terminal.rs` (~500 lines) - Terminal session management
+  - `ssh.rs` (~300 lines) - SSH connection logic
+  - Improves maintainability, reduces merge conflicts, enables parallel development
+
+- **Modularize Frontend (M-14):** Refactor `main.js` (10,771 lines) with ES modules + bundler:
+  - Use esbuild or Vite for module bundling
+  - Split into logical modules (profiles, groups, tags, settings, modals, etc.)
+  - Improves code organization, enables tree-shaking, faster dev rebuilds
+
+- **Additional Optimization:** Apply deferred performance improvements (M-5, L-1 done, others remaining)
 
 ---
 

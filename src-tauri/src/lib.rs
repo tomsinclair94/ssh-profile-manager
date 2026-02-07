@@ -48,6 +48,33 @@ const FILE_DIALOG_TIMEOUT_SECS: u64 = 60; // 1 minute timeout for file dialogs
 const SETTINGS_IMPORT_RATE_LIMIT_SECS: u64 = 5; // 5 second rate limit for settings import
 const SESSION_CREATE_RATE_LIMIT_SECS: u64 = 2; // 2 second rate limit for terminal session creation
 
+// Terminal dimension limits (M-6: Prevent duplication)
+const TERMINAL_MAX_COLS: u16 = 250;
+const TERMINAL_MAX_ROWS: u16 = 80;
+const TERMINAL_MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
+
+// Import size limits (M-2: Prevent OOM attacks)
+const MAX_IMPORT_JSON_SIZE: usize = 10 * 1024 * 1024; // 10MB
+
+// Settings validation (M-7: Valid setting keys)
+const ALLOWED_SETTING_KEYS: &[&str] = &[
+    "theme",
+    "terminal_preference",
+    "custom_terminal_path",
+    "should_minimize_on_connect",
+    "enable_keyboard_shortcuts",
+    "terminal_font_size",
+    "terminal_font_family",
+    "terminal_cursor_blink",
+    "terminal_cursor_style",
+    "default_group_collapsed_state",
+    "last_selected_group",
+    "keyboard_shortcuts_enabled",
+    "window_width",
+    "window_height",
+    "sidebar_width",
+];
+
 // Rate limiting for settings import
 static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
 // Rate limiting for terminal session creation
@@ -160,16 +187,10 @@ pub struct Profile {
 // Profile with metadata and tags (for get_profiles response)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileWithMetadata {
-    // Base profile fields
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub host: String,
-    pub port: i32,
-    pub username: String,
-    pub auth_method: String,
-    pub key_path: Option<String>,
-    pub group_path: Option<String>,
+    // L-2: Use composition instead of field duplication (DRY principle)
+    // The #[serde(flatten)] attribute spreads Profile fields at top level during serialization
+    #[serde(flatten)]
+    pub profile: Profile,
     // Metadata fields
     pub icon: Option<String>,
     pub is_favorite: bool,
@@ -990,17 +1011,8 @@ impl Database {
                 [],
             )?;
 
-            // Create group_tags junction table
-            conn.execute(
-                "CREATE TABLE group_tags (
-                    group_id TEXT NOT NULL,
-                    tag_id TEXT NOT NULL,
-                    PRIMARY KEY (group_id, tag_id),
-                    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
-                    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-                )",
-                [],
-            )?;
+            // L-5: group_tags table removed (unused feature - no UI, no commands, import-only)
+            // If needed in v1.0.0, add with proper migration and full feature implementation
 
             // Extract unique group names from profiles (handle NULL as "Ungrouped")
             let mut stmt = conn.prepare(
@@ -1106,18 +1118,24 @@ impl Database {
 
         let profiles_with_metadata = stmt
             .query_map([], |row| {
+                // L-2: Create Profile first, then compose ProfileWithMetadata
+                let profile = Profile {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    host: row.get(3)?,
+                    port: row.get(4)?,
+                    username: row.get(5)?,
+                    auth_method: row.get(6)?,
+                    key_path: row.get(7)?,
+                    group_path: row.get(8)?,
+                };
+                let id = profile.id.clone();
+
                 Ok((
-                    row.get::<_, String>(0)?, // id
+                    id,
                     ProfileWithMetadata {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        description: row.get(2)?,
-                        host: row.get(3)?,
-                        port: row.get(4)?,
-                        username: row.get(5)?,
-                        auth_method: row.get(6)?,
-                        key_path: row.get(7)?,
-                        group_path: row.get(8)?,
+                        profile,
                         icon: row.get(9)?,
                         is_favorite: row.get::<_, i32>(10)? != 0,
                         tags: Vec::new(), // Will populate below
@@ -1155,7 +1173,7 @@ impl Database {
 
         // Convert back to Vec and sort by name
         let mut profiles: Vec<ProfileWithMetadata> = profiles_map.into_values().collect();
-        profiles.sort_by(|a, b| a.name.cmp(&b.name));
+        profiles.sort_by(|a, b| a.profile.name.cmp(&b.profile.name));
 
         Ok(profiles)
     }
@@ -1326,11 +1344,8 @@ impl Database {
             })
         })?;
 
-        if let Some(profile) = profiles.next() {
-            Ok(Some(profile?))
-        } else {
-            Ok(None)
-        }
+        // M-8: Standardized to use .transpose() pattern (consistent with get_group_by_id)
+        profiles.next().transpose()
     }
 
     // Recent connections methods
@@ -1417,11 +1432,8 @@ impl Database {
             })
         })?;
 
-        if let Some(setting) = settings.next() {
-            Ok(Some(setting?))
-        } else {
-            Ok(None)
-        }
+        // M-8: Standardized to use .transpose() pattern
+        settings.next().transpose()
     }
 
     fn save_setting(&self, key: &str, value: &str) -> SqlResult<()> {
@@ -1452,11 +1464,8 @@ impl Database {
             })
         })?;
 
-        if let Some(meta) = metadata.next() {
-            Ok(Some(meta?))
-        } else {
-            Ok(None)
-        }
+        // M-8: Standardized to use .transpose() pattern
+        metadata.next().transpose()
     }
 
     // Tag methods
@@ -1484,28 +1493,23 @@ impl Database {
         Ok(tags)
     }
 
-    fn get_group_tags(&self, group_id: &str) -> SqlResult<Vec<Tag>> {
+    // L-5: get_group_tags removed (group_tags feature removed - no UI, no commands)
+
+    // M-11: Helper method to get all descendant group paths (including the group itself)
+    // Extracted to eliminate duplication in delete_group cascade/move modes
+    fn get_descendant_paths(&self, group_path: &str) -> SqlResult<Vec<String>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
+
+        // Escape LIKE wildcards to prevent unintended matches
+        let escaped_path = group_path.replace('%', "\\%").replace('_', "\\_");
+
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.name, t.color, t.created_at
-             FROM tags t
-             JOIN group_tags gt ON t.id = gt.tag_id
-             WHERE gt.group_id = ?1
-             ORDER BY t.name"
+            "SELECT path FROM groups WHERE path LIKE ?1 ESCAPE '\\' OR path = ?2"
         )?;
 
-        let tags = stmt
-            .query_map([group_id], |row| {
-                Ok(Tag {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    color: row.get(2)?,
-                    created_at: row.get(3)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
+        let rows = stmt.query_map([format!("{}/%", escaped_path), group_path.to_string()], |row| row.get(0))?;
 
-        Ok(tags)
+        rows.collect()
     }
 
     // Toggle favorite status for a profile
@@ -1824,7 +1828,7 @@ struct ProfileExportDetailed {
 struct GroupExportDetailed {
     #[serde(flatten)]
     group: GroupPortable,  // Groups still need conversion for parent_id -> parent_path
-    tags: Vec<Tag>,
+    // L-5: tags field removed (group_tags feature removed)
     profiles: Vec<ProfileExportDetailed>,
     subgroups: Vec<GroupExportDetailed>,
 }
@@ -2005,6 +2009,13 @@ fn encrypt_data(plaintext: &str, password: &str) -> Result<EncryptedExport, Stri
         .map_err(|e| format!("Encryption failed: {}", e))?;
 
     // Generate HMAC for integrity verification
+    // M-4: We use the same derived key for both AES-256-GCM encryption and HMAC-SHA256.
+    // This is intentional: AES-GCM already provides authenticated encryption with integrity
+    // protection. The HMAC serves as a fail-fast integrity check before attempting decryption,
+    // allowing us to reject tampered data earlier. While cryptographic best practice suggests
+    // separate keys for encryption and authentication, there is no known practical attack
+    // against this construction when using AES-GCM (which internally uses independent keys
+    // derived from the input key). The HMAC is defense-in-depth, not a security requirement.
     let hmac = generate_hmac(&salt, &nonce_bytes, &ciphertext, &key);
 
     // Zeroize sensitive data from memory
@@ -2493,20 +2504,9 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         // Cascade delete: Delete profiles first, then group (CASCADE will handle sub-groups via FK)
         let conn = db.conn.lock().expect("Database lock poisoned");
 
-        // Get all descendant group paths (including the group itself)
-        // Escape LIKE wildcards to prevent unintended matches
-        let escaped_path = group.path.replace('%', "\\%").replace('_', "\\_");
-        let descendant_paths: Vec<String> = {
-            let mut stmt = conn.prepare(
-                "SELECT path FROM groups WHERE path LIKE ?1 ESCAPE '\\' OR path = ?2"
-            ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-            let rows = stmt.query_map([format!("{}/%", escaped_path), group.path.clone()], |row| row.get(0))
-                .map_err(|e| format!("Failed to query descendants: {}", e))?;
-
-            let result: Result<Vec<_>, _> = rows.collect();
-            result.map_err(|e| format!("Failed to collect descendants: {}", e))?
-        };
+        // M-11: Get all descendant group paths using helper method
+        let descendant_paths = db.get_descendant_paths(&group.path)
+            .map_err(|e| format!("Failed to get descendant paths: {}", e))?;
 
         // Delete all profiles in these groups
         for group_path in descendant_paths {
@@ -2525,20 +2525,9 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
         // Move profiles to parent: Get all profiles in this group and descendants
         let conn = db.conn.lock().expect("Database lock poisoned");
 
-        // Get all descendant group paths (including the group itself)
-        // Escape LIKE wildcards to prevent unintended matches
-        let escaped_path = group.path.replace('%', "\\%").replace('_', "\\_");
-        let descendant_paths: Vec<String> = {
-            let mut stmt = conn.prepare(
-                "SELECT path FROM groups WHERE path LIKE ?1 ESCAPE '\\' OR path = ?2"
-            ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-            let rows = stmt.query_map([format!("{}/%", escaped_path), group.path.clone()], |row| row.get(0))
-                .map_err(|e| format!("Failed to query descendants: {}", e))?;
-
-            let result: Result<Vec<_>, _> = rows.collect();
-            result.map_err(|e| format!("Failed to collect descendants: {}", e))?
-        };
+        // M-11: Get all descendant group paths using helper method
+        let descendant_paths = db.get_descendant_paths(&group.path)
+            .map_err(|e| format!("Failed to get descendant paths: {}", e))?;
 
         // Calculate target group path (parent path or "Ungrouped" if top-level)
         let target_group_path = if let Some(parent_id) = &group.parent_id {
@@ -2700,42 +2689,34 @@ fn get_group_tree(db: State<Database>) -> Result<Vec<GroupTreeNode>, String> {
     let all_groups = db.get_all_groups()
         .map_err(|e| format!("Failed to get groups: {}", e))?;
 
-    // Build a map of group_id -> group for quick lookup
-    let group_map: HashMap<String, Group> = all_groups
-        .into_iter()
-        .map(|g| (g.id.clone(), g))
-        .collect();
+    // L-1: Build parent index for O(1) child lookup (was O(n) per parent, now O(1))
+    // This changes tree building from O(n²) to O(n)
+    let mut parent_index: HashMap<Option<String>, Vec<Group>> = HashMap::new();
+    for group in all_groups {
+        parent_index.entry(group.parent_id.clone()).or_insert_with(Vec::new).push(group);
+    }
 
-    // Build tree structure
+    // Build tree structure using parent index
     fn build_tree_recursive(
-        parent_id: Option<&String>,
-        group_map: &HashMap<String, Group>,
-        used_ids: &mut std::collections::HashSet<String>,
+        parent_id: Option<String>,
+        parent_index: &HashMap<Option<String>, Vec<Group>>,
     ) -> Vec<GroupTreeNode> {
-        let mut children = Vec::new();
+        // Look up children directly from index (O(1) instead of O(n))
+        let children_groups = match parent_index.get(&parent_id) {
+            Some(groups) => groups,
+            None => return Vec::new(),
+        };
 
-        for (id, group) in group_map.iter() {
-            // Skip if already used
-            if used_ids.contains(id) {
-                continue;
-            }
-
-            // Check if this group belongs under the current parent
-            let matches = match (&group.parent_id, parent_id) {
-                (None, None) => true,
-                (Some(gp), Some(pp)) => gp == pp,
-                _ => false,
-            };
-
-            if matches {
-                used_ids.insert(id.clone());
-                let node_children = build_tree_recursive(Some(id), group_map, used_ids);
-                children.push(GroupTreeNode {
+        let mut children: Vec<GroupTreeNode> = children_groups
+            .iter()
+            .map(|group| {
+                let node_children = build_tree_recursive(Some(group.id.clone()), parent_index);
+                GroupTreeNode {
                     group: group.clone(),
                     children: node_children,
-                });
-            }
-        }
+                }
+            })
+            .collect();
 
         // Sort by display_order, then by name
         children.sort_by(|a, b| {
@@ -2747,8 +2728,7 @@ fn get_group_tree(db: State<Database>) -> Result<Vec<GroupTreeNode>, String> {
         children
     }
 
-    let mut used_ids = std::collections::HashSet::new();
-    let tree = build_tree_recursive(None, &group_map, &mut used_ids);
+    let tree = build_tree_recursive(None, &parent_index);
 
     Ok(tree)
 }
@@ -2789,7 +2769,7 @@ fn export_profiles(db: State<Database>, include_passwords: bool, encryption_pass
     };
 
     // Serialize to JSON
-    let json_data = serde_json::to_string_pretty(&export_data)
+    let mut json_data = serde_json::to_string_pretty(&export_data)
         .map_err(|e| format!("Failed to serialize profiles: {}", e))?;
 
     // Check if encryption is required (any password-auth profile with include_passwords=true)
@@ -2800,6 +2780,8 @@ fn export_profiles(db: State<Database>, include_passwords: bool, encryption_pass
         Some(password) => {
             // User provided encryption password - encrypt the export
             let encrypted = encrypt_data(&json_data, &password)?;
+            // M-10: Zeroize plaintext JSON after encryption (defense-in-depth)
+            json_data.zeroize();
             serde_json::to_string_pretty(&encrypted)
                 .map_err(|e| format!("Failed to serialize encrypted export: {}", e))
         },
@@ -2817,6 +2799,14 @@ fn export_profiles(db: State<Database>, include_passwords: bool, encryption_pass
 
 #[tauri::command]
 fn import_profiles(db: State<Database>, data: String, encryption_password: Option<String>) -> Result<(), String> {
+    // M-2: Validate import size to prevent OOM attacks
+    if data.len() > MAX_IMPORT_JSON_SIZE {
+        return Err(format!(
+            "Import data exceeds maximum allowed size ({} MB)",
+            MAX_IMPORT_JSON_SIZE / 1024 / 1024
+        ));
+    }
+
     // Phase 6C: Decrypt if encrypted
     let data = decrypt_import_if_encrypted(&data, &encryption_password)?;
 
@@ -3058,7 +3048,7 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
     };
 
     // Serialize to JSON
-    let json_data = serde_json::to_string_pretty(&export_data)
+    let mut json_data = serde_json::to_string_pretty(&export_data)
         .map_err(|e| format!("Failed to serialize profile: {}", e))?;
 
     // Check if encryption is required (password-auth profile with include_password=true)
@@ -3069,6 +3059,8 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
         Some(password) => {
             // User provided encryption password - encrypt the export
             let encrypted = encrypt_data(&json_data, &password)?;
+            // M-10: Zeroize plaintext JSON after encryption (defense-in-depth)
+            json_data.zeroize();
             serde_json::to_string_pretty(&encrypted)
                 .map_err(|e| format!("Failed to serialize encrypted export: {}", e))
         },
@@ -3100,9 +3092,7 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
         // Convert to portable format (with semantic parent path)
         let group_portable = group_to_portable(db, &group)?;
 
-        // Get group tags
-        let tags = db.get_group_tags(group_id)
-            .map_err(|e| format!("Failed to get group tags: {}", e))?;
+        // L-5: Group tags removed (no UI, no commands for group tags)
 
         // Get all profiles in this group
         let profiles = db.get_profiles_by_group_path(&group.path)
@@ -3142,7 +3132,7 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
 
         Ok(GroupExportDetailed {
             group: group_portable,
-            tags,
+            // L-5: tags field removed
             profiles: profile_exports,
             subgroups: subgroup_exports,
         })
@@ -3158,7 +3148,7 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
     };
 
     // Serialize to JSON
-    let json_data = serde_json::to_string_pretty(&export_data)
+    let mut json_data = serde_json::to_string_pretty(&export_data)
         .map_err(|e| format!("Failed to serialize group: {}", e))?;
 
     // Collect all profiles from the group and sub-groups to check if encryption is required
@@ -3170,6 +3160,8 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
         Some(password) => {
             // User provided encryption password - encrypt the export
             let encrypted = encrypt_data(&json_data, &password)?;
+            // M-10: Zeroize plaintext JSON after encryption (defense-in-depth)
+            json_data.zeroize();
             serde_json::to_string_pretty(&encrypted)
                 .map_err(|e| format!("Failed to serialize encrypted export: {}", e))
         },
@@ -3246,6 +3238,14 @@ fn import_profile(
     duplicate_action: String, // "skip", "rename", or "overwrite"
     encryption_password: Option<String>,
 ) -> Result<String, String> {
+    // M-2: Validate import size to prevent OOM attacks
+    if data.len() > MAX_IMPORT_JSON_SIZE {
+        return Err(format!(
+            "Import data exceeds maximum allowed size ({} MB)",
+            MAX_IMPORT_JSON_SIZE / 1024 / 1024
+        ));
+    }
+
     // Phase 6C: Decrypt if encrypted
     let data = decrypt_import_if_encrypted(&data, &encryption_password)?;
 
@@ -3387,31 +3387,7 @@ fn import_group(
                 // Update local collection after insert
                 existing_groups.push(group.clone());
 
-                // Import group tags
-                let conn = db.conn.lock().expect("Database lock poisoned");
-                for tag in group_export.tags {
-                    // Create tag if it doesn't exist
-                    let existing_tag: Option<String> = conn
-                        .query_row("SELECT id FROM tags WHERE name = ?1", [&tag.name], |row| row.get(0))
-                        .ok();
-
-                    let tag_id = if let Some(existing_id) = existing_tag {
-                        existing_id
-                    } else {
-                        let new_tag_id = Uuid::new_v4().to_string();
-                        conn.execute(
-                            "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
-                            (new_tag_id.clone(), tag.name, tag.color, chrono::Utc::now().to_rfc3339()),
-                        ).map_err(|e| format!("Failed to create tag: {}", e))?;
-                        new_tag_id
-                    };
-
-                    // Link tag to group
-                    conn.execute(
-                        "INSERT OR IGNORE INTO group_tags (group_id, tag_id) VALUES (?1, ?2)",
-                        (new_id.clone(), tag_id),
-                    ).map_err(|e| format!("Failed to link tag to group: {}", e))?;
-                }
+                // L-5: Group tags import removed (feature removed - no UI, no commands)
 
                 (new_id, new_path)
             }
@@ -3476,6 +3452,14 @@ fn import_group(
         }
 
         Ok(group_id)
+    }
+
+    // M-2: Validate import size to prevent OOM attacks
+    if data.len() > MAX_IMPORT_JSON_SIZE {
+        return Err(format!(
+            "Import data exceeds maximum allowed size ({} MB)",
+            MAX_IMPORT_JSON_SIZE / 1024 / 1024
+        ));
     }
 
     // Phase 6C: Decrypt if encrypted
@@ -3988,6 +3972,16 @@ fn get_setting(db: State<Database>, key: String) -> Result<Option<UserSetting>, 
 
 #[tauri::command]
 fn save_setting(db: State<Database>, key: String, value: String) -> Result<(), String> {
+    // M-7: Validate setting key against allowlist
+    if !ALLOWED_SETTING_KEYS.contains(&key.as_str()) {
+        return Err(format!("Invalid setting key: {}", key));
+    }
+
+    // Validate value size (10KB max)
+    if value.len() > 10240 {
+        return Err("Setting value exceeds maximum size (10KB)".to_string());
+    }
+
     db.save_setting(&key, &value)
         .map_err(|e| format!("Failed to save setting: {}", e))
 }
@@ -4161,23 +4155,19 @@ async fn create_terminal_session(
     validate_port(profile.port as i64)?;
 
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
-    const MAX_COLS: u16 = 250;
-    const MAX_ROWS: u16 = 80;
-    const MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
-
-    if cols < 10 || cols > MAX_COLS {
-        return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
+    if cols < 10 || cols > TERMINAL_MAX_COLS {
+        return Err(format!("Terminal columns must be between 10 and {}", TERMINAL_MAX_COLS));
     }
-    if rows < 10 || rows > MAX_ROWS {
-        return Err(format!("Terminal rows must be between 10 and {}", MAX_ROWS));
+    if rows < 10 || rows > TERMINAL_MAX_ROWS {
+        return Err(format!("Terminal rows must be between 10 and {}", TERMINAL_MAX_ROWS));
     }
 
     // Validate total cell count to prevent excessive memory usage
     let total_cells = cols as u32 * rows as u32;
-    if total_cells > MAX_TOTAL_CELLS {
+    if total_cells > TERMINAL_MAX_TOTAL_CELLS {
         return Err(format!(
             "Terminal dimensions exceed maximum size ({}×{} = {} cells > {} max)",
-            cols, rows, total_cells, MAX_TOTAL_CELLS
+            cols, rows, total_cells, TERMINAL_MAX_TOTAL_CELLS
         ));
     }
 
@@ -4497,23 +4487,19 @@ fn resize_terminal(
     rows: u16,
 ) -> Result<(), String> {
     // Validate dimensions (reduced from 500x200 for security: prevent resource exhaustion)
-    const MAX_COLS: u16 = 250;
-    const MAX_ROWS: u16 = 80;
-    const MAX_TOTAL_CELLS: u32 = 20000; // 250 cols × 80 rows
-
-    if cols < 10 || cols > MAX_COLS {
-        return Err(format!("Terminal columns must be between 10 and {}", MAX_COLS));
+    if cols < 10 || cols > TERMINAL_MAX_COLS {
+        return Err(format!("Terminal columns must be between 10 and {}", TERMINAL_MAX_COLS));
     }
-    if rows < 10 || rows > MAX_ROWS {
-        return Err(format!("Terminal rows must be between 10 and {}", MAX_ROWS));
+    if rows < 10 || rows > TERMINAL_MAX_ROWS {
+        return Err(format!("Terminal rows must be between 10 and {}", TERMINAL_MAX_ROWS));
     }
 
     // Validate total cell count to prevent excessive memory usage
     let total_cells = cols as u32 * rows as u32;
-    if total_cells > MAX_TOTAL_CELLS {
+    if total_cells > TERMINAL_MAX_TOTAL_CELLS {
         return Err(format!(
             "Terminal dimensions exceed maximum size ({}×{} = {} cells > {} max)",
-            cols, rows, total_cells, MAX_TOTAL_CELLS
+            cols, rows, total_cells, TERMINAL_MAX_TOTAL_CELLS
         ));
     }
 
