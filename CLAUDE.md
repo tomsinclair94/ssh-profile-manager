@@ -82,7 +82,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL TESTS** before code reviews: `cargo test --lib` (all 106 tests must pass)
+3. **RUN ALL TESTS** before code reviews: `cargo test --lib` (all 107 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
@@ -436,7 +436,7 @@ src-tauri/src/tests/
 ├── settings.rs       #  3 tests - User settings
 └── migrations.rs     #  5 tests - Schema migrations
 
-Total: 106 tests (all must pass before release)
+Total: 107 tests (all must pass before release)
 ```
 
 **Test declaration in lib.rs:**
@@ -483,7 +483,7 @@ cargo test --lib -- --nocapture
 cargo llvm-cov --lib --open
 ```
 
-**Expected result:** `106 passed; 0 failed` in ~27 seconds
+**Expected result:** `107 passed; 0 failed` in ~29 seconds
 
 ### Writing Tests for New Features
 
@@ -567,7 +567,7 @@ cargo test --lib
 
 Before creating a release PR:
 
-- [ ] Run `cargo test --lib` → All 106 tests pass
+- [ ] Run `cargo test --lib` → All 107 tests pass
 - [ ] New features have corresponding tests
 - [ ] Tests run in <30 seconds (performance check)
 - [ ] No warnings from test compilation
