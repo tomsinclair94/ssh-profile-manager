@@ -3585,7 +3585,6 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
     }
 
     const isCollapsed = collapsedGroups.has(group.id);
-    const chevron = isCollapsed ? '▶' : '▼';
     // Add depth class for CSS-based indentation
     const depthClass = depth > 0 ? `depth-${depth}` : '';
 
@@ -3606,12 +3605,22 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
         return '';
     }
 
+    // Check if group is empty (no profiles AND no sub-groups)
+    const childGroups = groups.filter(g => g.parent_id === group.id);
+    const hasChildren = groupProfiles.length > 0 || childGroups.length > 0;
+    const isEmpty = !hasChildren;
+
+    // For empty groups, don't show chevron (or show disabled)
+    const chevron = isEmpty ? '' : (isCollapsed ? '▶' : '▼');
+    const emptyClass = isEmpty ? 'group-empty' : '';
+    const hasSubgroupsClass = childGroups.length > 0 ? 'has-subgroups' : '';
+
     // Create settings icon for group menu button
     const settingsIcon = createIcon('settings', 22);
 
     let html = `
-        <div class="profile-group" data-group-id="${group.id}">
-            <div class="profile-group-header ${depthClass}" data-group-id="${group.id}">
+        <div class="profile-group ${hasSubgroupsClass}" data-group-id="${group.id}">
+            <div class="profile-group-header ${depthClass} ${emptyClass}" data-group-id="${group.id}">
                 <span class="group-chevron">${chevron}</span>
                 <span class="group-name">${escapeHtml(group.name)}</span>
                 <button class="btn btn-icon group-menu-btn" data-group-id="${group.id}" title="Show group actions">
@@ -3619,7 +3628,7 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
                 </button>
                 <span class="badge group-count-badge">${totalProfileCount}</span>
             </div>
-            <div class="profile-group-content ${isCollapsed ? 'collapsed' : ''}">
+            <div class="profile-group-content ${isCollapsed || isEmpty ? 'collapsed' : ''}">
     `;
 
     // Render profiles in this group
@@ -3628,8 +3637,7 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
     });
 
     // Render child groups
-    const childGroups = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.name.localeCompare(b.name));
-    childGroups.forEach(childGroup => {
+    childGroups.sort((a, b) => a.name.localeCompare(b.name)).forEach(childGroup => {
         html += renderGroupNode(childGroup, profilesByGroupPath, depth + 1, filter);
     });
 
@@ -3791,6 +3799,9 @@ function attachProfileEventListeners() {
         // Toggle on click (but not on menu button)
         header.addEventListener('click', (e) => {
             if (e.target.classList.contains('group-menu-btn')) return; // Skip if clicking menu button
+
+            // Skip if group is empty (no chevron to expand)
+            if (header.classList.contains('group-empty')) return;
 
             const groupId = header.dataset.groupId;
 

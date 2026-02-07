@@ -433,7 +433,12 @@ body {
 
 /* Profile Groups */
 .profile-group {
-    margin-bottom: 24px;
+    margin-bottom: 16px; /* Consistent spacing between all top-level groups */
+}
+
+/* Nested groups don't add margin - parent's content gap handles spacing */
+.profile-group-content > .profile-group {
+    margin-bottom: 0;
 }
 
 /* Favourites Group - Gold/Amber Theme */
@@ -442,7 +447,7 @@ body {
     border-radius: var(--radius);
     padding: 0;
     background: transparent;
-    margin-bottom: 24px;
+    margin-bottom: 16px; /* Match standard group spacing */
 }
 
 .favourites-group .profile-group-header {
@@ -571,6 +576,22 @@ body {
     font-size: 12px;
     color: var(--text-muted);
     transition: transform 0.2s ease;
+    min-width: 12px; /* Reserve space even when empty */
+}
+
+/* Empty groups have no chevron */
+.profile-group-header.group-empty .group-chevron {
+    visibility: hidden; /* Hide but maintain layout space */
+}
+
+/* Empty groups are not clickable */
+.profile-group-header.group-empty {
+    cursor: default;
+}
+
+.profile-group-header.group-empty:hover {
+    background-color: var(--surface-color); /* No hover effect */
+    border-color: var(--border-color);
 }
 
 .group-name {
