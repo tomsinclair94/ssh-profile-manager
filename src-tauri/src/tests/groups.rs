@@ -112,8 +112,8 @@ fn test_get_child_groups() {
 
 #[test]
 fn test_rename_group_with_overlapping_names() {
-    // SECURITY: Test that renaming "Dev" to "Development" doesn't corrupt "DevOps"
-    // This verifies the C-1 fix (SQL REPLACE → SUBSTR)
+    // Verify that renaming a group doesn't corrupt groups with overlapping names
+    // (e.g., renaming "Dev" to "Development" should not affect "DevOps")
     let db = create_test_db();
 
     // Create two groups with overlapping names

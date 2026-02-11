@@ -5208,4 +5208,5 @@ mod tests {
     mod connections;
     mod settings;
     mod migrations;
+    mod integration;  // Phase 8C: Integration tests for multi-step workflows
 }

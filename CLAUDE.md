@@ -434,9 +434,10 @@ src-tauri/src/tests/
 ├── tags.rs           #  9 tests - Tag system
 ├── connections.rs    #  5 tests - Recent connections
 ├── settings.rs       #  3 tests - User settings
-└── migrations.rs     #  5 tests - Schema migrations
+├── migrations.rs     #  5 tests - Schema migrations
+└── integration.rs    # 22 tests - Multi-step workflows
 
-Total: 107 tests (all must pass before release)
+Total: 129 tests (all must pass before release)
 ```
 
 **Test declaration in lib.rs:**
@@ -446,9 +447,50 @@ mod tests {
     mod helpers;      // Shared utilities
     mod encryption;   // Individual test modules
     mod validation;
+    mod integration;  // Multi-step workflow tests
     // ... etc
 }
 ```
+
+### Integration Tests (integration.rs)
+
+**Integration tests validate multi-step workflows (22 comprehensive tests):**
+
+**Export/Import Round-Trip (4 tests):**
+- Encrypted profile export → decrypt → import → verify all data (metadata, tags, passwords)
+- Encrypted group export with password-auth profiles → verify encryption mandatory
+- Hierarchical group export (recursive with subgroups) → import → verify structure
+- Invalid encryption password → verify error handling
+
+**Export Validation (1 test):**
+- Verify password-auth profiles require encryption (mandatory rule enforcement)
+
+**Group Operations (4 tests):**
+- Rename cascade: Rename parent → verify all descendants update paths
+- Move cascade: Move group to new parent → verify all descendant paths recalculate
+- Circular move prevention: Cannot move group into its own descendant
+- Delete cascade with profile cleanup: Verify profiles deleted in cascade mode
+
+**Import Duplicate Detection (5 tests):**
+- Skip mode: Duplicate detected, no import
+- Rename mode: Auto-suffix applied (e.g., "Server (imported)")
+- Overwrite mode: Existing profile replaced with imported data
+- Scoped uniqueness: Same name allowed in different groups
+- Group duplicate detection: By name + parent_id
+
+**Tag & Metadata (1 test):**
+- Tag auto-creation: Tags automatically created by name during import
+
+**Full Backup/Restore (2 tests):**
+- Export ALL → Import ALL (replace mode) → verify complete restoration
+- Settings export/import round-trip
+
+**Performance (3 tests):**
+- 100 profiles imported in <5 seconds
+- 100 profiles with metadata + tags in <5 seconds
+- Deep nesting (3 levels, 50 profiles) in <2 seconds
+
+**Why integration tests?** Unit tests validate individual functions, but integration tests catch issues in multi-step workflows (e.g., transaction boundaries, cascading updates, command orchestration, encryption enforcement).
 
 ### Test Helpers (helpers.rs)
 
@@ -483,7 +525,7 @@ cargo test --lib -- --nocapture
 cargo llvm-cov --lib --open
 ```
 
-**Expected result:** `107 passed; 0 failed` in ~29 seconds
+**Expected result:** `129 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
@@ -549,6 +591,22 @@ fn test_something() {
 ```bash
 cargo test --lib
 ```
+
+**7. Test comment guidelines (CRITICAL):**
+- **NO phase-specific references** - Never mention "Phase 8C", "v0.7.0", or specific version numbers in test files
+- **NO test numbering** - Don't use "Test 1:", "Test 2:" in section headers (test names are already descriptive)
+- **NO issue references** - Don't reference specific bug IDs (e.g., "C-1 fix", "Issue #123")
+- **Keep comments generic and high-level** - Explain what the test validates, not when/why it was written
+- **Example:**
+  ```rust
+  // ❌ BAD: Integration tests for Phase 8C
+  // ❌ BAD: Test 1: Export/Import Round-Trip
+  // ❌ BAD: This verifies the C-1 fix (SQL REPLACE → SUBSTR)
+
+  // ✅ GOOD: Integration tests validating multi-step workflows
+  // ✅ GOOD: Export/Import Round-Trip with Encryption
+  // ✅ GOOD: Verify that renaming a group doesn't corrupt groups with overlapping names
+  ```
 
 ### Coverage Goals
 
