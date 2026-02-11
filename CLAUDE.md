@@ -82,15 +82,17 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL TESTS** before code reviews: `cargo test --lib` (all 107 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 129 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
 7. Security review (`voltagent-infra:security-engineer` agent)
 8. Fix CRITICAL/HIGH/MEDIUM issues
-9. **RE-RUN TESTS** after fixes: `cargo test --lib` (ensure no regressions)
-10. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
-11. Commit & push
+9. **RE-RUN AUTOMATED TESTS** after fixes: `cargo test --lib` (ensure no regressions)
+10. **RUN MANUAL GUI TESTS**: Follow `plans/manual-gui-test-plan.md` (macOS + Windows, ~3-4 hours total)
+11. Fix any GUI bugs found during manual testing
+12. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
+13. Commit & push
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled
@@ -616,20 +618,72 @@ cargo test --lib
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~27s for 106 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 129 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Readable:** Clear test names, focused assertions, minimal setup
+- **Comprehensive:** 107 unit tests + 22 integration tests covering all backend logic
+- **GUI Testing:** Manual GUI tests cover all frontend functionality (see `plans/manual-gui-test-plan.md`)
 
 ### Pre-Release Testing Checklist
 
 Before creating a release PR:
 
-- [ ] Run `cargo test --lib` → All 107 tests pass
-- [ ] New features have corresponding tests
-- [ ] Tests run in <30 seconds (performance check)
+**Automated Tests:**
+- [ ] Run `cargo test --lib` → All 129 tests pass
+- [ ] New features have corresponding automated tests
+- [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation
 - [ ] CI/CD tests pass on both macOS and Windows
+
+**Manual GUI Tests:**
+- [ ] Follow `plans/manual-gui-test-plan.md` for comprehensive GUI testing
+- [ ] Complete macOS testing section (~2-3 hours)
+- [ ] Complete Windows testing section (~45 minutes)
+- [ ] Document test results using template in test plan
+- [ ] Log any failed tests as GitHub issues
+- [ ] Verify no console errors during testing
+
+## Manual GUI Testing
+
+**Location:** `plans/manual-gui-test-plan.md`
+
+**Purpose:** Comprehensive manual testing of all GUI/frontend functionality before each major release.
+
+**When to Run:** After all automated tests pass and before creating release PR (step 10 in Release Process).
+
+### What's Tested
+
+The manual test plan covers all user-facing functionality NOT covered by automated backend tests:
+- Profile management UI (create, edit, delete, display, favourites, icons, search)
+- Group management UI (create, rename, move, delete, tree navigation)
+- Tag management UI (create, assign, delete, color picker)
+- Export/Import workflows (all UI dialogs, encryption prompts, duplicate handling)
+- Connection management (terminal spawning, recent connections)
+- Settings UI (all tabs, preferences, reset functionality)
+- Keyboard navigation (all 30+ shortcuts, modal trapping, tab order)
+- Visual & layout testing (responsive design, tooltips, loading states, animations)
+- Platform-specific behaviors (macOS vs Windows terminal integration, keyboard modifiers)
+
+### How to Use
+
+1. **Pre-Testing Setup:** Create test data (groups, profiles, tags) following checklist
+2. **macOS Testing:** Work through sections 1-9, checking off each item (~2-3 hours)
+3. **Windows Testing:** Complete platform-specific tests + critical smoke tests (~45 minutes)
+4. **Document Results:** Fill in test results template with pass/fail counts, failed tests, observations
+5. **Log Issues:** Create GitHub issues for any failed tests or bugs found
+6. **Repeat for Each Release:** Test plan is generic and reusable for v0.7.0, v0.8.0, v1.0.0, etc.
+
+### Performance Notes
+
+Performance testing has been intentionally excluded to keep testing focused on functional correctness. Performance issues will be addressed through user feedback and bug reports. If significant performance problems are observed during functional testing, note them in the test results template.
+
+### Test Results
+
+After completing manual testing:
+- Save completed test plan with checkmarks in `plans/manual-gui-test-results-vX.X.X.md`
+- Include summary of pass/fail counts, failed tests table, and observations
+- Attach test results to release PR or reference in PR description
 
 ## Quick Reference
 
