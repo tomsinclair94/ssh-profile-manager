@@ -701,6 +701,9 @@ function pushModal(modalId) {
     if (!modalStack.includes(modalId)) {
         modalStack.push(modalId);
         debug.log(`Modal stack: pushed ${modalId}. Stack: [${modalStack.join(', ')}]`);
+
+        // Pause recent connections timestamp refresh when modal opens
+        pauseRecentConnectionsTimestampRefresh();
     }
 }
 
@@ -709,6 +712,11 @@ function popModal(modalId) {
     if (index > -1) {
         modalStack.splice(index, 1);
         debug.log(`Modal stack: popped ${modalId}. Stack: [${modalStack.join(', ')}]`);
+
+        // Resume recent connections timestamp refresh when all modals are closed
+        if (modalStack.length === 0) {
+            resumeRecentConnectionsTimestampRefresh();
+        }
     }
 }
 
@@ -737,6 +745,24 @@ function saveKeyboardShortcutsPreference() {
     if (keyboardShortcutsCheck) {
         keyboardShortcutsEnabled = keyboardShortcutsCheck.checked;
         localStorage.setItem('keyboardShortcutsEnabled', keyboardShortcutsEnabled);
+
+        // When shortcuts are disabled, reset modifier key state and button text
+        if (!keyboardShortcutsEnabled) {
+            isModifierKeyHeld = false;
+
+            // Reset buttons to default state
+            const profileBtn = document.getElementById('new-profile-btn');
+            const groupBtn = document.getElementById('add-group-btn');
+
+            if (profileBtn) {
+                profileBtn.textContent = '+ New Profile';
+                profileBtn.title = 'Create a new SSH profile';
+            }
+            if (groupBtn) {
+                groupBtn.textContent = '+ New Group';
+                groupBtn.title = 'Create a new group to organise profiles';
+            }
+        }
     }
 }
 
@@ -779,6 +805,8 @@ function setupModifierKeyTracking() {
 
     // Track modifier key state (Cmd on Mac, Ctrl on Windows/Linux)
     document.addEventListener('keydown', (e) => {
+        if (!keyboardShortcutsEnabled) return;  // Respect keyboard shortcuts setting
+
         const modifierPressed = isMac ? e.metaKey : e.ctrlKey;
 
         if (modifierPressed && !isModifierKeyHeld) {
@@ -788,6 +816,8 @@ function setupModifierKeyTracking() {
     });
 
     document.addEventListener('keyup', (e) => {
+        if (!keyboardShortcutsEnabled) return;  // Respect keyboard shortcuts setting
+
         // Check if the modifier key was released
         const modifierPressed = isMac ? e.metaKey : e.ctrlKey;
 
@@ -799,6 +829,8 @@ function setupModifierKeyTracking() {
 
     // Reset state when window loses focus (modifier keys released outside window)
     window.addEventListener('blur', () => {
+        if (!keyboardShortcutsEnabled) return;  // Respect keyboard shortcuts setting
+
         if (isModifierKeyHeld) {
             isModifierKeyHeld = false;
             updateHeaderButtons();
@@ -1093,6 +1125,13 @@ function getProfileModalTabbableItems() {
 function getSettingsModalTabbableItems() {
     const items = [];
 
+    // Header buttons first (visually at top of modal)
+    const saveBtn = document.getElementById('settings-save-btn');
+    if (saveBtn && !saveBtn.disabled) items.push(saveBtn);
+
+    const closeBtn = document.getElementById('settings-close-btn');
+    if (closeBtn && !closeBtn.disabled) items.push(closeBtn);
+
     // Theme settings
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) items.push(themeSelect);
@@ -1179,13 +1218,6 @@ function getSettingsModalTabbableItems() {
 
     const githubFeatureBtn = document.getElementById('github-feature-btn');
     if (githubFeatureBtn) items.push(githubFeatureBtn);
-
-    // Header buttons (Save/Close at the end)
-    const saveBtn = document.getElementById('settings-save-btn');
-    if (saveBtn && !saveBtn.disabled) items.push(saveBtn);
-
-    const closeBtn = document.getElementById('settings-close-btn');
-    if (closeBtn && !closeBtn.disabled) items.push(closeBtn);
 
     return items;
 }
@@ -1381,7 +1413,12 @@ async function handleModalShortcuts(e) {
             }
 
             case 'encryptionPassword': {
-                const items = [encryptExportCheck, encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordSubmit, encryptionPasswordCancel];
+                // Filter out disabled elements from tab order
+                const allItems = [encryptExportCheck, encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordSubmit, encryptionPasswordCancel];
+                const items = allItems.filter(item => item && !item.disabled);
+
+                if (items.length === 0) return;
+
                 const currentIndex = items.indexOf(document.activeElement);
                 let nextIndex;
                 if (e.shiftKey) {
@@ -3077,6 +3114,12 @@ async function loadRecentConnections() {
         recentConnections = await invoke('get_recent_connections', { limit });
         debug.log('Recent connections loaded:', recentConnections);
         renderRecentConnections();
+
+        // Trigger immediate timestamp refresh if panel is expanded
+        const list = document.getElementById('recent-connections-list');
+        if (list && !list.classList.contains('collapsed') && recentConnections.length > 0) {
+            refreshRecentConnectionsTimestamps();
+        }
     } catch (error) {
         console.error('Failed to load recent connections:', error);
         recentConnections = [];
@@ -3182,6 +3225,120 @@ function formatTimeAgo(timestamp) {
     }
 }
 
+// Recent Connections Timestamp Auto-Refresh
+// Refresh interval ID (null when not running)
+let recentConnectionsTimestampInterval = null;
+// Paused state (true when modals are open)
+let recentConnectionsTimestampPaused = false;
+// Current interval duration (for detecting changes)
+let recentConnectionsCurrentInterval = null;
+
+// Calculate dynamic refresh interval based on most recent connection
+// Returns interval in milliseconds
+function calculateTimestampRefreshInterval() {
+    // If no recent connections, use default 60 seconds
+    if (!recentConnections || recentConnections.length === 0) return 60000;
+
+    const now = new Date();
+
+    // Find the most recent connection (shortest time ago)
+    let mostRecentSeconds = Infinity;
+    for (const recent of recentConnections) {
+        try {
+            const then = new Date(recent.connected_at);
+            const seconds = Math.floor((now - then) / 1000);
+            if (seconds < mostRecentSeconds) {
+                mostRecentSeconds = seconds;
+            }
+        } catch (error) {
+            console.error('Error calculating recency:', error);
+        }
+    }
+
+    // Dynamic interval based on most recent connection:
+    // - Any connection < 1 minute: refresh every 5 seconds (rapid updates)
+    // - All connections ≥ 1 minute: refresh every 60 seconds (efficient)
+    return mostRecentSeconds < 60 ? 5000 : 60000;
+}
+
+// Refresh only the timestamps in recent connections (no full re-render)
+function refreshRecentConnectionsTimestamps() {
+    // Only refresh if panel is visible (not collapsed)
+    const list = document.getElementById('recent-connections-list');
+    if (!list || list.classList.contains('collapsed')) return;
+
+    // Only refresh if we have recent connections data
+    if (!recentConnections || recentConnections.length === 0) return;
+
+    // Update each timestamp element
+    const items = list.querySelectorAll('.recent-connection-item');
+    items.forEach((item, index) => {
+        const recent = recentConnections[index];
+        if (!recent) return;
+
+        const timeElement = item.querySelector('.recent-connection-time');
+        if (timeElement) {
+            timeElement.textContent = formatTimeAgo(recent.connected_at);
+        }
+    });
+
+    // Check if interval should change (e.g., most recent connection aged past 1 minute)
+    // Only check if we're currently running (not during initial call from start function)
+    if (recentConnectionsTimestampInterval !== null) {
+        const newInterval = calculateTimestampRefreshInterval();
+        if (newInterval !== recentConnectionsCurrentInterval) {
+            debug.log(`Timestamp refresh interval changing from ${recentConnectionsCurrentInterval}ms to ${newInterval}ms`);
+            // Restart interval with new duration
+            stopRecentConnectionsTimestampRefresh();
+            startRecentConnectionsTimestampRefresh();
+        }
+    }
+}
+
+// Start the timestamp refresh interval (dynamic: 5s or 60s based on recency)
+function startRecentConnectionsTimestampRefresh() {
+    // Don't start if already running
+    if (recentConnectionsTimestampInterval !== null) return;
+
+    // Calculate dynamic interval based on most recent connection
+    const interval = calculateTimestampRefreshInterval();
+    recentConnectionsCurrentInterval = interval;
+
+    // Refresh immediately
+    refreshRecentConnectionsTimestamps();
+
+    // Start dynamic interval
+    recentConnectionsTimestampInterval = setInterval(() => {
+        // Only refresh if not paused (i.e., no modals open)
+        if (!recentConnectionsTimestampPaused) {
+            refreshRecentConnectionsTimestamps();
+        }
+    }, interval);
+}
+
+// Stop the timestamp refresh interval
+function stopRecentConnectionsTimestampRefresh() {
+    if (recentConnectionsTimestampInterval !== null) {
+        clearInterval(recentConnectionsTimestampInterval);
+        recentConnectionsTimestampInterval = null;
+        recentConnectionsCurrentInterval = null;
+    }
+}
+
+// Pause timestamp refresh (when modal opens)
+function pauseRecentConnectionsTimestampRefresh() {
+    recentConnectionsTimestampPaused = true;
+}
+
+// Resume timestamp refresh (when all modals close)
+function resumeRecentConnectionsTimestampRefresh() {
+    recentConnectionsTimestampPaused = false;
+    // Trigger immediate refresh when resuming
+    if (recentConnectionsTimestampInterval !== null) {
+        refreshRecentConnectionsTimestamps();
+    }
+}
+
 // Remove individual recent connection
 async function removeRecentConnection(profileId) {
     try {
@@ -3238,13 +3395,21 @@ function toggleRecentConnections() {
     const isCollapsed = list.classList.contains('collapsed');
 
     if (isCollapsed) {
+        // Expanding: show panel
         list.classList.remove('collapsed');
         toggleBtn.textContent = '▼';
         localStorage.setItem('recentConnectionsCollapsed', 'false');
+
+        // Start timestamp auto-refresh when panel is expanded
+        startRecentConnectionsTimestampRefresh();
     } else {
+        // Collapsing: hide panel
         list.classList.add('collapsed');
         toggleBtn.textContent = '▶';
         localStorage.setItem('recentConnectionsCollapsed', 'true');
+
+        // Stop timestamp auto-refresh when panel is collapsed
+        stopRecentConnectionsTimestampRefresh();
     }
 
     // Focus the toggle button after action (for keyboard navigation)
@@ -3262,9 +3427,12 @@ function loadRecentConnectionsCollapsedState() {
     if (isCollapsed) {
         list.classList.add('collapsed');
         toggleBtn.textContent = '▶';
+        // Don't start refresh when collapsed
     } else {
         list.classList.remove('collapsed');
         toggleBtn.textContent = '▼';
+        // Start timestamp auto-refresh on initial load if panel is expanded
+        startRecentConnectionsTimestampRefresh();
     }
 }
 
@@ -4261,24 +4429,21 @@ async function deleteGroup(groupId) {
                 { text: 'This group contains ' },
                 { highlight: `${profileCount} ${profileText}` },
                 { text: ' and ' },
-                { highlight: `${subgroupCount} ${subgroupText}` },
-                { text: '.' }
+                { highlight: `${subgroupCount} ${subgroupText}` }
             ]
         });
     } else if (profileCount > 0) {
         lines.push({
             segments: [
                 { text: 'This group contains ' },
-                { highlight: `${profileCount} ${profileText}` },
-                { text: '.' }
+                { highlight: `${profileCount} ${profileText}` }
             ]
         });
     } else if (subgroupCount > 0) {
         lines.push({
             segments: [
                 { text: 'This group contains ' },
-                { highlight: `${subgroupCount} ${subgroupText}` },
-                { text: '.' }
+                { highlight: `${subgroupCount} ${subgroupText}` }
             ]
         });
     }
@@ -4331,6 +4496,17 @@ async function deleteGroup(groupId) {
             document.body.removeChild(modal);
             resolve('cancel');
         };
+
+        // ESC key handler - cancel deletion
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                document.removeEventListener('keydown', handleEscape);
+                document.body.removeChild(modal);
+                resolve('cancel');
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
     });
 
     if (result === 'cancel') return;
@@ -4415,6 +4591,17 @@ function setupEventListeners() {
             searchClearBtn.classList.remove('hidden');
         } else {
             searchClearBtn.classList.add('hidden');
+        }
+    });
+
+    // ESC key to clear search
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && searchInput.value.trim()) {
+            e.preventDefault();
+            searchInput.value = '';
+            searchClearBtn.classList.add('hidden');
+            renderProfiles('');
+            searchInput.blur(); // Remove focus from search input
         }
     });
 
@@ -6757,11 +6944,11 @@ function determineEncryptionState(profilesInExport) {
 
     let reason = '';
     if (requireEncryption) {
-        reason = 'Encryption is required by your security settings';
+        reason = 'Encryption is required by your security settings.';
     } else if (includePasswords && hasPasswordAuth) {
-        reason = 'Encryption is mandatory when exporting password-authenticated profiles';
+        reason = 'Encryption is mandatory when exporting password-authenticated profiles.';
     } else {
-        reason = 'Optionally encrypt this export for additional security';
+        reason = 'Optionally encrypt this export for additional security.';
     }
 
     return { isMandatory, reason };
@@ -6801,8 +6988,10 @@ function openEncryptionPasswordModal(encryptionState = { isMandatory: true, reas
         encryptionPasswordIntro.textContent = encryptionState.reason;
         if (encryptionState.isMandatory) {
             encryptExportHelp.textContent = 'Encryption is required and cannot be disabled.';
+            encryptExportHelp.classList.add('text-danger');
         } else {
             encryptExportHelp.textContent = 'Check the box above to encrypt this export.';
+            encryptExportHelp.classList.remove('text-danger');
         }
 
         encryptionPasswordModal.classList.remove('hidden');
@@ -7332,7 +7521,11 @@ async function importProfiles(file) {
             const password = await openDecryptionPasswordModal(async (pw) => {
                 return await routeEncryptedImport(text, pw);
             });
-            if (password === null) return; // User cancelled
+            if (password === null) {
+                // User cancelled - ensure toast is hidden
+                toastElement.classList.add('hidden');
+                return;
+            }
             // Success path already handled inside routeEncryptedImport
             return;
         }
@@ -7375,7 +7568,11 @@ async function routeEncryptedImport(rawText, encryptionPassword) {
         await handleEncryptedSingleProfileImport(rawText, encryptionPassword, result);
         return null;
     } catch (e) {
-        if (isCryptoError(e)) return cleanErrorMessage(e);
+        if (isCryptoError(e)) {
+            // Hide decryption toast before returning error
+            toastElement.classList.add('hidden');
+            return cleanErrorMessage(e);
+        }
         // Parse error — try next type
     }
 
@@ -7390,7 +7587,11 @@ async function routeEncryptedImport(rawText, encryptionPassword) {
         await handleEncryptedSingleGroupImport(rawText, encryptionPassword, result);
         return null;
     } catch (e) {
-        if (isCryptoError(e)) return cleanErrorMessage(e);
+        if (isCryptoError(e)) {
+            // Hide decryption toast before returning error
+            toastElement.classList.add('hidden');
+            return cleanErrorMessage(e);
+        }
     }
 
     // --- Must be "all profiles" format — show confirmation then import ---
@@ -7526,7 +7727,11 @@ async function importAllProfilesEncrypted(rawText, encryptionPassword) {
         debug.log('Encrypted profiles imported successfully');
         return null;
     } catch (error) {
-        if (isCryptoError(error)) return cleanErrorMessage(error);
+        if (isCryptoError(error)) {
+            // Hide decryption toast before returning error
+            toastElement.classList.add('hidden');
+            return cleanErrorMessage(error);
+        }
         console.error('Failed to import encrypted profiles:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
         return null;
@@ -8148,7 +8353,11 @@ async function restoreSettings(file) {
                     throw error; // Non-crypto error — bubbles to modal's catch
                 }
             });
-            if (password === null) return; // User cancelled
+            if (password === null) {
+                // User cancelled - ensure toast is hidden
+                toastElement.classList.add('hidden');
+                return;
+            }
             closeSettings();
         } else {
             // Validate the JSON structure (only for non-encrypted data)
@@ -9087,7 +9296,21 @@ function duplicateProfile(id) {
     document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'none';
     document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
     document.getElementById('profile-password').value = ''; // Don't copy password for security
-    document.getElementById('profile-group').value = duplicatedProfile.group_path || '';
+
+    // Set group (both visible select and hidden ID field)
+    const groupPath = duplicatedProfile.group_path || '';
+    document.getElementById('profile-group').value = groupPath;
+    // Find group ID from path and set hidden field
+    if (groupPath) {
+        const group = groups.find(g => g.path === groupPath);
+        if (group) {
+            document.getElementById('profile-group-id').value = group.id;
+        } else {
+            document.getElementById('profile-group-id').value = '';
+        }
+    } else {
+        document.getElementById('profile-group-id').value = '';
+    }
 
     // Set icon for duplicated profile
     const profileIcon = duplicatedProfile.icon || '';
@@ -9098,8 +9321,14 @@ function duplicateProfile(id) {
     // Set favorite checkbox
     document.getElementById('profile-favorite-checkbox').checked = duplicatedProfile.is_favorite || false;
 
-    // Copy tags from the original profile
-    selectedProfileTags = new Set(duplicatedProfile.tags || []);
+    // C-3 FIX: Copy tags from the original profile (convert tag names to tag IDs)
+    // duplicatedProfile.tags contains tag names, but selectedProfileTags needs tag IDs
+    const tagNames = duplicatedProfile.tags || [];
+    const tagIds = tagNames.map(tagName => {
+        const tag = allTags.find(t => t.name === tagName);
+        return tag ? tag.id : null;
+    }).filter(id => id !== null); // Remove any null values if tag not found
+    selectedProfileTags = new Set(tagIds);
     renderSelectedTags();
 
     updateAuthMethodVisibility();
@@ -9623,6 +9852,7 @@ function updateFocusedDropdownItem(items) {
 
 // Close group modal
 async function closeGroupModal() {
+    hideParentGroupDropdown(); // Hide dropdown and restore modal padding if needed
     groupModal.classList.add('hidden');
     popModal('group');
     editingGroupId = null;
@@ -9648,11 +9878,13 @@ async function saveGroup() {
     try {
         if (editingGroupId) {
             // Update existing group
+            // C-2 FIX: Pass parent_id to allow moving groups via Edit Group
             await invoke('update_group', {
                 input: {
                     id: editingGroupId,
                     name: groupName,
-                    icon: null // Icons will be added in Phase 4
+                    icon: null, // Icons will be added in Phase 4
+                    parent_id: parentId
                 }
             });
             showToast('Group updated successfully!');
@@ -9872,7 +10104,7 @@ async function openTagManager() {
 
         // Focus on tag name input and reset counter
         const tagNameInput = document.getElementById('new-tag-name-input');
-        updateTagNameCounter();
+        updateTagNameCounter(); // This will also call validateTagNameInput()
         setTimeout(() => tagNameInput.focus(), 100);
     } catch (error) {
         console.error('Failed to open tag manager:', error);
@@ -9903,6 +10135,26 @@ function updateTagNameCounter() {
     } else {
         input.classList.remove('validation-error');
     }
+
+    // Update Create Tag button state
+    validateTagNameInput();
+}
+
+// Validate tag name input and enable/disable Create Tag button
+function validateTagNameInput() {
+    const nameInput = document.getElementById('new-tag-name-input');
+    const createBtn = document.getElementById('create-tag-btn');
+
+    if (!nameInput || !createBtn) return;
+
+    const name = nameInput.value.trim();
+
+    // Validate: must not be empty and must match allowed characters
+    // Tag names: alphanumeric + hyphens/underscores only (NO spaces)
+    const isValid = name.length > 0 && /^[a-zA-Z0-9\-_]+$/.test(name);
+
+    // Enable/disable button based on validation
+    createBtn.disabled = !isValid;
 }
 
 // Close Tag Manager modal
@@ -9921,6 +10173,9 @@ function closeTagManager() {
     colorInput.value = '#3b82f6';
     counter.textContent = '0 / 32';
     counter.classList.remove('over-limit');
+
+    // Disable Create Tag button (empty input = invalid)
+    validateTagNameInput();
 
     // Clear any selected checkboxes
     document.querySelectorAll('.tag-checkbox:checked').forEach(checkbox => {
@@ -10023,8 +10278,8 @@ async function createTag() {
         nameInput.classList.remove('validation-error');
         colorInput.value = '#3b82f6';
 
-        // Reset counter
-        updateTagNameCounter();
+        // Reset counter and button state
+        updateTagNameCounter(); // This will also disable the button via validateTagNameInput()
 
         // Refresh tag list
         await loadTags();

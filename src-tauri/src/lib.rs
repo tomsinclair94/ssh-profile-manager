@@ -1476,7 +1476,7 @@ impl Database {
              FROM tags t
              JOIN profile_tags pt ON t.id = pt.tag_id
              WHERE pt.profile_id = ?1
-             ORDER BY t.name"
+             ORDER BY t.name COLLATE NOCASE"
         )?;
 
         let tags = stmt
@@ -1581,7 +1581,7 @@ impl Database {
     fn get_all_tags(&self) -> SqlResult<Vec<Tag>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, color, created_at FROM tags ORDER BY name"
+            "SELECT id, name, color, created_at FROM tags ORDER BY name COLLATE NOCASE"
         )?;
 
         let tags = stmt
@@ -1623,7 +1623,7 @@ impl Database {
              FROM tags t
              LEFT JOIN profile_tags pt ON t.id = pt.tag_id
              GROUP BY t.id
-             ORDER BY t.name"
+             ORDER BY t.name COLLATE NOCASE"
         )?;
 
         let results = stmt
@@ -2425,6 +2425,7 @@ struct UpdateGroupInput {
     id: String,
     name: String,
     icon: Option<String>,
+    parent_id: Option<String>, // C-2 FIX: Allow updating parent to move groups
 }
 
 #[tauri::command]
@@ -2437,11 +2438,19 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
         .map_err(|e| format!("Failed to get group: {}", e))?
         .ok_or_else(|| "Group not found".to_string())?;
 
-    // If name changed, update path and all descendant paths
-    if group.name != input.name {
+    // C-2 FIX: Check if name OR parent has changed (either requires path recalculation)
+    let name_changed = group.name != input.name;
+    let parent_changed = group.parent_id != input.parent_id;
+
+    if name_changed || parent_changed {
         let old_path = group.path.clone();
 
-        // Calculate new path
+        // Update parent_id if changed
+        if parent_changed {
+            group.parent_id = input.parent_id.clone();
+        }
+
+        // Calculate new path based on (possibly new) parent and name
         group.path = if let Some(ref parent_id) = group.parent_id {
             let parent = db.get_group_by_id(parent_id)
                 .map_err(|e| format!("Failed to get parent group: {}", e))?
@@ -2451,7 +2460,7 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
             input.name.clone()
         };
 
-        // Update name
+        // Update name and icon
         group.name = input.name;
         group.icon = input.icon;
         group.updated_at = chrono::Utc::now().to_rfc3339();
@@ -2460,7 +2469,7 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
         db.update_group(&group)
             .map_err(|e| format!("Failed to update group: {}", e))?;
 
-        // Update all descendant group paths
+        // Update all descendant group paths (cascade update)
         let all_groups = db.get_all_groups()
             .map_err(|e| format!("Failed to get groups: {}", e))?;
 
@@ -2485,7 +2494,7 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
             (&old_path, &group.path, format!("{}/%", escaped_path)),
         ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
     } else {
-        // Just update icon
+        // Just update icon (name and parent unchanged)
         group.icon = input.icon;
         group.updated_at = chrono::Utc::now().to_rfc3339();
         db.update_group(&group)
@@ -2510,11 +2519,12 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
 
     if input.delete_profiles {
         // Cascade delete: Delete profiles first, then group (CASCADE will handle sub-groups via FK)
-        let conn = db.conn.lock().expect("Database lock poisoned");
 
-        // M-11: Get all descendant group paths using helper method
+        // C-1 FIX: Get descendant paths BEFORE acquiring lock to avoid deadlock
         let descendant_paths = db.get_descendant_paths(&group.path)
             .map_err(|e| format!("Failed to get descendant paths: {}", e))?;
+
+        let conn = db.conn.lock().expect("Database lock poisoned");
 
         // Delete all profiles in these groups
         for group_path in descendant_paths {
@@ -2531,13 +2541,13 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
             .map_err(|e| format!("Failed to delete group: {}", e))?;
     } else {
         // Move profiles to parent: Get all profiles in this group and descendants
-        let conn = db.conn.lock().expect("Database lock poisoned");
 
-        // M-11: Get all descendant group paths using helper method
+        // C-1 FIX: Get descendant paths and calculate target path BEFORE acquiring lock to avoid deadlock
         let descendant_paths = db.get_descendant_paths(&group.path)
             .map_err(|e| format!("Failed to get descendant paths: {}", e))?;
 
         // Calculate target group path (parent path or "Ungrouped" if top-level)
+        // C-1 FIX: Get parent group BEFORE acquiring lock
         let target_group_path = if let Some(parent_id) = &group.parent_id {
             // Get parent group's path
             let parent = db.get_group_by_id(parent_id)
@@ -2545,7 +2555,14 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
                 .ok_or_else(|| "Parent group not found".to_string())?;
             parent.path
         } else {
-            // Ensure "Ungrouped" group exists
+            "Ungrouped".to_string()
+        };
+
+        // Now acquire lock for database operations
+        let conn = db.conn.lock().expect("Database lock poisoned");
+
+        // Ensure "Ungrouped" group exists if we're moving to top level
+        if target_group_path == "Ungrouped" {
             let ungrouped = conn.query_row(
                 "SELECT id FROM groups WHERE name = 'Ungrouped' AND parent_id IS NULL",
                 [],
@@ -2562,9 +2579,7 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
                     (&id, &now, &now),
                 ).map_err(|e| format!("Failed to create Ungrouped group: {}", e))?;
             }
-
-            "Ungrouped".to_string()
-        };
+        }
 
         // Update all profiles in descendant groups to move to target group path
         for group_path in descendant_paths {
@@ -3476,6 +3491,10 @@ fn import_group(
     // Parse import data
     let import_data: SingleGroupExportData = serde_json::from_str(&data)
         .map_err(|e| format!("Failed to parse import data: {}", e))?;
+
+    // Use parent path from export data if not explicitly provided
+    // This ensures encrypted imports preserve original group structure
+    let parent_group_path = parent_group_path.or_else(|| import_data.group.group.parent_path.clone());
 
     // Resolve parent group path to group_id
     let parent_group_id = resolve_group_path_to_id(&db, &parent_group_path)?;

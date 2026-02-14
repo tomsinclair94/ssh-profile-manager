@@ -1197,6 +1197,10 @@ button.keyboard-selected {
     padding: 20px 24px 24px 24px;
 }
 
+.encryption-password-body .form-group.encryption-checkbox-group {
+    margin-bottom: 20px;  /* Space for the intro paragraph below */
+}
+
 .encryption-password-body .form-group:first-of-type {
     margin-bottom: 7px;  /* Reduced from default 20px for compact spacing above strength bar */
 }
@@ -1219,10 +1223,11 @@ button.keyboard-selected {
 
 .encryption-password-intro,
 .decryption-password-intro {
-    font-size: 14px;
-    color: var(--text-color);
+    font-size: 13px;
+    color: var(--text-muted);
     line-height: 1.5;
-    margin-bottom: 16px;
+    margin-top: -8px;  /* Negative margin to pull up closer, matching pattern of encryption-password-help */
+    margin-bottom: 12px;
 }
 
 .encryption-password-help {
@@ -1640,6 +1645,15 @@ form {
     border-color: var(--primary-color);
 }
 
+/* Disabled input styles - make it obvious the field is disabled */
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--surface-color);
+}
+
 .form-group small {
     display: block;
     margin-top: 6px;
@@ -1755,6 +1769,22 @@ form {
     color: var(--text-muted);
     line-height: 1.5;
     margin: 0;
+}
+
+/* Help text below checkboxes (same styling as .settings-help) */
+.settings-help-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: block;
+    margin-top: 4px;
+    margin-bottom: 16px;  /* Add bottom margin to prevent clipping buttons below */
+}
+
+/* Red/warning text for mandatory encryption */
+.text-danger {
+    color: var(--danger-color);
+    font-weight: 600;
 }
 
 .default-value {
@@ -2435,6 +2465,14 @@ form {
 .form-group textarea:hover + .input-tooltip {
     opacity: 1;
     visibility: visible;
+}
+
+/* Hide tooltip on disabled inputs */
+.form-group input:disabled:hover + .input-tooltip,
+.form-group select:disabled:hover + .input-tooltip,
+.form-group textarea:disabled:hover + .input-tooltip {
+    opacity: 0;
+    visibility: hidden;
 }
 
 /* Show tooltip when hovering over the label */

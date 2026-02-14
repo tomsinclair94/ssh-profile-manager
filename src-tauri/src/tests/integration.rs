@@ -725,7 +725,7 @@ fn test_export_requires_encryption_validation() {
 #[test]
 fn test_import_with_invalid_encryption_password() {
     // Verify proper error handling for wrong decryption password
-    let db = create_test_db();
+    let _db = create_test_db();
 
     let profile = make_test_profile("Server", None);
     let export = ProfileExportDetailed {
