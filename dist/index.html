@@ -438,9 +438,17 @@
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="include-passwords-check" checked>
-                                <span>Include Passwords in Export</span>
+                                <span>Include Passwords in Exports</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                        </div>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="require-encryption-check">
+                                <span>Require Encryption for All Exports</span>
+                                <span class="default-value">(Default: Off)</span>
+                            </label>
+                            <span class="settings-help-text">When enabled, all profile exports must be encrypted (recommended for organisations with security policies)</span>
                         </div>
                         <div class="settings-actions">
                             <button id="export-profiles-btn" class="btn btn-primary">Export All Profiles</button>
@@ -448,7 +456,7 @@
                             <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All</button>
                             <input type="file" id="import-file-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles and groups permanently.<br><strong>Security Note:</strong> When "Include Passwords in Export" is enabled, exported files are automatically encrypted with a password you provide.</p>
+                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles and groups permanently.<br><strong>Security Note:</strong> Encryption is mandatory when exporting password-authenticated profiles. You can optionally encrypt other exports for additional security.</p>
                     </div>
 
                     <!-- Tag Management -->
@@ -552,7 +560,14 @@
                     </div>
                 </div>
                 <div class="encryption-password-body">
-                    <p class="encryption-password-intro">This export contains password-authenticated profiles. An encryption password is required to protect sensitive data.</p>
+                    <div class="form-group settings-no-gap" style="margin-bottom: 1rem;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="encrypt-export-check">
+                            <span>Encrypt this export</span>
+                        </label>
+                        <span class="settings-help-text" id="encrypt-export-help"></span>
+                    </div>
+                    <p class="encryption-password-intro" id="encryption-password-intro">This export contains password-authenticated profiles. An encryption password is required to protect sensitive data.</p>
                     <div class="form-group">
                         <label for="encryption-password-input">Encryption Password <span class="required">*</span></label>
                         <input type="password" id="encryption-password-input" placeholder="Enter encryption password (12+ characters)" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">

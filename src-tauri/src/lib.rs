@@ -1875,6 +1875,14 @@ struct SettingsData {
     filtered_groups: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     collapsed_groups: Option<Vec<String>>,
+    #[serde(default = "default_include_passwords")]
+    include_passwords_in_exports: bool,
+    #[serde(default)]
+    require_encryption_for_all_exports: bool,
+}
+
+fn default_include_passwords() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -3527,6 +3535,8 @@ fn export_settings(
     recent_connections_limit: i32,
     filtered_groups: Option<Vec<String>>,
     collapsed_groups: Option<Vec<String>>,
+    include_passwords_in_exports: bool,
+    require_encryption_for_all_exports: bool,
     terminal_preference: String,
     use_tabs_in_terminal: Option<bool>,
     minimize_on_launch: Option<bool>,
@@ -3553,6 +3563,8 @@ fn export_settings(
         recent_connections_limit,
         filtered_groups,
         collapsed_groups,
+        include_passwords_in_exports,
+        require_encryption_for_all_exports,
     };
 
     let settings_os_specific = SettingsOsSpecific {

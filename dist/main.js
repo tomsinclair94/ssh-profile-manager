@@ -640,6 +640,7 @@ let restoreSettingsInput;
 let resetSettingsBtn;
 let includeProfilesCheck;
 let includePasswordsCheck;
+let requireEncryptionCheck;
 let profileCountBadge;
 let terminalSelect;
 let customTerminalGroup;
@@ -686,6 +687,9 @@ let decryptionPasswordSubmit;
 // Encryption modal state
 let encryptionModalResolver = null;
 let decryptionModalResolver = null;
+let encryptExportCheck;
+let encryptExportHelp;
+let encryptionPasswordIntro;
 let decryptionModalTryDecrypt = null;
 
 // Modal Stack System - tracks which modal is topmost
@@ -1126,6 +1130,8 @@ function getSettingsModalTabbableItems() {
     // Profile management
     const includePasswordsCheck = document.getElementById('include-passwords-check');
     if (includePasswordsCheck) items.push(includePasswordsCheck);
+    const requireEncryptionCheck = document.getElementById('require-encryption-check');
+    if (requireEncryptionCheck) items.push(requireEncryptionCheck);
 
     // Profile management buttons
     const exportProfilesBtn = document.getElementById('export-profiles-btn');
@@ -1375,7 +1381,7 @@ async function handleModalShortcuts(e) {
             }
 
             case 'encryptionPassword': {
-                const items = [encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordSubmit, encryptionPasswordCancel];
+                const items = [encryptExportCheck, encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordSubmit, encryptionPasswordCancel];
                 const currentIndex = items.indexOf(document.activeElement);
                 let nextIndex;
                 if (e.shiftKey) {
@@ -1454,7 +1460,7 @@ async function handleModalShortcuts(e) {
                 return;
 
             case 'encryptionPassword':
-                closeEncryptionPasswordModal(null);
+                closeEncryptionPasswordModal(undefined); // undefined = user cancelled
                 return;
 
             case 'decryptionPassword':
@@ -2472,6 +2478,7 @@ async function init() {
     resetSettingsBtn = document.getElementById('reset-settings-btn');
     includeProfilesCheck = document.getElementById('include-profiles-check');
     includePasswordsCheck = document.getElementById('include-passwords-check');
+    requireEncryptionCheck = document.getElementById('require-encryption-check');
     profileCountBadge = document.getElementById('profile-count-badge');
     terminalSelect = document.getElementById('terminal-select');
     customTerminalGroup = document.getElementById('custom-terminal-group');
@@ -2517,6 +2524,9 @@ async function init() {
     decryptionPasswordError = document.getElementById('decryption-password-error');
     decryptionPasswordCancel = document.getElementById('decryption-password-cancel');
     decryptionPasswordSubmit = document.getElementById('decryption-password-submit');
+    encryptExportCheck = document.getElementById('encrypt-export-check');
+    encryptExportHelp = document.getElementById('encrypt-export-help');
+    encryptionPasswordIntro = document.getElementById('encryption-password-intro');
 
     debug.log('DOM elements retrieved');
 
@@ -4993,7 +5003,7 @@ function setupEventListeners() {
     });
 
     encryptionPasswordCancel.addEventListener('click', () => {
-        closeEncryptionPasswordModal(null);
+        closeEncryptionPasswordModal(undefined); // undefined = user cancelled
     });
 
     encryptionPasswordSubmit.addEventListener('click', () => {
@@ -5005,6 +5015,24 @@ function setupEventListeners() {
             e.preventDefault();
             submitEncryptionPassword();
         }
+    });
+
+    // Encryption checkbox listener - enable/disable password fields
+    encryptExportCheck.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        // Enable/disable password fields
+        encryptionPasswordInput.disabled = !isChecked;
+        encryptionPasswordConfirm.disabled = !isChecked;
+        // Clear fields when unchecked
+        if (!isChecked) {
+            encryptionPasswordInput.value = '';
+            encryptionPasswordConfirm.value = '';
+            updatePasswordStrengthMeter('');
+            encryptionPasswordCounter.textContent = '0 / 128';
+            encryptionPasswordConfirmCounter.textContent = '0 / 128';
+        }
+        // Re-validate
+        validateEncryptionPasswordModal();
     });
 
     // Decryption Password Modal listeners
@@ -5090,6 +5118,10 @@ function setupEventListeners() {
     });
 
     includePasswordsCheck.addEventListener('change', () => {
+        debouncedCheckSettingsChanged();
+    });
+
+    requireEncryptionCheck.addEventListener('change', () => {
         debouncedCheckSettingsChanged();
     });
 
@@ -5666,6 +5698,7 @@ function getCurrentSettingsValues() {
         customTerminalPath: customTerminalPath.value,
         includeProfiles: includeProfilesCheck.checked,
         includePasswords: includePasswordsCheck.checked,
+        requireEncryption: requireEncryptionCheck.checked,
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
         useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true,
@@ -5714,6 +5747,7 @@ function openSettings() {
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
     loadIncludePasswordsPreference();
+    loadRequireEncryptionPreference();
     loadUseTabsInTerminalPreference();
     loadMinimizeOnLaunchPreference();
 
@@ -5830,6 +5864,9 @@ function saveSettings() {
     // Save include passwords preference
     saveIncludePasswordsPreference();
 
+    // Save require encryption preference
+    saveRequireEncryptionPreference();
+
     // Save use tabs in terminal preference
     saveUseTabsInTerminalPreference();
 
@@ -5896,6 +5933,21 @@ function loadIncludePasswordsPreference() {
 
 function saveIncludePasswordsPreference() {
     localStorage.setItem('includePasswords', includePasswordsCheck.checked);
+}
+
+function loadRequireEncryptionPreference() {
+    const requireEncryption = localStorage.getItem('requireEncryption');
+    // Default to false (unchecked) if not set
+    if (requireEncryption === null) {
+        requireEncryptionCheck.checked = false;
+        saveRequireEncryptionPreference();
+    } else {
+        requireEncryptionCheck.checked = requireEncryption === 'true';
+    }
+}
+
+function saveRequireEncryptionPreference() {
+    localStorage.setItem('requireEncryption', requireEncryptionCheck.checked);
 }
 
 function loadUseTabsInTerminalPreference() {
@@ -6693,8 +6745,31 @@ function updatePasswordStrengthMeter(password) {
     encryptionStrengthLabel.textContent = strength.label;
 }
 
+// Determine if encryption is mandatory or optional for a given set of profiles
+// Returns: { isMandatory: boolean, reason: string }
+function determineEncryptionState(profilesInExport) {
+    const requireEncryption = localStorage.getItem('requireEncryption') === 'true';
+    const includePasswords = localStorage.getItem('includePasswords') !== 'false';
+    const hasPasswordAuth = profilesInExport.some(p => p.auth_method === 'password');
+
+    // Mandatory if: global setting OR exporting password-auth profiles
+    const isMandatory = requireEncryption || (includePasswords && hasPasswordAuth);
+
+    let reason = '';
+    if (requireEncryption) {
+        reason = 'Encryption is required by your security settings';
+    } else if (includePasswords && hasPasswordAuth) {
+        reason = 'Encryption is mandatory when exporting password-authenticated profiles';
+    } else {
+        reason = 'Optionally encrypt this export for additional security';
+    }
+
+    return { isMandatory, reason };
+}
+
 // Open the encryption password modal. Resolves with password string or null (cancelled).
-function openEncryptionPasswordModal() {
+// Parameters: { isMandatory: boolean, reason: string } or undefined (defaults to mandatory)
+function openEncryptionPasswordModal(encryptionState = { isMandatory: true, reason: 'Encryption is required' }) {
     return new Promise((resolve) => {
         encryptionPasswordInput.value = '';
         encryptionPasswordConfirm.value = '';
@@ -6709,14 +6784,46 @@ function openEncryptionPasswordModal() {
         encryptionPasswordConfirmCounter.classList.remove('over-limit');
         encryptionPasswordSubmit.disabled = true;  // Start disabled until validation passes
 
+        // Configure encryption checkbox based on whether encryption is mandatory
+        if (encryptionState.isMandatory) {
+            encryptExportCheck.checked = true;
+            encryptExportCheck.disabled = true;
+            encryptionPasswordInput.disabled = false;
+            encryptionPasswordConfirm.disabled = false;
+        } else {
+            encryptExportCheck.checked = false;
+            encryptExportCheck.disabled = false;
+            encryptionPasswordInput.disabled = true;
+            encryptionPasswordConfirm.disabled = true;
+        }
+
+        // Update intro text and help text
+        encryptionPasswordIntro.textContent = encryptionState.reason;
+        if (encryptionState.isMandatory) {
+            encryptExportHelp.textContent = 'Encryption is required and cannot be disabled.';
+        } else {
+            encryptExportHelp.textContent = 'Check the box above to encrypt this export.';
+        }
+
         encryptionPasswordModal.classList.remove('hidden');
         pushModal('encryptionPassword');
         encryptionModalResolver = resolve;
 
-        setTimeout(() => encryptionPasswordInput.focus(), 100);
+        // Focus checkbox if optional, password input if mandatory
+        setTimeout(() => {
+            if (encryptionState.isMandatory) {
+                encryptionPasswordInput.focus();
+            } else {
+                encryptExportCheck.focus();
+            }
+        }, 100);
     });
 }
 
+// Close encryption modal and resolve with:
+// - undefined: user cancelled (clicked Cancel or ESC)
+// - null: user chose not to encrypt (checkbox unchecked, clicked Export)
+// - string: password for encryption (checkbox checked, valid password entered)
 function closeEncryptionPasswordModal(password) {
     encryptionPasswordModal.classList.add('hidden');
     popModal('encryptionPassword');
@@ -6737,14 +6844,20 @@ function validateEncryptionConfirm() {
     }
 }
 
-// Enable/disable the Export button based on password validation:
-// - Password must be 12+ characters
-// - Confirmation password must match
+// Enable/disable the Export button based on checkbox state and password validation:
+// - If checkbox unchecked: button is enabled (export without encryption)
+// - If checkbox checked: password must be 12+ characters and match confirmation
 function validateEncryptionPasswordModal() {
-    const password = encryptionPasswordInput.value;
-    const confirm = encryptionPasswordConfirm.value;
-    const isValid = password.length >= 12 && password === confirm;
-    encryptionPasswordSubmit.disabled = !isValid;
+    if (!encryptExportCheck.checked) {
+        // Checkbox unchecked - allow export without encryption
+        encryptionPasswordSubmit.disabled = false;
+    } else {
+        // Checkbox checked - require valid password
+        const password = encryptionPasswordInput.value;
+        const confirm = encryptionPasswordConfirm.value;
+        const isValid = password.length >= 12 && password === confirm;
+        encryptionPasswordSubmit.disabled = !isValid;
+    }
 }
 
 // Enable/disable the Import button based on whether a password has been entered
@@ -6754,6 +6867,13 @@ function validateDecryptionPasswordModal() {
 }
 
 function submitEncryptionPassword() {
+    // If checkbox is unchecked, user chose not to encrypt - return null
+    if (!encryptExportCheck.checked) {
+        closeEncryptionPasswordModal(null);
+        return;
+    }
+
+    // Checkbox is checked - validate password
     const password = encryptionPasswordInput.value;
     const confirm  = encryptionPasswordConfirm.value;
 
@@ -6893,12 +7013,12 @@ async function exportSingleProfile(profileId) {
 
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
-        // Prompt for encryption password if this profile uses password auth
-        let encryptionPassword = null;
-        if (includePasswords && profile.auth_method === 'password') {
-            encryptionPassword = await openEncryptionPasswordModal();
-            if (encryptionPassword === null) return; // User cancelled
-        }
+        // Determine encryption state and show encryption modal
+        const encryptionState = determineEncryptionState([profile]);
+        const encryptionPassword = await openEncryptionPasswordModal(encryptionState);
+
+        // Handle modal return: undefined = cancelled, null = no encryption, string = password
+        if (encryptionPassword === undefined) return; // User cancelled
 
         showToast('Exporting profile...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -6941,15 +7061,13 @@ async function exportSingleGroup(groupId) {
 
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
-        // Prompt for encryption password if the group contains password-auth profiles
-        let encryptionPassword = null;
-        if (includePasswords) {
-            const groupProfiles = getProfilesForExportScope('group', groupId);
-            if (exportNeedsEncryption(groupProfiles)) {
-                encryptionPassword = await openEncryptionPasswordModal();
-                if (encryptionPassword === null) return; // User cancelled
-            }
-        }
+        // Determine encryption state based on all profiles in group (including subgroups)
+        const groupProfiles = getProfilesForExportScope('group', groupId);
+        const encryptionState = determineEncryptionState(groupProfiles);
+        const encryptionPassword = await openEncryptionPasswordModal(encryptionState);
+
+        // Handle modal return: undefined = cancelled, null = no encryption, string = password
+        if (encryptionPassword === undefined) return; // User cancelled
 
         showToast('Exporting group...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -6986,12 +7104,12 @@ async function exportProfiles() {
     try {
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
-        // Prompt for encryption password if any profile uses password auth
-        let encryptionPassword = null;
-        if (includePasswords && exportNeedsEncryption(profiles)) {
-            encryptionPassword = await openEncryptionPasswordModal();
-            if (encryptionPassword === null) return; // User cancelled
-        }
+        // Determine encryption state based on all profiles
+        const encryptionState = determineEncryptionState(profiles);
+        const encryptionPassword = await openEncryptionPasswordModal(encryptionState);
+
+        // Handle modal return: undefined = cancelled, null = no encryption, string = password
+        if (encryptionPassword === undefined) return; // User cancelled
 
         showToast('Exporting profiles...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -7872,11 +7990,18 @@ async function backupSettings() {
         // Check if passwords should be included (from Profile Management setting)
         const includePasswords = localStorage.getItem('includePasswords') !== 'false';
 
-        // Prompt for encryption if backup includes password-authenticated profiles
+        // Get Profile Management settings for encryption
+        const includePasswordsInExports = localStorage.getItem('includePasswords') !== 'false';
+        const requireEncryptionForAllExports = localStorage.getItem('requireEncryption') === 'true';
+
+        // Determine encryption state if backup includes profiles
         let encryptionPassword = null;
-        if (includeProfiles && includePasswords && exportNeedsEncryption(profiles)) {
-            encryptionPassword = await openEncryptionPasswordModal();
-            if (encryptionPassword === null) return; // User cancelled
+        if (includeProfiles) {
+            const encryptionState = determineEncryptionState(profiles);
+            encryptionPassword = await openEncryptionPasswordModal(encryptionState);
+
+            // Handle modal return: undefined = cancelled, null = no encryption, string = password
+            if (encryptionPassword === undefined) return; // User cancelled
         }
 
         showToast('Backing up settings...', TOAST_DURATION_LOADING, encryptionPassword ? 'loading' : 'success');
@@ -7888,6 +8013,8 @@ async function backupSettings() {
             recentConnectionsLimit,
             filteredGroups,
             collapsedGroups,
+            includePasswordsInExports,
+            requireEncryptionForAllExports,
             terminalPreference: terminalPreference,
             useTabsInTerminal: useTabsInTerminal,
             minimizeOnLaunch: minimizeOnLaunch,
