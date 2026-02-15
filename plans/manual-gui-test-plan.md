@@ -236,144 +236,144 @@
 ### 4. Export/Import Workflows
 
 #### Encryption Checkbox - Optional Scenario (Key-Auth Profile, Require Encryption OFF)
-- [ ] Open Settings → Profile Management
-- [ ] Verify "Require Encryption for All Exports" is UNCHECKED
-- [ ] Verify "Include Passwords in Exports" setting (any state is fine)
-- [ ] Select key-auth profile, click "Export Profile"
-- [ ] Verify encryption modal appears
-- [ ] Verify checkbox "Encrypt this export" is UNCHECKED and ENABLED
-- [ ] Verify intro text: "Optionally encrypt this export for additional security"
-- [ ] Verify help text: "Check the box above to encrypt this export"
-- [ ] Verify password fields are DISABLED (greyed out)
-- [ ] Verify Export button is ENABLED (can export without encryption)
-- [ ] Click Export without checking checkbox
-- [ ] Verify file saves successfully
-- [ ] Open exported file - verify plain JSON (no encryption)
+- [x] Open Settings → Profile Management
+- [x] Verify "Require Encryption for All Exports" is UNCHECKED
+- [x] Verify "Include Passwords in Exports" setting (any state is fine)
+- [x] Select key-auth profile, click "Export Profile"
+- [x] Verify encryption modal appears
+- [x] Verify checkbox "Encrypt this export" is UNCHECKED and ENABLED
+- [x] Verify help text: "Check the box above to encrypt this export"
+- [x] Verify intro text: "Optionally encrypt this export for additional security"
+- [x] Verify password fields are DISABLED (greyed out)
+- [x] Verify Export button is ENABLED (can export without encryption)
+- [x] Click Export without checking checkbox
+- [x] Verify file saves successfully
+- [x] Open exported file - verify plain JSON (no encryption)
 
 #### Encryption Checkbox - Toggling Behavior
-- [ ] Export key-auth profile again (modal appears)
-- [ ] Checkbox should be UNCHECKED and password fields DISABLED
-- [ ] CHECK the "Encrypt this export" checkbox
-- [ ] Verify password fields become ENABLED
-- [ ] Verify Export button becomes DISABLED (needs password)
-- [ ] Enter password <12 characters
-- [ ] Verify Export button stays DISABLED
-- [ ] Enter password ≥12 characters in both fields (matching)
-- [ ] Verify Export button becomes ENABLED
-- [ ] Verify strength meter shows appropriate level
-- [ ] UNCHECK the checkbox again
-- [ ] Verify password fields become DISABLED
-- [ ] Verify password fields are CLEARED
-- [ ] Verify strength meter is RESET
-- [ ] Verify Export button becomes ENABLED again (no password needed)
-- [ ] Click Export (checkbox unchecked)
-- [ ] Verify export succeeds without encryption
+- [x] Export key-auth profile again (modal appears)
+- [x] Checkbox should be UNCHECKED and password fields DISABLED
+- [x] CHECK the "Encrypt this export" checkbox
+- [x] Verify password fields become ENABLED
+- [x] Verify Export button becomes DISABLED (needs password)
+- [x] Enter password <12 characters
+- [x] Verify Export button stays DISABLED
+- [x] Enter password ≥12 characters in both fields (matching)
+- [x] Verify Export button becomes ENABLED
+- [x] Verify strength meter shows appropriate level
+- [x] UNCHECK the checkbox again
+- [x] Verify password fields become DISABLED
+- [x] Verify password fields are CLEARED
+- [x] Verify strength meter is RESET
+- [x] Verify Export button becomes ENABLED again (no password needed)
+- [x] Click Export (checkbox unchecked)
+- [x] Verify export succeeds without encryption
 
 #### Encryption Checkbox - Mandatory Scenario (Password-Auth Profile)
-- [ ] Select password-auth profile, click "Export Profile"
-- [ ] Verify "Include Passwords in Exports" is ON (Settings → Profile Management)
-- [ ] Verify encryption modal appears
-- [ ] Verify checkbox "Encrypt this export" is CHECKED and DISABLED
-- [ ] Verify intro text: "Encryption is mandatory when exporting password-authenticated profiles"
-- [ ] Verify help text: "Encryption is required and cannot be disabled"
-- [ ] Verify password fields are ENABLED (not greyed out)
-- [ ] Verify Export button is DISABLED (needs password)
-- [ ] Try to UNCLICK the checkbox
-- [ ] Verify checkbox remains CHECKED (disabled, cannot uncheck)
-- [ ] Enter password ≥12 characters in both fields (matching)
-- [ ] Verify Export button becomes ENABLED
-- [ ] Click Export
-- [ ] Verify file saves successfully
-- [ ] Open exported file - verify encrypted JSON (has "encrypted": true)
+- [x] Select password-auth profile, click "Export Profile"
+- [x] Verify "Include Passwords in Exports" is ON (Settings → Profile Management)
+- [x] Verify encryption modal appears
+- [x] Verify checkbox "Encrypt this export" is CHECKED and DISABLED
+- [x] Verify help text: "Encryption is required and cannot be disabled"
+- [x] Verify intro text: "Encryption is mandatory when exporting password-authenticated profiles"
+- [x] Verify password fields are ENABLED (not greyed out)
+- [x] Verify Export button is DISABLED (needs password)
+- [x] Try to UNCLICK the checkbox
+- [x] Verify checkbox remains CHECKED (disabled, cannot uncheck)
+- [x] Enter password ≥12 characters in both fields (matching)
+- [x] Verify Export button becomes ENABLED
+- [x] Click Export
+- [x] Verify file saves successfully
+- [x] Open exported file - verify encrypted JSON (has "encrypted": true)
 
 #### Encryption Checkbox - Global "Require Encryption" Setting ON
-- [ ] Open Settings → Profile Management
-- [ ] CHECK "Require Encryption for All Exports"
-- [ ] Save settings
-- [ ] Select ANY profile (key-auth or password-auth), click "Export Profile"
-- [ ] Verify encryption modal appears
-- [ ] Verify checkbox "Encrypt this export" is CHECKED and DISABLED
-- [ ] Verify intro text: "Encryption is required by your security settings"
-- [ ] Verify help text: "Encryption is required and cannot be disabled"
-- [ ] Verify password fields are ENABLED
-- [ ] Verify Export button is DISABLED (needs password)
-- [ ] Try to UNCLICK the checkbox
-- [ ] Verify checkbox remains CHECKED (cannot uncheck due to global setting)
-- [ ] Enter password ≥12 characters in both fields (matching)
-- [ ] Click Export
-- [ ] Verify file saves successfully
-- [ ] Open exported file - verify encrypted JSON
-- [ ] Turn OFF "Require Encryption for All Exports" when done testing
+- [x] Open Settings → Profile Management
+- [x] CHECK "Require Encryption for All Exports"
+- [x] Save settings
+- [x] Select ANY profile (key-auth or password-auth), click "Export Profile"
+- [x] Verify encryption modal appears
+- [x] Verify checkbox "Encrypt this export" is CHECKED and DISABLED
+- [x] Verify help text: "Encryption is required and cannot be disabled"
+- [x] Verify intro text: "Encryption is required by your security settings"
+- [x] Verify password fields are ENABLED
+- [x] Verify Export button is DISABLED (needs password)
+- [x] Try to UNCLICK the checkbox
+- [x] Verify checkbox remains CHECKED (cannot uncheck due to global setting)
+- [x] Enter password ≥12 characters in both fields (matching)
+- [x] Click Export
+- [x] Verify file saves successfully
+- [x] Open exported file - verify encrypted JSON
+- [x] Turn OFF "Require Encryption for All Exports" when done testing
 
 #### Encryption Checkbox - Group Export with Mixed Profiles
-- [ ] Create/select group containing BOTH key-auth AND password-auth profiles
-- [ ] Verify "Include Passwords in Exports" is ON
-- [ ] Verify "Require Encryption for All Exports" is OFF
-- [ ] Click "Export Group"
-- [ ] Verify encryption modal appears
-- [ ] Verify checkbox is CHECKED and DISABLED (mandatory due to password-auth profiles)
-- [ ] Verify intro text: "Encryption is mandatory when exporting password-authenticated profiles"
-- [ ] Enter password and export
-- [ ] Verify encrypted export successful
+- [x] Create/select group containing BOTH key-auth AND password-auth profiles
+- [x] Verify "Include Passwords in Exports" is ON
+- [x] Verify "Require Encryption for All Exports" is OFF
+- [x] Click "Export Group"
+- [x] Verify encryption modal appears
+- [x] Verify checkbox is CHECKED and DISABLED (mandatory due to password-auth profiles)
+- [x] Verify intro text: "Encryption is mandatory when exporting password-authenticated profiles"
+- [x] Enter password and export
+- [x] Verify encrypted export successful
 
 #### Encryption Checkbox - Export All Profiles
-- [ ] Have mix of key-auth and password-auth profiles
-- [ ] Verify "Include Passwords in Exports" is ON
-- [ ] Verify "Require Encryption for All Exports" is OFF
-- [ ] Open Settings → Backup & Restore
-- [ ] Click "Export All Profiles"
-- [ ] Verify encryption modal appears
-- [ ] Verify checkbox is CHECKED and DISABLED (mandatory due to password-auth profiles)
-- [ ] Enter password and export
-- [ ] Verify encrypted export successful
+- [x] Have mix of key-auth and password-auth profiles
+- [x] Verify "Include Passwords in Exports" is ON
+- [x] Verify "Require Encryption for All Exports" is OFF
+- [x] Open Settings → Backup & Restore
+- [x] Click "Export All Profiles"
+- [x] Verify encryption modal appears
+- [x] Verify checkbox is CHECKED and DISABLED (mandatory due to password-auth profiles)
+- [x] Enter password and export
+- [x] Verify encrypted export successful
 
 #### Encryption Checkbox - Backup Settings with Profiles
-- [ ] Open Settings → Backup & Restore
-- [ ] CHECK "Include Profiles in Settings Backup"
-- [ ] Have at least one password-auth profile in database
-- [ ] Verify "Include Passwords in Exports" is ON
-- [ ] Click "Backup Settings"
-- [ ] Verify encryption modal appears
-- [ ] Verify checkbox is CHECKED and DISABLED (mandatory)
-- [ ] Enter password and export
-- [ ] Verify backup successful
+- [x] Open Settings → Backup & Restore
+- [x] CHECK "Include Profiles in Settings Backup"
+- [x] Have at least one password-auth profile in database
+- [x] Verify "Include Passwords in Exports" is ON
+- [x] Click "Backup Settings"
+- [x] Verify encryption modal appears
+- [x] Verify checkbox is CHECKED and DISABLED (mandatory)
+- [x] Enter password and export
+- [x] Verify backup successful
 
 #### Encryption Checkbox - Cancel vs Uncheck
-- [ ] Export any profile (modal appears)
-- [ ] If mandatory: checkbox is checked+disabled
-- [ ] If optional: checkbox is unchecked+enabled
-- [ ] Click Cancel button
-- [ ] Verify export is ABORTED (no file saved)
-- [ ] Export same profile again
-- [ ] If optional: UNCHECK checkbox and click Export
-- [ ] Verify export SUCCEEDS (plain JSON file saved)
-- [ ] This confirms: Cancel = abort, Uncheck+Export = export without encryption
+- [x] Export any profile (modal appears)
+- [x] If mandatory: checkbox is checked+disabled
+- [x] If optional: checkbox is unchecked+enabled
+- [x] Click Cancel button
+- [x] Verify export is ABORTED (no file saved)
+- [x] Export same profile again
+- [x] If optional: UNCHECK checkbox and click Export
+- [x] Verify export SUCCEEDS (plain JSON file saved)
+- [x] This confirms: Cancel = abort, Uncheck+Export = export without encryption
 
 #### Encryption Checkbox - Keyboard Navigation
-- [ ] Export any profile (modal appears)
-- [ ] Verify checkbox is first tabbable element
-- [ ] Press Tab
-- [ ] Verify focus moves to password input (if enabled) or next element (if disabled)
-- [ ] Press Shift+Tab from password input
-- [ ] Verify focus moves back to checkbox
-- [ ] Press ESC
-- [ ] Verify modal closes and export is ABORTED
+- [x] Export any profile (modal appears)
+- [x] Verify checkbox is first tabbable element
+- [x] Press Tab
+- [x] Verify focus moves to password input (if enabled) or next element (if disabled)
+- [x] Press Shift+Tab from password input
+- [x] Verify focus moves back to checkbox
+- [x] Press ESC
+- [x] Verify modal closes and export is ABORTED
 
 #### Encryption Checkbox - Settings Persistence
-- [ ] Open Settings → Profile Management
-- [ ] CHECK "Require Encryption for All Exports"
-- [ ] Save settings
-- [ ] Close and reopen app
-- [ ] Open Settings → Profile Management
-- [ ] Verify "Require Encryption for All Exports" is still CHECKED
-- [ ] Export any profile
-- [ ] Verify encryption is mandatory (checkbox checked+disabled)
-- [ ] UNCHECK "Require Encryption for All Exports"
-- [ ] Save settings
-- [ ] Close and reopen app
-- [ ] Verify setting persisted as UNCHECKED
-- [ ] Export key-auth profile
-- [ ] Verify encryption is optional (checkbox unchecked+enabled)
+- [x] Open Settings → Profile Management
+- [x] CHECK "Require Encryption for All Exports"
+- [x] Save settings
+- [x] Close and reopen app
+- [x] Open Settings → Profile Management
+- [x] Verify "Require Encryption for All Exports" is still CHECKED
+- [x] Export any profile
+- [x] Verify encryption is mandatory (checkbox checked+disabled)
+- [x] UNCHECK "Require Encryption for All Exports"
+- [x] Save settings
+- [x] Close and reopen app
+- [x] Verify setting persisted as UNCHECKED
+- [x] Export key-auth profile
+- [x] Verify encryption is optional (checkbox unchecked+enabled)
 
 #### Import Single Profile
 - [x] Click "Import Profile" button (or menu)
@@ -391,35 +391,35 @@
 - [x] Test import with wrong decryption password (should show error)
 
 #### Import Group
-- [ ] Click "Import Group" button (or hold ⌘/Ctrl and click "+ New Group")
-- [ ] Select previously exported group file (unencrypted)
-- [ ] If no duplicate: verify group imported to correct parent location
-- [ ] Verify group structure recreated (including subgroups)
-- [ ] Verify all profiles imported with correct paths
-- [ ] Verify tags auto-created if they don't exist
-- [ ] Import same group again (duplicate detection)
-- [ ] Verify duplicate group dialog appears with Skip/Keep Both/Merge options
-- [ ] Test "Skip" option (should cancel import, no changes)
-- [ ] Import again, test "Keep Both" option (should rename to "GroupName (imported)")
-- [ ] Verify renamed group appears under original parent
-- [ ] Import again, test "Merge" option (should merge profiles into existing group)
-- [ ] Verify no duplicate profiles created
-- [ ] Import encrypted group file
-- [ ] Enter correct decryption password
-- [ ] Verify group imported to **correct parent location** (not forced to top-level)
-- [ ] Import same encrypted group again (duplicate detection with encryption)
-- [ ] Enter decryption password
-- [ ] Verify duplicate detection dialog appears (Skip/Keep Both/Merge)
-- [ ] Test "Keep Both" option
-- [ ] Verify renamed group imported under **original parent** (not top-level)
-- [ ] Test import encrypted group with wrong password (should show error)
-- [ ] Verify can retry with correct password
-- [ ] Create nested group "Parent/Child/Grandchild" with profiles at each level
-- [ ] Export parent group (includes all subgroups)
-- [ ] Delete parent group and all descendants
-- [ ] Import the export
-- [ ] Verify full 3-level hierarchy recreated correctly
-- [ ] Verify all profiles imported at correct hierarchy levels
+- [x] Click "Import Group" button (or hold ⌘/Ctrl and click "+ New Group")
+- [x] Select previously exported group file (unencrypted)
+- [x] If no duplicate: verify group imported to correct parent location
+- [x] Verify group structure recreated (including subgroups)
+- [x] Verify all profiles imported with correct paths
+- [x] Verify tags auto-created if they don't exist
+- [x] Import same group again (duplicate detection)
+- [x] Verify duplicate group dialog appears with Skip/Keep Both/Merge options
+- [x] Test "Skip" option (should cancel import, no changes)
+- [x] Import again, test "Keep Both" option (should rename to "GroupName (imported)")
+- [x] Verify renamed group appears under original parent
+- [x] Import again, test "Merge" option (should merge profiles into existing group)
+- [x] Verify no duplicate profiles created
+- [x] Import encrypted group file
+- [x] Enter correct decryption password
+- [x] Verify group imported to **correct parent location** (not forced to top-level)
+- [x] Import same encrypted group again (duplicate detection with encryption)
+- [x] Enter decryption password
+- [x] Verify duplicate detection dialog appears (Skip/Keep Both/Merge)
+- [x] Test "Keep Both" option
+- [x] Verify renamed group imported under **original parent** (not top-level)
+- [x] Test import encrypted group with wrong password (should show error)
+- [x] Verify can retry with correct password
+- [x] Create nested group "Parent/Child/Grandchild" with profiles at each level
+- [x] Export parent group (includes all subgroups)
+- [x] Delete parent group and all descendants
+- [x] Import the export
+- [x] Verify full 3-level hierarchy recreated correctly
+- [x] Verify all profiles imported at correct hierarchy levels
 
 #### Import All Profiles (Restore)
 - [x] Open Settings → Backup & Restore
@@ -730,213 +730,6 @@ None
 
 ### Additional Observations
 None
-
----
-
-## Issues Found During macOS Testing (2026-02-14)
-
-### 🔴 CRITICAL (Blocking Release)
-
-**C-1: Group Deletion Locks Up Application** ✅ FIXED
-- **Location:** Lines 180-191
-- **Issue:** Both "Delete All" and "Move All" modes cause spinning wheel and application freeze
-- **Details:**
-  - Selecting either deletion mode locks up the app
-  - ESC key doesn't work to cancel delete modal
-  - Users cannot delete groups at all
-- **Impact:** Showstopper - core functionality completely broken
-- **Status:** ✅ Fixed 2026-02-14
-
-**C-2: Group Move Functionality Missing** ✅ FIXED
-- **Location:** Lines 164-175
-- **Issue:** Entire "Move Group" functionality appears to be missing
-- **Details:**
-  - No "Move" option in group action menu
-  - Cannot move groups between parents at all
-  - All move-related tests blocked
-- **Impact:** Major feature completely absent
-- **Status:** ✅ Fixed 2026-02-14
-
-**C-3: Profile Duplication Doesn't Copy Tags or Group Path** ✅ FIXED
-- **Location:** Additional Observations, lines 9128-9147
-- **Issue:** When duplicating a profile, tags and group path were not copied correctly
-- **Details:**
-  - **Tag Issue:** Throws error "ReferenceError: Can't find variable: tags"
-    - Root cause: Typo - code referenced `tags` instead of `allTags` (line 9143)
-  - **Group Path Issue:** Duplicated profiles always saved to "Ungrouped"
-    - Root cause: Code set `profile-group` dropdown but not `profile-group-id` hidden field
-    - `saveProfile()` uses `profile-group-id` to determine group (line 9022)
-- **Impact:** Data loss (tags + group membership) + error state
-- **Status:** ✅ Fixed 2026-02-14
-  - Tag fix: Typo corrected `tags` → `allTags`
-  - Group fix: Added logic to set both `profile-group` and `profile-group-id` fields
-
----
-
-### 🟡 HIGH (Should Fix Before Release)
-
-**H-1: Export/Import Encryption UX Mismatch** ✅ FIXED
-- **Location:** Lines 245, 254, 266, 281, 306
-- **Issue:** Current design doesn't match expected encryption workflow
-- **Details:**
-  - Expected: User chooses encryption per export (with mandatory enforcement for password-auth)
-  - Actual: Global setting controls encryption implicitly
-  - Multiple test cases flagged as "not the design"
-  - Question: Should non-password profiles offer encryption option?
-- **Impact:** User confusion, potential security gaps
-- **Status:** ✅ Fixed 2026-02-14 (encryption checkbox feature implemented)
-
-**H-2: Decryption Spinner Persists After Cancel** ✅ FIXED
-- **Location:** Line 444
-- **Issue:** After cancelling decryption with wrong password, "Decrypting import..." toast still shows
-- **Details:**
-  - Spinner/toast doesn't dismiss when user cancels
-  - Previously reported in Phase 6, thought to be fixed
-- **Impact:** Poor UX, confusing state
-- **Status:** ✅ Fixed 2026-02-14 (toast now hidden on cancel in both import and settings restore)
-
-**H-3: Search Clear (ESC) Not Working** ✅ FIXED
-- **Location:** Line 114
-- **Issue:** ESC key doesn't clear search
-- **Details:**
-  - Test expects ESC to clear search
-  - Feature was never configured
-  - X button works, ESC doesn't
-- **Impact:** Inconsistent keyboard navigation
-- **Status:** ✅ Fixed 2026-02-14 (ESC key now clears search and blurs input)
-
----
-
-### 🟢 MEDIUM (Nice to Fix)
-
-**M-1: Import All Has No Conflict Resolution** ✅ NOT AN ISSUE
-- **Location:** Lines 316, 319
-- **Issue:** Import All doesn't follow expected duplicate handling workflow
-- **Details:**
-  - Warning appears AFTER file selection/decryption (not before)
-  - No conflict resolution options (Skip/Rename/Overwrite)
-  - Appears to be full overwrite/restore only
-  - User notes: "more about restoring all profiles, no duplicate or merging"
-- **Impact:** Limited flexibility, potential data loss if user misunderstands
-- **Status:** ✅ Working as intended - this is a RESTORE function, not a merge function
-
-**M-2: Tag Sorting Case-Sensitive** ✅ FIXED
-- **Location:** Line 212
-- **Issue:** Tags sorted alphabetically but capitals come first
-- **Details:**
-  - 'Test' appears before 'abc'
-  - Should be case-insensitive alphabetical sort
-- **Impact:** Minor UX inconsistency
-- **Status:** ✅ Fixed 2026-02-14 (added COLLATE NOCASE to 3 SQL queries)
-
-**M-3: Settings Tab Cycle Incomplete** ✅ FIXED
-- **Location:** Line 462
-- **Issue:** Tab cycling doesn't include the 3 buttons at bottom properly
-- **Details:**
-  - Keyboard navigation through settings modal incomplete
-  - Save/Close buttons (header) came after GitHub buttons (bottom) in tab order
-  - Expected: top-to-bottom visual order
-- **Impact:** Accessibility issue
-- **Status:** ✅ Fixed 2026-02-14 (reordered tab items: Save/Close → Settings → GitHub buttons)
-
-**M-4: Keyboard Shortcuts Partially Disabled** ✅ FIXED & VERIFIED
-- **Location:** Lines 781-806 + 735-741
-- **Issue:** When shortcuts globally disabled, Cmd key still toggles +new buttons
-- **Details:**
-  - Modifier key tracking didn't check keyboardShortcutsEnabled
-  - Buttons could get stuck in "Import" state when shortcuts toggled off
-- **Impact:** Inconsistent behavior, unexpected for users who disable shortcuts
-- **Status:** ✅ Fixed 2026-02-14 (2-part fix)
-  - Part 1: Added keyboardShortcutsEnabled check to modifier event listeners
-  - Part 2: Reset button state when shortcuts toggled off (prevents stuck "Import" state)
-- **Verified:** User tested - working correctly ✅
-
-**M-5: Group Rename UI Terminology** ✅ FIXED
-- **Location:** Line 154
-- **Issue:** Minor UI terminology inconsistency
-- **Details:**
-  - Test expects "Rename" option
-  - Actual UI shows "Edit Group" option
-  - Functionality works, just different label
-- **Impact:** Very minor, test needs updating
-- **Status:** ✅ Fixed 2026-02-14 (test plan updated to match actual UI)
-
-**M-6: Terminal Connection Flow Changed** ✅ FIXED
-- **Location:** Line 480
-- **Issue:** Test expects terminal preference modal during connect, but design changed
-- **Details:**
-  - Test expects: Terminal modal appears on connect
-  - Actual: Profile itself has terminal option configured
-  - Design changed but test not updated
-- **Impact:** Test needs updating, not a bug
-- **Status:** ✅ Fixed 2026-02-14 (test plan updated to match actual design)
-
-**M-7: Recent Connections Timestamp Static** ✅ FIXED
-- **Location:** Line 493
-- **Issue:** Timestamp doesn't refresh automatically
-- **Details:**
-  - Timestamps show correctly but don't update (e.g., "5 minutes ago" → "6 minutes ago")
-  - Static timestamps look stale during long-running sessions
-- **Impact:** Minor UX, potentially confusing for long-running sessions
-- **Implementation:**
-  - ✅ **Dynamic refresh interval** based on recency:
-    - Any connection < 1 minute: **5-second** refresh (rapid updates)
-    - All connections ≥ 1 minute: **60-second** refresh (efficient)
-  - ✅ Only refresh when Recent Connections panel is expanded/visible
-  - ✅ Trigger immediate refresh when panel is toggled open
-  - ✅ Pause refresh when any modal is open
-  - ✅ Update only timestamp text (not entire UI re-render)
-  - ✅ Stop interval when panel is collapsed
-  - ✅ Auto-adjusts interval when connections age past 1-minute threshold
-- **Status:** ✅ Fixed 2026-02-14 (auto-refresh with dynamic interval + modal-aware pause/resume)
-
----
-
-### 🔵 LOW (Clarifications/Polish)
-
-**L-1: Profile Card Hover Test Unclear** ✅ CLARIFIED
-- **Location:** Line 68
-- **Issue:** User needs clarification what "hover state" test is checking for
-- **Impact:** Test clarification needed
-- **Clarification:**
-  - **Regular cards:** Background lightens, border turns blue, shadow appears
-  - **Favourite cards:** Border turns gold (#f59e0b)
-  - Visual feedback that card is interactive/clickable
-- **Status:** ✅ Clarified 2026-02-14
-
-**L-2: Icon Picker Tab Navigation** ✅ FIXED
-- **Location:** Line 90
-- **Issue:** Tab through icons not possible
-- **Details:**
-  - User notes: "was not intended, test can be removed"
-  - Updated test to reflect actual behavior (arrow key navigation)
-- **Impact:** None - test documentation updated
-- **Status:** ✅ Fixed 2026-02-14 (test updated to match actual behavior)
-
-**L-3: Create Tag Button Should Disable** ✅ FIXED
-- **Location:** Lines 204, 206
-- **Issue:** Button should be disabled when input invalid
-- **Details:**
-  - Now disables "Create Tag" button when tag name is empty or has invalid characters
-  - Real-time validation on every keystroke
-  - Matches UX pattern of other buttons (e.g., Export, Decrypt)
-- **Implementation:**
-  - `validateTagNameInput()` function checks name is non-empty and matches `/^[a-zA-Z0-9\-_]+$/`
-  - Called on every `input` event via `updateTagNameCounter()`
-  - Button disabled by default when modal opens
-  - Re-disabled after successful tag creation
-- **Impact:** Better UX - prevents invalid submission attempts
-- **Status:** ✅ Fixed 2026-02-14 (button disable validation implemented)
-
-**L-4: Group Deletion Option Names** ✅ FIXED
-- **Location:** Line 179
-- **Issue:** Minor terminology difference
-- **Details:**
-  - Test expects: "Move Profiles to Parent" and "Cascade Delete"
-  - Actual UI shows: "Move All" and "Delete All"
-  - Functionality works, just different labels
-- **Impact:** Very minor, test needs updating
-- **Status:** ✅ Fixed 2026-02-14 (user updated test documentation)
 
 ---
 

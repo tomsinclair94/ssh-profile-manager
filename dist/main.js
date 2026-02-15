@@ -6944,7 +6944,7 @@ function determineEncryptionState(profilesInExport) {
 
     let reason = '';
     if (requireEncryption) {
-        reason = 'Encryption is required by your security settings.';
+        reason = 'Encryption is required by the global "Require Encryption for All Exports" setting.';
     } else if (includePasswords && hasPasswordAuth) {
         reason = 'Encryption is mandatory when exporting password-authenticated profiles.';
     } else {
@@ -6985,13 +6985,24 @@ function openEncryptionPasswordModal(encryptionState = { isMandatory: true, reas
         }
 
         // Update intro text and help text
-        encryptionPasswordIntro.textContent = encryptionState.reason;
+        // Combine both text strings into ONE paragraph with <br> (like bottom help text)
+        encryptExportHelp.textContent = ''; // Clear - content moved to intro paragraph
+        encryptionPasswordIntro.innerHTML = ''; // Clear existing content
+
         if (encryptionState.isMandatory) {
-            encryptExportHelp.textContent = 'Encryption is required and cannot be disabled.';
-            encryptExportHelp.classList.add('text-danger');
+            // Red bold text for mandatory message (using deeper red #dc2626 instead of pink-ish #ef4444)
+            const redSpan = document.createElement('span');
+            redSpan.style.color = '#dc2626';
+            redSpan.style.fontWeight = 'bold';
+            redSpan.textContent = 'Encryption is required and cannot be disabled.';
+            encryptionPasswordIntro.appendChild(redSpan);
+            encryptionPasswordIntro.appendChild(document.createElement('br'));
+            encryptionPasswordIntro.appendChild(document.createTextNode(encryptionState.reason));
         } else {
-            encryptExportHelp.textContent = 'Check the box above to encrypt this export.';
-            encryptExportHelp.classList.remove('text-danger');
+            // Gray text for optional message
+            encryptionPasswordIntro.appendChild(document.createTextNode('Check the box above to encrypt this export.'));
+            encryptionPasswordIntro.appendChild(document.createElement('br'));
+            encryptionPasswordIntro.appendChild(document.createTextNode(encryptionState.reason));
         }
 
         encryptionPasswordModal.classList.remove('hidden');
@@ -7006,6 +7017,10 @@ function openEncryptionPasswordModal(encryptionState = { isMandatory: true, reas
                 encryptExportCheck.focus();
             }
         }, 100);
+
+        // Fix Issue 1: Set initial Export button state based on checkbox
+        // Without this, button stays disabled even when encryption is optional and checkbox is unchecked
+        validateEncryptionPasswordModal();
     });
 }
 
