@@ -26,7 +26,7 @@ bun run build    # Production build
 **In Development:** v0.7.0
 **See:** TODO.md for roadmap and feature backlog
 
-**v0.7.0 Features (In Development - 90% Complete):**
+**v0.7.0 Features (In Development - 98% Complete):**
 - ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
 - ✅ Individual profile/group export/import with duplicate detection
 - ✅ Favourites system for profiles with virtual group display
@@ -36,7 +36,7 @@ bun run build    # Production build
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
 - ✅ Encryption for exports (Phase 6 - all sub-phases 6A-6E complete)
-- ⏸️ Testing & documentation (Phase 8 - pending)
+- ⏸️ Testing & documentation (Phase 8E-8F - migration testing + final docs)
 
 ## Version Management
 
@@ -49,33 +49,23 @@ bun run build    # Production build
 4. `dist/index.html` (line ~22 + ~393: `vX.X.X` and `X.X.X`)
 5. `README.md` (line ~14 + ~16: badge versions)
 6. `dist/main.js` (line ~56: `CURRENT_APP_VERSION = 'X.X.X'`)
-7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry with version, releaseDate, subtitle, highlights, and githubUrl)
+7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry)
 
 **Step 2: Enable Developer Tools:**
-Enable devtools for debugging during development:
-1. `src-tauri/tauri.conf.json` (line ~19: `"devtools": true`)
+`src-tauri/tauri.conf.json` (line ~19: `"devtools": true`)
 
-**Step 3: Update all dependencies to latest versions:**
+**Step 3: Update dependencies:**
 ```bash
-# Update JavaScript dependencies
 bun update
-
-# Update Rust dependencies
 cd src-tauri && cargo update && cd ..
-
-# Verify builds still work
-bun run build
+bun run build  # Verify builds work
 ```
 
-**Step 4: Commit changes:**
+**Step 4: Commit:**
 ```bash
 git add -A
 git commit -m "Bump version to X.X.X for dev branch"
 ```
-
-**Why update dependencies?** Keeping dependencies current at the start of each release prevents Dependabot from creating many PRs during development. This gives you control over when updates happen and ensures all updates are tested together with your new features.
-
-**Developer Tools:** With devtools enabled, you can right-click in the application to access the console for debugging during development. This helps with frontend debugging and Tauri command inspection.
 
 ## Release Process
 
@@ -91,21 +81,21 @@ git commit -m "Bump version to X.X.X for dev branch"
 9. **RE-RUN AUTOMATED TESTS** after fixes: `cargo test --lib` (ensure no regressions)
 10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-manual-gui-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
 11. Fix any GUI bugs found during manual testing
-12. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
-13. Commit & push
+12. **RUN MIGRATION TESTS** (if database migrations present): Open version-specific plan `plans/vX.X.X-migration-testing.md` and complete all migration validation tests (~1.5 hours total)
+13. Fix any migration issues found during testing
+14. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
+15. Commit & push
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled
    - Create PR: `gh pr create --title "..." --body "..."`
    - Enable auto-merge: `gh pr merge <PR_NUMBER> --auto --squash`
-   - PR will auto-merge with squash once all checks pass
 2. Squash merge with title: `Release vX.X.X - Description`
 3. Auto-tag workflow creates git tag with CHANGELOG content
 4. Auto-release workflow builds binaries (macOS aarch64, Windows x86_64)
 5. GitHub release published automatically
 
 **Critical:** Commit message MUST start with `Release vX.X.X` for auto-tagging.
-**Note:** Auto-tag workflow uses PAT_TOKEN (fixed in v0.6.3) to properly trigger release builds.
 **Workflow:** See DEVELOPMENT.md for branch protection rules and PAT_TOKEN setup.
 
 ## Phase Development Workflow
@@ -116,25 +106,13 @@ git commit -m "Bump version to X.X.X for dev branch"
 - Always ask for confirmation before committing changes
 
 **Documentation Updates After Phase Completion**
-After completing ANY phase or sub-phase (e.g., Phase 6, Phase 6A, Phase 6B), you MUST update ALL relevant documentation:
+After completing ANY phase or sub-phase, update ALL relevant documentation:
 
 **Required Updates:**
 1. **TODO.md** - Update phase progress tracker with completion status
 2. **Version-specific plan** (e.g., `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md`) - Update overall progress percentage and phase status
 3. **Phase-specific plan** (e.g., `plans/v0.7.0-phase-6-encryption.md`) - Mark sub-phase as complete with detailed notes
 4. **CLAUDE.md** - Update command signatures if APIs changed (e.g., new parameters)
-
-**Example: Completing Phase 6B (Export Command Integration)**
-- ✅ Update TODO.md: Mark Phase 6B complete, list accomplishments
-- ✅ Update plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md: Update progress percentage (e.g., 80% → 82%), mark Phase 6B complete
-- ✅ Update plans/v0.7.0-phase-6-encryption.md: Add completion date, mark all tasks as done
-- ✅ Update CLAUDE.md: Update export command signatures if parameters changed
-
-**Verification Checklist:**
-- [ ] All relevant plan files updated?
-- [ ] TODO.md reflects current status?
-- [ ] CLAUDE.md updated if APIs changed?
-- [ ] User explicitly requested commit/push?
 
 ## Dependabot Dependency Updates
 
@@ -147,7 +125,6 @@ After completing ANY phase or sub-phase (e.g., Phase 6, Phase 6A, Phase 6B), you
 - Updates dependencies on `main` branch between releases
 - Does NOT trigger new releases (no version bump or git tag)
 - Next dev branch inherits updates when branched from `main`
-- Example: v0.6.5 released → Dependabot updates `main` → v0.6.6-dev branches from updated `main`
 
 **Configuration:**
 - Weekly limit: 10 Rust PRs, 10 JavaScript PRs, 5 GitHub Actions PRs
@@ -164,8 +141,8 @@ get_profiles()  // Returns Vec<ProfileWithMetadata> (includes icon, is_favorite,
 create_profile(input: CreateProfileInput)
 update_profile(input: UpdateProfileInput)
 delete_profile(id: String)
-export_profile(profile_id: String, include_password: bool, encryption_password: Option<String>) // Individual profile export (v0.7.0, encryption added Phase 6B)
-import_profile(data: String, encryption_password: Option<String>) // With duplicate detection (v0.7.0, decryption added Phase 6C)
+export_profile(profile_id: String, include_password: bool, encryption_password: Option<String>)
+import_profile(data: String, encryption_password: Option<String>)
 ```
 
 **Group Management (v0.7.0):**
@@ -176,14 +153,14 @@ create_group(name: String, parent_id: Option<String>)
 update_group(id: String, name: String)
 delete_group(id: String, mode: String) // "cascade" or "move"
 move_group(id: String, new_parent_id: Option<String>)
-export_group(group_id: String, include_passwords: bool, encryption_password: Option<String>) // Recursive with sub-groups (encryption added Phase 6B)
-import_group(data: String, target_parent_id: Option<String>, encryption_password: Option<String>) // Decryption added Phase 6C
+export_group(group_id: String, include_passwords: bool, encryption_password: Option<String>)
+import_group(data: String, target_parent_id: Option<String>, encryption_password: Option<String>)
 get_profiles_by_group_path(group_path: String)
 ```
 
 **Metadata & Favourites (v0.7.0):**
 ```rust
-toggle_profile_favorite(profile_id: String) // Returns new state
+toggle_profile_favorite(profile_id: String)
 set_profile_favorite(profile_id: String, is_favorite: bool)
 update_profile_icon(profile_id: String, icon: Option<String>)
 get_profile_metadata(profile_id: String)
@@ -203,8 +180,8 @@ remove_profile_tag(profile_id: String, tag_id: String)
 
 **Settings & Export/Import:**
 ```rust
-export_profiles(include_passwords: bool, encryption_password: Option<String>) // All profiles (now called "Export All Profiles", encryption added Phase 6B)
-import_profiles(data: String, encryption_password: Option<String>) // With conflict resolution (decryption added Phase 6C)
+export_profiles(include_passwords: bool, encryption_password: Option<String>)
+import_profiles(data: String, encryption_password: Option<String>)
 export_settings() // Now displayed as "Backup Settings" in UI
 import_settings(data: String) // Now displayed as "Restore Settings" in UI
 browse_ssh_key()
@@ -221,10 +198,6 @@ create_terminal_session(profile_id: String)
 write_to_session(session_id: String, data: String)
 resize_session(session_id: String, cols: u16, rows: u16)
 close_session(session_id: String)
-```
-
-**Updates:**
-```rust
 check_for_updates()
 ```
 
@@ -261,20 +234,6 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
   2. Call `popModal('modalId')` when hiding modal (after `classList.add('hidden')`)
   3. Add case to `handleModalShortcuts()` switch statements for Tab, Escape, Cmd/Ctrl+S
   4. Create `getModalIdTabbableItems()` function if modal has focusable elements
-- **Example:**
-  ```javascript
-  function openMyModal() {
-      myModal.classList.remove('hidden');
-      pushModal('myModal');  // Add to stack
-  }
-
-  function closeMyModal() {
-      myModal.classList.add('hidden');
-      popModal('myModal');  // Remove from stack
-  }
-  ```
-- Handles nested modals automatically (e.g., splash screen over settings, confirm over profile)
-- No manual priority ordering needed - stack handles it dynamically
 
 **Security:**
 - Backend validation: XSS, command injection, path traversal
@@ -284,12 +243,12 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Tag/group name validation: Alphanumeric + limited special chars only
 - localStorage: Group IDs (not names) for filter/collapse state
 
-**Export Encryption (v0.7.0 - Phase 6 - ✅ Complete):**
+**Export Encryption (v0.7.0):**
 - AES-256-GCM authenticated encryption for exports
 - PBKDF2-HMAC-SHA256 key derivation (600k iterations - OWASP 2023)
 - Additional HMAC-SHA256 integrity verification (fail-fast)
 - Mandatory encryption when password-authenticated profiles included
-- Password requirements: 12–128 characters (character count, not byte count; enforced front- and back-end)
+- Password requirements: 12–128 characters (enforced front- and back-end)
 - Zeroization: Passwords/keys cleared from memory after use
 - Random salt (16 bytes) and IV (12 bytes) per export
 - Constant-time HMAC comparison prevents timing attacks
@@ -424,7 +383,7 @@ These warnings only affect Linux builds, which are not supported. Application ta
 
 ### Test Structure
 
-All backend tests are located in `src-tauri/src/tests/` with a modular structure (refactored from monolithic to separate modules for maintainability):
+All backend tests are located in `src-tauri/src/tests/` with a modular structure:
 
 ```
 src-tauri/src/tests/
@@ -442,68 +401,9 @@ src-tauri/src/tests/
 Total: 129 tests (all must pass before release)
 ```
 
-**Test declaration in lib.rs:**
-```rust
-#[cfg(test)]
-mod tests {
-    mod helpers;      // Shared utilities
-    mod encryption;   // Individual test modules
-    mod validation;
-    mod integration;  // Multi-step workflow tests
-    // ... etc
-}
-```
+**Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
 
-### Integration Tests (integration.rs)
-
-**Integration tests validate multi-step workflows (22 comprehensive tests):**
-
-**Export/Import Round-Trip (4 tests):**
-- Encrypted profile export → decrypt → import → verify all data (metadata, tags, passwords)
-- Encrypted group export with password-auth profiles → verify encryption mandatory
-- Hierarchical group export (recursive with subgroups) → import → verify structure
-- Invalid encryption password → verify error handling
-
-**Export Validation (1 test):**
-- Verify password-auth profiles require encryption (mandatory rule enforcement)
-
-**Group Operations (4 tests):**
-- Rename cascade: Rename parent → verify all descendants update paths
-- Move cascade: Move group to new parent → verify all descendant paths recalculate
-- Circular move prevention: Cannot move group into its own descendant
-- Delete cascade with profile cleanup: Verify profiles deleted in cascade mode
-
-**Import Duplicate Detection (5 tests):**
-- Skip mode: Duplicate detected, no import
-- Rename mode: Auto-suffix applied (e.g., "Server (imported)")
-- Overwrite mode: Existing profile replaced with imported data
-- Scoped uniqueness: Same name allowed in different groups
-- Group duplicate detection: By name + parent_id
-
-**Tag & Metadata (1 test):**
-- Tag auto-creation: Tags automatically created by name during import
-
-**Full Backup/Restore (2 tests):**
-- Export ALL → Import ALL (replace mode) → verify complete restoration
-- Settings export/import round-trip
-
-**Performance (3 tests):**
-- 100 profiles imported in <5 seconds
-- 100 profiles with metadata + tags in <5 seconds
-- Deep nesting (3 levels, 50 profiles) in <2 seconds
-
-**Why integration tests?** Unit tests validate individual functions, but integration tests catch issues in multi-step workflows (e.g., transaction boundaries, cascading updates, command orchestration, encryption enforcement).
-
-### Test Helpers (helpers.rs)
-
-**Shared test utilities used across all test modules:**
-
-- `create_test_db() -> Database` - Creates in-memory SQLite database with full schema
-- `make_test_profile(name, group_path) -> Profile` - Profile factory with defaults
-- `make_test_group(name, parent_id, path) -> Group` - Group factory
-- `make_test_tag(name, color) -> Tag` - Tag factory
-
-**Pattern:** All tests use in-memory databases for isolation (no shared state between tests)
+**Test helpers (helpers.rs):** Shared utilities (`create_test_db()`, `make_test_profile()`, `make_test_group()`, `make_test_tag()`) used across all test modules. All tests use in-memory databases for isolation.
 
 ### Running Tests
 
@@ -533,97 +433,33 @@ cargo llvm-cov --lib --open
 
 **CRITICAL: All new features MUST include tests before merging to main.**
 
-**1. Choose the appropriate test module:**
-- Profile operations → `tests/profiles.rs`
-- Group operations → `tests/groups.rs`
-- Validation → `tests/validation.rs`
-- New feature domain → Create new module (e.g., `tests/new_feature.rs`)
+1. **Choose appropriate test module:** Profile operations → `tests/profiles.rs`, Group operations → `tests/groups.rs`, etc.
+2. **Follow existing patterns:** Use `create_test_db()`, `make_test_*()` helpers
+3. **Test both success and failure paths:** Happy path, edge cases, validation failures, error conditions
+4. **Descriptive test names:** `test_create_profile_success` ✅, `test1` ❌
+5. **If creating new module:** Add declaration in `lib.rs` #[cfg(test)] mod tests block
+6. **Verify tests pass:** `cargo test --lib`
+7. **Test comment guidelines:** NO phase-specific references, NO test numbering, NO issue references. Keep comments generic and high-level.
 
-**2. Follow existing patterns:**
-
+**Example:**
 ```rust
-// In tests/your_module.rs
-use super::helpers::*;  // Import test utilities
-use crate::X;           // Import lib.rs functions
+use super::helpers::*;
+use crate::X;
 
 #[test]
 fn test_feature_success() {
     let db = create_test_db();
     let profile = make_test_profile("Test", None);
-
-    // Test implementation
     assert!(db.your_function(&profile).is_ok());
 }
-
-#[test]
-fn test_feature_validation_fails() {
-    // Test failure case
-    assert!(validate_input("").is_err());
-}
 ```
-
-**3. Test both success and failure paths:**
-- Happy path (valid input, successful operation)
-- Edge cases (empty, max length, boundary values)
-- Validation failures (invalid input, missing data)
-- Error conditions (not found, conflicts, cascades)
-
-**4. Descriptive test names:**
-- `test_create_profile_success` ✅
-- `test_create_profile_duplicate_in_same_group` ✅
-- `test_delete_group_cascade_deletes_children` ✅
-- `test1` ❌
-
-**5. If creating a new test module:**
-
-```rust
-// In lib.rs #[cfg(test)] mod tests block:
-mod your_new_module;  // Add declaration
-
-// Create src-tauri/src/tests/your_new_module.rs
-use super::helpers::*;
-
-#[test]
-fn test_something() {
-    // Your tests
-}
-```
-
-**6. Verify tests pass:**
-```bash
-cargo test --lib
-```
-
-**7. Test comment guidelines (CRITICAL):**
-- **NO phase-specific references** - Never mention "Phase 8C", "v0.7.0", or specific version numbers in test files
-- **NO test numbering** - Don't use "Test 1:", "Test 2:" in section headers (test names are already descriptive)
-- **NO issue references** - Don't reference specific bug IDs (e.g., "C-1 fix", "Issue #123")
-- **Keep comments generic and high-level** - Explain what the test validates, not when/why it was written
-- **Example:**
-  ```rust
-  // ❌ BAD: Integration tests for Phase 8C
-  // ❌ BAD: Test 1: Export/Import Round-Trip
-  // ❌ BAD: This verifies the C-1 fix (SQL REPLACE → SUBSTR)
-
-  // ✅ GOOD: Integration tests validating multi-step workflows
-  // ✅ GOOD: Export/Import Round-Trip with Encryption
-  // ✅ GOOD: Verify that renaming a group doesn't corrupt groups with overlapping names
-  ```
-
-### Coverage Goals
-
-- **60%+ coverage** on critical functions (Tauri commands, DB operations, validation)
-- **All Tauri commands** should have at least basic success/failure tests
-- **Security-critical code** (encryption, validation) requires comprehensive tests
 
 ### Test Philosophy
 
 - **Fast:** In-memory databases, no I/O, no network (~41s for 129 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
-- **Readable:** Clear test names, focused assertions, minimal setup
 - **Comprehensive:** 107 unit tests + 22 integration tests covering all backend logic
-- **GUI Testing:** Manual GUI tests cover all frontend functionality (template: `plans/templates/manual-gui-test-plan-template.md`)
 
 ### Pre-Release Testing Checklist
 
@@ -645,6 +481,17 @@ Before creating a release PR:
 - [ ] Verify no console errors during testing
 - [ ] Commit completed test results file
 
+**Migration Tests** (if database migrations present):
+- [ ] Open version-specific migration plan: `plans/vX.X.X-migration-testing.md`
+- [ ] Create v[PREVIOUS_VERSION] test database with minimal realistic data
+- [ ] Export JSON backup (recommended user method)
+- [ ] Run migration to v[NEW_VERSION], monitor console for errors
+- [ ] Validate 100% data integrity (zero profiles lost)
+- [ ] Test new features with migrated data
+- [ ] Document migration results in plan file
+- [ ] Update plan status to "✅ Complete"
+- [ ] Commit completed migration plan
+
 ## Manual GUI Testing
 
 **Template:** `plans/templates/manual-gui-test-plan-template.md`
@@ -654,39 +501,48 @@ Before creating a release PR:
 
 **When to Run:** After all automated tests pass and before creating release PR (step 10 in Release Process).
 
-### What's Tested
+**What's Tested:** Profile management UI, group management UI, tag management UI, export/import workflows, connection management, settings UI, keyboard navigation (30+ shortcuts), visual & layout testing, platform-specific behaviors.
 
-The manual test plan covers all user-facing functionality NOT covered by automated backend tests:
-- Profile management UI (create, edit, delete, display, favourites, icons, search)
-- Group management UI (create, rename, move, delete, tree navigation)
-- Tag management UI (create, assign, delete, color picker)
-- Export/Import workflows (all UI dialogs, encryption prompts, duplicate handling)
-- Connection management (terminal spawning, recent connections)
-- Settings UI (all tabs, preferences, reset functionality)
-- Keyboard navigation (all 30+ shortcuts, modal trapping, tab order)
-- Visual & layout testing (responsive design, tooltips, loading states, animations)
-- Platform-specific behaviors (macOS vs Windows terminal integration, keyboard modifiers)
+**How to Use:** Copy template to test-results, create test data per checklist, complete macOS testing (~2-3 hours), complete Windows testing (~45 minutes), document results, log issues, commit completed results.
 
-### How to Use
-
-1. **Copy Template:** `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-manual-gui-test-results.md`
-2. **Pre-Testing Setup:** Create test data (groups, profiles, tags) following checklist in the copied file
-3. **macOS Testing:** Work through sections 1-9, checking off each item (~2-3 hours)
-4. **Windows Testing:** Complete platform-specific tests + critical smoke tests (~45 minutes)
-5. **Document Results:** Fill in test results section with pass/fail counts, issues fixed, observations
-6. **Log Issues:** Create GitHub issues for any failed tests or bugs found
-7. **Commit Results:** Commit the completed test results file to the repository
-
-### Performance Notes
-
-Performance testing has been intentionally excluded to keep testing focused on functional correctness. Performance issues will be addressed through user feedback and bug reports. If significant performance problems are observed during functional testing, note them in the test results template.
-
-### Test Results Storage
-
+**Test Results Storage:**
 - **Template:** `plans/templates/manual-gui-test-plan-template.md` (never modified, always blank)
 - **Completed Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md` (one per release)
 - **Version Prefix:** Use `vX.X.X-` prefix for chronological sorting
-- **Update Template:** If new features require new test cases, update the template AND add those tests to the current version's results file
+
+## Migration Testing
+
+**Guidelines:** `plans/templates/migration-testing-guidelines.md`
+**Version-Specific Plans:** `plans/vX.X.X-migration-testing.md`
+
+**Purpose:** Validate database and frontend migrations when upgrading between versions.
+
+**When to Run:** After all automated and GUI tests pass, before creating release PR (Phase 8E).
+
+**Approach:** Unlike GUI testing (same features across versions), migration testing is **version-specific**. Each upgrade has different schema changes, data transformations, and new features.
+
+**Two-Part System:**
+1. **Guidelines:** Reusable checklist and procedures for all migrations
+2. **Version-Specific Plan:** Detailed test plan for specific version upgrade (e.g., `plans/v0.7.0-migration-testing.md`)
+
+**What's Tested:** Database schema migrations, data integrity (zero data loss requirement), frontend localStorage migrations, new features work with migrated data, JSON export/import validation (recommended user backup method).
+
+**Test Duration:** ~1.5 hours total (20min setup, 5min migration, 20min data validation, 30min feature validation, 15min documentation)
+
+**Success Criteria:**
+- Migration completes without errors (no console warnings/errors)
+- 100% data integrity (zero profiles lost, all groups preserved)
+- All user settings preserved
+- Keychain entries intact (password-auth profiles)
+- New features work correctly with migrated data
+- Migration time <30 seconds
+
+**Migration Testing Notes:**
+- **Backup via Export:** Always recommend users export profiles (JSON) before upgrading, NOT database file backups
+- **No Backward Compatibility:** Users cannot downgrade to previous versions with a migrated database
+- **Zero Data Loss:** Any data loss (even 1 profile) is a CRITICAL blocker requiring investigation
+- **Minimal Test Data:** Use minimal realistic data (e.g., 4 profiles, 3 groups) - not extreme datasets
+- **Version-Specific:** Each migration is unique - don't assume the same tests apply across versions
 
 ## Quick Reference
 
@@ -703,9 +559,9 @@ Performance testing has been intentionally excluded to keep testing focused on f
 Specialized agents for code quality, security, and development tasks:
 
 **Testing & QA (Phase 8):**
-- `voltagent-qa-sec:test-automator` - Design and implement automated test frameworks (Phase 8A)
-- `voltagent-qa-sec:code-reviewer` - Code quality, design patterns, best practices (Phase 8B)
-- `voltagent-infra:security-engineer` - Security audit, vulnerability assessment (Phase 8B)
+- `voltagent-qa-sec:test-automator` - Design and implement automated test frameworks
+- `voltagent-qa-sec:code-reviewer` - Code quality, design patterns, best practices
+- `voltagent-infra:security-engineer` - Security audit, vulnerability assessment
 
 **Development Support:**
 - `voltagent-lang:rust-engineer` - Rust-specific development and optimization

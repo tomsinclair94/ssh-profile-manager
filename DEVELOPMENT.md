@@ -35,7 +35,7 @@
    ```
 
 4. **Prepare for Release** - Before creating PR, ensure:
-   - ✅ **All tests passing** (`cargo test --lib` - 106 tests must pass)
+   - ✅ **All tests passing** (`cargo test --lib` - 129 tests must pass)
    - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
    - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
@@ -216,9 +216,10 @@ src-tauri/src/tests/
 ├── tags.rs           #  9 tests - Tag system operations
 ├── connections.rs    #  5 tests - Recent connections tracking
 ├── settings.rs       #  3 tests - User settings storage
-└── migrations.rs     #  5 tests - Database schema migrations
+├── migrations.rs     #  5 tests - Database schema migrations
+└── integration.rs    # 22 tests - Multi-step workflow validation
 
-Total: 106 tests (all must pass before release)
+Total: 129 tests (all must pass before release)
 ```
 
 ### Running Tests
@@ -240,7 +241,7 @@ cargo test --lib test_create_profile_success
 cargo test --lib -- --nocapture
 ```
 
-**Expected result:** `106 passed; 0 failed` in ~27 seconds
+**Expected result:** `129 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
@@ -303,7 +304,7 @@ dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
   ├── src/
   │   ├── lib.rs        # Main backend code (~5190 lines)
-  │   └── tests/        # Test modules (106 tests)
+  │   └── tests/        # Test modules (129 tests)
 ```
 
 See CLAUDE.md for detailed development notes (local file, not in repo).
