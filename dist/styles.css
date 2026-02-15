@@ -408,7 +408,15 @@ body {
     white-space: nowrap;
     margin-left: 8px;
     position: relative;
-    top: -2px; /* Shift text up slightly for visual center alignment */
+}
+
+/* Platform-specific vertical alignment adjustments */
+.platform-macos .filter-group-name {
+    top: -2px; /* macOS: shift up 2px for visual center alignment */
+}
+
+.platform-windows .filter-group-name {
+    top: -4px; /* Windows: shift up 4px for visual center alignment */
 }
 
 .filter-group-count {
@@ -1822,7 +1830,15 @@ form {
     color: var(--text-color);
     margin-left: 8px;
     position: relative;
-    top: -2px; /* Shift text up slightly for visual center alignment */
+}
+
+/* Platform-specific vertical alignment adjustments */
+.platform-macos .checkbox-label span {
+    top: -2px; /* macOS: shift up 2px for visual center alignment */
+}
+
+.platform-windows .checkbox-label span {
+    top: -4px; /* Windows: shift up 4px for visual center alignment */
 }
 
 /* Smaller default values inside checkbox labels */

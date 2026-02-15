@@ -2468,6 +2468,17 @@ function showKeyboardShortcutsHelp() {
 async function init() {
     debug.log('Initializing app...');
 
+    // Detect platform and add CSS class for platform-specific styles
+    const platform = navigator.platform.toLowerCase();
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (platform.includes('mac') || userAgent.includes('mac')) {
+        document.body.classList.add('platform-macos');
+    } else if (platform.includes('win') || userAgent.includes('win')) {
+        document.body.classList.add('platform-windows');
+    } else {
+        document.body.classList.add('platform-linux');
+    }
+
     // Get DOM elements
     profilesList = document.getElementById('profiles-list');
     searchInput = document.getElementById('search-input');
