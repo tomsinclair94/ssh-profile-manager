@@ -637,7 +637,22 @@ fn validate_key_path(path: &str) -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
     let ssh_dir = home.join(".ssh");
 
-    if !canonical.starts_with(&ssh_dir) && !canonical.starts_with(&home) {
+    // Canonicalize home paths for consistent comparison (handles Windows \\?\ prefix)
+    let canonical_home = std::fs::canonicalize(&home)
+        .map_err(|e| format!("Cannot canonicalize home directory: {}", e))?;
+    let canonical_ssh_dir = if ssh_dir.exists() {
+        std::fs::canonicalize(&ssh_dir).ok()
+    } else {
+        None
+    };
+
+    // Check if key path is within home directory or .ssh directory
+    let is_in_home = canonical.starts_with(&canonical_home);
+    let is_in_ssh = canonical_ssh_dir
+        .map(|ssh| canonical.starts_with(&ssh))
+        .unwrap_or(false);
+
+    if !is_in_home && !is_in_ssh {
         return Err("Key path must be within your home directory.".to_string());
     }
 

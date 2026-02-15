@@ -407,6 +407,8 @@ body {
     color: var(--text-color);
     white-space: nowrap;
     margin-left: 8px;
+    position: relative;
+    top: -2px; /* Shift text up slightly for visual center alignment */
 }
 
 .filter-group-count {
@@ -1819,6 +1821,8 @@ form {
     font-size: 14px;
     color: var(--text-color);
     margin-left: 8px;
+    position: relative;
+    top: -2px; /* Shift text up slightly for visual center alignment */
 }
 
 /* Smaller default values inside checkbox labels */

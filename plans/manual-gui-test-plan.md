@@ -629,87 +629,87 @@
 ### 1. Platform-Specific Terminal Integration
 
 #### Windows Terminal
-- [ ] Set terminal preference to "Windows Terminal"
-- [ ] Connect to profile
-- [ ] Verify Windows Terminal opens (not CMD/PowerShell)
-- [ ] Verify SSH command executed correctly
-- [ ] Verify connection successful
+- [x] Set terminal preference to "Windows Terminal"
+- [x] Connect to profile
+- [x] Verify Windows Terminal opens (not CMD/PowerShell)
+- [x] Verify SSH command executed correctly
+- [x] Verify connection successful
 
 #### Command Prompt (CMD)
-- [ ] Set terminal preference to "Command Prompt"
-- [ ] Connect to profile
-- [ ] Verify CMD opens
-- [ ] Verify SSH command executed
-- [ ] Verify connection successful
+- [x] Set terminal preference to "Command Prompt"
+- [x] Connect to profile
+- [x] Verify CMD opens
+- [x] Verify SSH command executed
+- [x] Verify connection successful
 
 #### PowerShell
-- [ ] Set terminal preference to "PowerShell"
-- [ ] Connect to profile
-- [ ] Verify PowerShell opens
-- [ ] Verify SSH command executed
-- [ ] Verify connection successful
+- [x] Set terminal preference to "PowerShell"
+- [x] Connect to profile
+- [x] Verify PowerShell opens
+- [x] Verify SSH command executed
+- [x] Verify connection successful
 
 ### 2. Keyboard Shortcuts (Windows-Specific)
 
 #### Modifier Keys
-- [ ] Verify shortcuts use `Ctrl` instead of `Cmd`
-- [ ] Press `Ctrl+S` (Search activates)
-- [ ] Press `Ctrl+F` (Filter opens)
-- [ ] Press `Ctrl+Left` (Collapse all groups)
-- [ ] Press `Ctrl+Right` (Expand all groups)
-- [ ] Verify keyboard shortcuts help modal shows `Ctrl` (not `Cmd`)
+- [x] Verify shortcuts use `Ctrl` instead of `Cmd`
+- [x] Press `Ctrl+S` (Search activates)
+- [x] Press `Ctrl+F` (Filter opens)
+- [x] Press `Ctrl+Left` (Collapse all groups)
+- [x] Press `Ctrl+Right` (Expand all groups)
+- [x] Verify keyboard shortcuts help modal shows `Ctrl` (not `Cmd`)
 
 ### 3. File System Integration
 
 #### File Pickers
-- [ ] Test SSH key file browser (Windows native dialog)
-- [ ] Verify Windows paths work (C:\Users\...\. ssh\id_rsa)
-- [ ] Test export file save dialog (Windows native dialog)
-- [ ] Test import file open dialog (Windows native dialog)
-- [ ] Verify file extensions filter correctly (.json)
+- [x] Test SSH key file browser (Windows native dialog)
+- [ ] Verify Windows paths work (C:\Users\...\. ssh\id_rsa) | Got error 'Key path must be within your home directory' even though I selected a key under my home (C:\Users\tomsi\.ssh\id_ed25519)
+- [x] Test export file save dialog (Windows native dialog)
+- [x] Test import file open dialog (Windows native dialog)
+- [x] Verify file extensions filter correctly (.json)
 
 #### Path Handling
-- [ ] Create profile with Windows-style SSH key path (C:\Users\...)
-- [ ] Verify path stored correctly
-- [ ] Verify path displayed correctly in UI
-- [ ] Test tilde expansion works (if applicable)
+- [x] Create profile with Windows-style SSH key path (C:\Users\...)
+- [x] Verify path stored correctly
+- [x] Verify path displayed correctly in UI
+- [x] Test tilde expansion works (if applicable)
 
 ### 4. Critical GUI Tests (Smoke Test)
 
 **Run a subset of critical macOS tests to ensure cross-platform compatibility:**
 
-- [ ] Create profile (key auth)
-- [ ] Create profile (password auth)
-- [ ] Edit profile
-- [ ] Delete profile
-- [ ] Create group
-- [ ] Rename group
-- [ ] Delete group
-- [ ] Create tag
-- [ ] Assign tag to profile
-- [ ] Delete tag
-- [ ] Toggle favourite
-- [ ] Change profile icon
-- [ ] Search profiles
-- [ ] Filter by group
-- [ ] Export profile (encrypted)
-- [ ] Import profile (encrypted)
-- [ ] Export all profiles
-- [ ] Import all profiles
-- [ ] Connect to profile
-- [ ] Verify recent connections
-- [ ] Open Settings
-- [ ] Change terminal preference
-- [ ] Test keyboard shortcuts (N, G, T, S, ?)
-- [ ] Modal navigation (Tab, ESC, Ctrl+S)
+- [ ] Create profile (key auth) | Got error 'Key path must be within your home directory' even though I selected a key under my home (C:\Users\tomsi\.ssh\id_ed25519)
+- [x] Create profile (password auth)
+- [x] Edit profile
+- [x] Delete profile
+- [x] Create group
+- [x] Rename group
+- [x] Delete group
+- [x] Create tag
+- [x] Assign tag to profile
+- [x] Delete tag
+- [x] Toggle favourite
+- [x] Change profile icon
+- [x] Search profiles
+- [x] Filter by group
+- [x] Export profile (encrypted)
+- [x] Import profile (encrypted)
+- [x] Export all profiles
+- [x] Import all profiles
+- [x] Connect to profile
+- [x] Verify recent connections
+- [x] Open Settings
+- [x] Change terminal preference
+- [x] Test keyboard shortcuts (N, G, T, S, ?)
+- [x] Modal navigation (Tab, ESC, Ctrl+S)
 
 ### 5. Visual Validation
 
-- [ ] Verify fonts render correctly (no missing glyphs)
-- [ ] Verify colors consistent with macOS
-- [ ] Verify icons render correctly (SVG support)
-- [ ] Verify layout matches macOS (no Windows-specific issues)
-- [ ] Verify window chrome appropriate (Windows title bar)
+- [x] Verify fonts render correctly (no missing glyphs)
+- [x] Verify colors consistent with macOS
+- [x] Verify icons render correctly (SVG support)
+- [ ] Verify layout matches macOS (no Windows-specific issues) | everything looks all okay except from Checkboxes. every checkbox doesn't seem to align properly, I can provide a screenshot
+- [x] Verify window chrome appropriate (Windows title bar)
 
 ---
 
@@ -737,13 +737,13 @@ None
 
 - [x] All critical tests passed on macOS
 - [ ] All critical tests passed on Windows
-- [ ] No console errors observed
+- [x] No console errors observed
 - [x] No visual glitches or layout issues
 - [x] Export/Import workflows validated
 - [x] Keyboard navigation fully functional
-- [ ] Terminal integration working on both platforms
-- [ ] Test results documented
-- [ ] Failed tests logged as issues (if any)
+- [x] Terminal integration working on both platforms
+- [x] Test results documented
+- [x] Failed tests logged as issues (if any)
 
 **Sign-off:** Manual GUI Testing Complete ✅
 
