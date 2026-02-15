@@ -89,7 +89,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 7. Security review (`voltagent-infra:security-engineer` agent)
 8. Fix CRITICAL/HIGH/MEDIUM issues
 9. **RE-RUN AUTOMATED TESTS** after fixes: `cargo test --lib` (ensure no regressions)
-10. **RUN MANUAL GUI TESTS**: Follow `plans/manual-gui-test-plan.md` (macOS + Windows, ~3-4 hours total)
+10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-manual-gui-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
 11. Fix any GUI bugs found during manual testing
 12. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
 13. Commit & push
@@ -623,7 +623,7 @@ cargo test --lib
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Readable:** Clear test names, focused assertions, minimal setup
 - **Comprehensive:** 107 unit tests + 22 integration tests covering all backend logic
-- **GUI Testing:** Manual GUI tests cover all frontend functionality (see `plans/manual-gui-test-plan.md`)
+- **GUI Testing:** Manual GUI tests cover all frontend functionality (template: `plans/templates/manual-gui-test-plan-template.md`)
 
 ### Pre-Release Testing Checklist
 
@@ -637,16 +637,18 @@ Before creating a release PR:
 - [ ] CI/CD tests pass on both macOS and Windows
 
 **Manual GUI Tests:**
-- [ ] Follow `plans/manual-gui-test-plan.md` for comprehensive GUI testing
+- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-manual-gui-test-results.md`
 - [ ] Complete macOS testing section (~2-3 hours)
 - [ ] Complete Windows testing section (~45 minutes)
-- [ ] Document test results using template in test plan
+- [ ] Document test results (fill in summary, issues fixed, observations)
 - [ ] Log any failed tests as GitHub issues
 - [ ] Verify no console errors during testing
+- [ ] Commit completed test results file
 
 ## Manual GUI Testing
 
-**Location:** `plans/manual-gui-test-plan.md`
+**Template:** `plans/templates/manual-gui-test-plan-template.md`
+**Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md`
 
 **Purpose:** Comprehensive manual testing of all GUI/frontend functionality before each major release.
 
@@ -667,23 +669,24 @@ The manual test plan covers all user-facing functionality NOT covered by automat
 
 ### How to Use
 
-1. **Pre-Testing Setup:** Create test data (groups, profiles, tags) following checklist
-2. **macOS Testing:** Work through sections 1-9, checking off each item (~2-3 hours)
-3. **Windows Testing:** Complete platform-specific tests + critical smoke tests (~45 minutes)
-4. **Document Results:** Fill in test results template with pass/fail counts, failed tests, observations
-5. **Log Issues:** Create GitHub issues for any failed tests or bugs found
-6. **Repeat for Each Release:** Test plan is generic and reusable for v0.7.0, v0.8.0, v1.0.0, etc.
+1. **Copy Template:** `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-manual-gui-test-results.md`
+2. **Pre-Testing Setup:** Create test data (groups, profiles, tags) following checklist in the copied file
+3. **macOS Testing:** Work through sections 1-9, checking off each item (~2-3 hours)
+4. **Windows Testing:** Complete platform-specific tests + critical smoke tests (~45 minutes)
+5. **Document Results:** Fill in test results section with pass/fail counts, issues fixed, observations
+6. **Log Issues:** Create GitHub issues for any failed tests or bugs found
+7. **Commit Results:** Commit the completed test results file to the repository
 
 ### Performance Notes
 
 Performance testing has been intentionally excluded to keep testing focused on functional correctness. Performance issues will be addressed through user feedback and bug reports. If significant performance problems are observed during functional testing, note them in the test results template.
 
-### Test Results
+### Test Results Storage
 
-After completing manual testing:
-- Save completed test plan with checkmarks in `plans/manual-gui-test-results-vX.X.X.md`
-- Include summary of pass/fail counts, failed tests table, and observations
-- Attach test results to release PR or reference in PR description
+- **Template:** `plans/templates/manual-gui-test-plan-template.md` (never modified, always blank)
+- **Completed Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md` (one per release)
+- **Version Prefix:** Use `vX.X.X-` prefix for chronological sorting
+- **Update Template:** If new features require new test cases, update the template AND add those tests to the current version's results file
 
 ## Quick Reference
 
