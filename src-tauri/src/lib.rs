@@ -76,10 +76,10 @@ const ALLOWED_SETTING_KEYS: &[&str] = &[
 ];
 
 // Bundle identifier migration constants
-const OLD_BUNDLE_ID: &str = "com.tomsinclair.sshprofilemanager";
-const NEW_BUNDLE_ID: &str = "com.sshprofilemanager.app";
-const OLD_KEYCHAIN_SERVICE: &str = "com.tomsinclair.sshprofilemanager";
-const NEW_KEYCHAIN_SERVICE: &str = "com.sshprofilemanager.app";
+const OLD_BUNDLE_ID: &str = "ssh-profile-manager";
+const NEW_BUNDLE_ID: &str = "ssh-profile-manager";
+const OLD_KEYCHAIN_SERVICE: &str = "ssh-profile-manager";
+const NEW_KEYCHAIN_SERVICE: &str = "ssh-profile-manager";
 
 // Rate limiting for settings import
 static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);

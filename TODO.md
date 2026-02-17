@@ -25,7 +25,7 @@ v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1.0.0
 
 See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed plan.
 
-**Major Features:** 🔄 In Progress (Phase 8 Pending)
+**Major Features:** 🔄 In Progress (Phase 8E in progress — 3 bugs to fix before release)
 - ✅ Hierarchical group system with sub-groups (up to 3 levels)
 - ✅ Separate group management (Add, Rename, Delete with cascade/move options)
 - ✅ Individual profile/group export/import with append mode
@@ -50,7 +50,7 @@ See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed
 
 **Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
 
-**Phase 8 (Testing & Release Preparation):** 🔄 IN PROGRESS — ✅ 8A Complete (Automated Testing - 107 unit tests, modular structure, all passing in ~29s), ✅ 8B Complete (Agent Reviews - 20 issues fixed: 1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW; 12 issues deferred to v1.0.0), ✅ 8C Complete (Integration Tests - 22 tests added, 129 total tests passing in ~41s), ✅ 8D Complete (Manual GUI Testing - 558/558 tests passed, 2 platform-specific issues fixed), ⏸️ 8E Ready (Migration Testing - v0.6.5 → v0.7.0, test plan prepared), ⏸️ 8F Pending (Final Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
+**Phase 8 (Testing & Release Preparation):** 🔄 IN PROGRESS — ✅ 8A Complete (Automated Testing - 107 unit tests, modular structure, all passing in ~29s), ✅ 8B Complete (Agent Reviews - 20 issues fixed: 1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW; 12 issues deferred to v1.0.0), ✅ 8C Complete (Integration Tests - 22 tests added, 129 total tests passing in ~41s), ✅ 8D Complete (Manual GUI Testing - 558/558 tests passed, 2 platform-specific issues fixed), 🔄 8E In Progress (Migration Testing - v0.6.5 → v0.7.0 validated, 100% data integrity, 5 bundle migration tests added, 134 total tests — 3 bugs to fix before sign-off), ⏸️ 8F Pending (Final Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
 
 ---
 
