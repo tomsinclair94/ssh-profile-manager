@@ -2479,6 +2479,11 @@ async function init() {
         document.body.classList.add('platform-linux');
     }
 
+    // Listen for bundle identifier migration event
+    window.__TAURI__.event.listen('migration-success', () => {
+        showToast('Successfully migrated from v0.6.5!', TOAST_DURATION_LONG, 'success');
+    });
+
     // Get DOM elements
     profilesList = document.getElementById('profiles-list');
     searchInput = document.getElementById('search-input');

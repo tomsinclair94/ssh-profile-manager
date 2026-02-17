@@ -4406,6 +4406,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-log",
  "tauri-plugin-shell",
+ "tempfile",
  "tokio",
  "unicode-normalization",
  "uuid",

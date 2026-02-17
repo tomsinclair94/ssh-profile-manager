@@ -75,6 +75,12 @@ const ALLOWED_SETTING_KEYS: &[&str] = &[
     "sidebar_width",
 ];
 
+// Bundle identifier migration constants
+const OLD_BUNDLE_ID: &str = "com.tomsinclair.sshprofilemanager";
+const NEW_BUNDLE_ID: &str = "com.sshprofilemanager.app";
+const OLD_KEYCHAIN_SERVICE: &str = "com.tomsinclair.sshprofilemanager";
+const NEW_KEYCHAIN_SERVICE: &str = "com.sshprofilemanager.app";
+
 // Rate limiting for settings import
 static LAST_SETTINGS_IMPORT_TIME: Mutex<u64> = Mutex::new(0);
 // Rate limiting for terminal session creation
@@ -1760,7 +1766,7 @@ impl Database {
 
 // Password storage using system keychain
 fn store_password(profile_id: &str, password: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new("ssh-profile-manager", profile_id)
+    let entry = keyring::Entry::new(NEW_KEYCHAIN_SERVICE, profile_id)
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
     entry
         .set_password(password)
@@ -1769,7 +1775,7 @@ fn store_password(profile_id: &str, password: &str) -> Result<(), String> {
 }
 
 fn get_password(profile_id: &str) -> Result<String, String> {
-    let entry = keyring::Entry::new("ssh-profile-manager", profile_id)
+    let entry = keyring::Entry::new(NEW_KEYCHAIN_SERVICE, profile_id)
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
     entry
         .get_password()
@@ -1777,7 +1783,7 @@ fn get_password(profile_id: &str) -> Result<String, String> {
 }
 
 fn delete_password(profile_id: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new("ssh-profile-manager", profile_id)
+    let entry = keyring::Entry::new(NEW_KEYCHAIN_SERVICE, profile_id)
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
     entry
         .delete_credential()
@@ -5153,12 +5159,112 @@ fn connect_ssh(
     Ok(())
 }
 
+/// Core migration logic (testable - accepts paths as parameters)
+/// Returns Ok(true) if migration was performed, Ok(false) if not needed
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn perform_bundle_migration(
+    old_db_path: &PathBuf,
+    new_db_path: &PathBuf,
+    old_keychain_service: &str,
+    new_keychain_service: &str,
+) -> Result<bool, String> {
+    // Check if migration is needed
+    let old_exists = old_db_path.exists();
+    let new_exists = new_db_path.exists();
+
+    if !old_exists {
+        // No old database to migrate
+        return Ok(false);
+    }
+
+    if new_exists {
+        // New database already exists, don't overwrite
+        return Ok(false);
+    }
+
+    // Perform migration
+    eprintln!("Migrating database from {:?} to {:?}", old_db_path, new_db_path);
+
+    // Create new directory
+    if let Some(parent) = new_db_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create new data directory: {}", e))?;
+    }
+
+    // Copy database file
+    fs::copy(old_db_path, new_db_path)
+        .map_err(|e| format!("Failed to copy database: {}", e))?;
+
+    eprintln!("Database copied successfully");
+
+    // Migrate keychain entries
+    // First, we need to read all profile IDs from the database
+    let conn = Connection::open(new_db_path)
+        .map_err(|e| format!("Failed to open migrated database: {}", e))?;
+
+    let mut stmt = conn.prepare("SELECT id FROM profiles WHERE auth_method = 'password'")
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let profile_ids: Vec<String> = stmt.query_map([], |row| row.get(0))
+        .map_err(|e| format!("Failed to query profiles: {}", e))?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|e| format!("Failed to collect profile IDs: {}", e))?;
+
+    eprintln!("Found {} password-authenticated profiles to migrate", profile_ids.len());
+
+    // Migrate each keychain entry
+    let mut migrated_count = 0;
+    for profile_id in profile_ids {
+        // Try to read from old keychain
+        let old_entry = keyring::Entry::new(old_keychain_service, &profile_id)
+            .map_err(|e| format!("Failed to create old keychain entry: {}", e))?;
+
+        if let Ok(password) = old_entry.get_password() {
+            // Store in new keychain
+            let new_entry = keyring::Entry::new(new_keychain_service, &profile_id)
+                .map_err(|e| format!("Failed to create new keychain entry: {}", e))?;
+
+            new_entry.set_password(&password)
+                .map_err(|e| format!("Failed to store password in new keychain: {}", e))?;
+
+            migrated_count += 1;
+            eprintln!("Migrated keychain entry for profile: {}", profile_id);
+        }
+    }
+
+    eprintln!("Migrated {} keychain entries", migrated_count);
+    eprintln!("Migration completed successfully!");
+
+    Ok(true)
+}
+
+/// Migrates data from old bundle identifier to new bundle identifier
+/// Returns Ok(true) if migration was performed, Ok(false) if not needed
+fn migrate_bundle_identifier() -> Result<bool, String> {
+    let data_local_dir = dirs::data_local_dir()
+        .ok_or("Failed to get data directory")?;
+
+    let old_db_path = data_local_dir.join(OLD_BUNDLE_ID).join("profiles.db");
+    let new_db_path = data_local_dir.join(NEW_BUNDLE_ID).join("profiles.db");
+
+    perform_bundle_migration(
+        &old_db_path,
+        &new_db_path,
+        OLD_KEYCHAIN_SERVICE,
+        NEW_KEYCHAIN_SERVICE,
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Get database path
+    // Perform bundle identifier migration before database initialization
+    let migration_performed = migrate_bundle_identifier()
+        .expect("Failed to perform bundle identifier migration");
+
+    // Get database path using new bundle identifier
     let data_dir = dirs::data_local_dir()
         .expect("Failed to get data directory")
-        .join("ssh-profile-manager");
+        .join(NEW_BUNDLE_ID);
 
     std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
     let db_path = data_dir.join("profiles.db");
@@ -5173,7 +5279,7 @@ pub fn run() {
         .manage(db)
         .manage(registry)
         .plugin(tauri_plugin_shell::init())
-        .setup(|app| {
+        .setup(move |app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -5181,6 +5287,14 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Emit migration success notification if migration was performed
+            if migration_performed {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("migration-success", ());
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
