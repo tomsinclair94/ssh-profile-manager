@@ -162,3 +162,67 @@ fn test_rename_group_with_overlapping_names() {
     let dev_profile_check = db.get_profile_by_id(&dev_profile.id).unwrap().unwrap();
     assert_eq!(dev_profile_check.group_path, Some("Development".to_string()), "Dev profile group_path should be updated");
 }
+
+#[test]
+fn test_rename_group_cascade_updates_sub_group_profiles() {
+    // Verify that renaming a parent group correctly updates profile group_paths
+    // in sub-groups using SQL SUBSTR (not Rust replace() which corrupts overlapping names)
+    let db = create_test_db();
+
+    // Create parent and a sub-group whose name starts with the parent name
+    // This is the edge case where Rust's replace() would corrupt paths
+    let parent = make_test_group("Dev", None, "Dev");
+    let child = make_test_group("DevOps", Some(parent.id.clone()), "Dev/DevOps");
+
+    db.create_group(&parent).unwrap();
+    db.create_group(&child).unwrap();
+
+    // Create profiles at both levels
+    let parent_profile = make_test_profile("ParentServer", Some("Dev"));
+    let child_profile = make_test_profile("ChildServer", Some("Dev/DevOps"));
+
+    db.create_profile(&parent_profile).unwrap();
+    db.create_profile(&child_profile).unwrap();
+
+    // Simulate the update_group command: rename "Dev" to "Development"
+    let mut updated_parent = parent.clone();
+    let old_path = updated_parent.path.clone();
+    updated_parent.name = "Development".to_string();
+    updated_parent.path = "Development".to_string();
+    updated_parent.updated_at = chrono::Utc::now().to_rfc3339();
+    db.update_group(&updated_parent).unwrap();
+
+    // Apply cascade using SQL SUBSTR (the fixed approach)
+    let conn = db.conn.lock().unwrap();
+    let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
+    let like_pattern = format!("{}/%", escaped_path);
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE groups
+         SET path = ?2 || SUBSTR(path, LENGTH(?1) + 1),
+             updated_at = ?3
+         WHERE path LIKE ?4 ESCAPE '\\'",
+        (&old_path, &updated_parent.path, &now, &like_pattern),
+    ).unwrap();
+
+    conn.execute(
+        "UPDATE profiles
+         SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
+         WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
+        (&old_path, &updated_parent.path, &like_pattern),
+    ).unwrap();
+    drop(conn);
+
+    // Sub-group path should be "Development/DevOps" (NOT "Development/DevelopmentOps")
+    let child_check = db.get_group_by_id(&child.id).unwrap().unwrap();
+    assert_eq!(child_check.path, "Development/DevOps");
+
+    // Parent profile path should be updated
+    let parent_profile_check = db.get_profile_by_id(&parent_profile.id).unwrap().unwrap();
+    assert_eq!(parent_profile_check.group_path, Some("Development".to_string()));
+
+    // Sub-group profile path must be "Development/DevOps" (not "Development/DevelopmentOps")
+    let child_profile_check = db.get_profile_by_id(&child_profile.id).unwrap().unwrap();
+    assert_eq!(child_profile_check.group_path, Some("Development/DevOps".to_string()));
+}

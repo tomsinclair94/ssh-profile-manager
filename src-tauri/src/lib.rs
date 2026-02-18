@@ -2490,29 +2490,30 @@ fn update_group(db: State<Database>, input: UpdateGroupInput) -> Result<(), Stri
         db.update_group(&group)
             .map_err(|e| format!("Failed to update group: {}", e))?;
 
-        // Update all descendant group paths (cascade update)
-        let all_groups = db.get_all_groups()
-            .map_err(|e| format!("Failed to get groups: {}", e))?;
-
-        for mut descendant in all_groups {
-            if descendant.path.starts_with(&format!("{}/", old_path)) {
-                descendant.path = descendant.path.replace(&old_path, &group.path);
-                descendant.updated_at = chrono::Utc::now().to_rfc3339();
-                db.update_group(&descendant)
-                    .map_err(|e| format!("Failed to update descendant group: {}", e))?;
-            }
-        }
-
-        // CASCADE UPDATE: Update all profile group_paths that reference this group or its descendants
-        // Use SUBSTR instead of REPLACE to avoid corrupting paths with overlapping prefixes
-        // Example: Renaming "Dev" to "Development" should not affect "DevOps"
+        // CASCADE UPDATE: Update all descendant group paths and profile group_paths.
+        // Use SQL SUBSTR instead of Rust String::replace() to avoid corrupting paths with
+        // overlapping prefixes (e.g., renaming "Dev" with a "Dev/DevOps" child — replace()
+        // would incorrectly change "Dev/DevOps" to "Development/DevelopmentOps").
         let conn = db.conn.lock().expect("Database lock poisoned");
+        let now = chrono::Utc::now().to_rfc3339();
         let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
+        let like_pattern = format!("{}/%", escaped_path);
+
+        // Update descendant group paths
+        conn.execute(
+            "UPDATE groups
+             SET path = ?2 || SUBSTR(path, LENGTH(?1) + 1),
+                 updated_at = ?3
+             WHERE path LIKE ?4 ESCAPE '\\'",
+            (&old_path, &group.path, &now, &like_pattern),
+        ).map_err(|e| format!("Failed to update descendant group paths: {}", e))?;
+
+        // Update profile group_paths (direct members and profiles in sub-groups)
         conn.execute(
             "UPDATE profiles
              SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
              WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
-            (&old_path, &group.path, format!("{}/%", escaped_path)),
+            (&old_path, &group.path, &like_pattern),
         ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
     } else {
         // Just update icon (name and parent unchanged)
@@ -2699,29 +2700,30 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
     db.update_group(&group)
         .map_err(|e| format!("Failed to update group: {}", e))?;
 
-    // Update all descendant group paths
-    let all_groups = db.get_all_groups()
-        .map_err(|e| format!("Failed to get groups: {}", e))?;
-
-    for mut descendant in all_groups {
-        if descendant.path.starts_with(&format!("{}/", old_path)) {
-            descendant.path = descendant.path.replace(&old_path, &new_path);
-            descendant.updated_at = chrono::Utc::now().to_rfc3339();
-            db.update_group(&descendant)
-                .map_err(|e| format!("Failed to update descendant group: {}", e))?;
-        }
-    }
-
-    // CASCADE UPDATE: Update all profile group_paths that reference this group or its descendants
-    // Use SUBSTR instead of REPLACE to avoid corrupting paths with overlapping prefixes
-    // Example: Moving "Dev" should not affect "DevOps"
+    // CASCADE UPDATE: Update all descendant group paths and profile group_paths.
+    // Use SQL SUBSTR instead of Rust String::replace() to avoid corrupting paths with
+    // overlapping prefixes (e.g., moving "Dev" with a "Dev/DevOps" child — replace()
+    // would incorrectly change "Dev/DevOps" to "NewParent/Dev/NewParent/DevOps").
     let conn = db.conn.lock().expect("Database lock poisoned");
+    let now = chrono::Utc::now().to_rfc3339();
     let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
+    let like_pattern = format!("{}/%", escaped_path);
+
+    // Update descendant group paths
+    conn.execute(
+        "UPDATE groups
+         SET path = ?2 || SUBSTR(path, LENGTH(?1) + 1),
+             updated_at = ?3
+         WHERE path LIKE ?4 ESCAPE '\\'",
+        (&old_path, &new_path, &now, &like_pattern),
+    ).map_err(|e| format!("Failed to update descendant group paths: {}", e))?;
+
+    // Update profile group_paths (direct members and profiles in sub-groups)
     conn.execute(
         "UPDATE profiles
          SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
          WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
-        (&old_path, &new_path, format!("{}/%", escaped_path)),
+        (&old_path, &new_path, &like_pattern),
     ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
 
     Ok(())

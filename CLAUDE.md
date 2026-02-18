@@ -36,7 +36,7 @@ bun run build    # Production build
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
 - ✅ Encryption for exports (Phase 6 - all sub-phases 6A-6E complete)
-- ⏸️ Testing & documentation (Phase 8E-8F - migration testing + final docs)
+- ⏸️ Testing & documentation (Phase 8F - final docs, changelog)
 
 ## Version Management
 
@@ -72,7 +72,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 129 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 135 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
@@ -391,14 +391,14 @@ src-tauri/src/tests/
 ├── encryption.rs     # 38 tests - AES-256-GCM encryption
 ├── validation.rs     # 27 tests - Input validation
 ├── profiles.rs       # 11 tests - Profile CRUD
-├── groups.rs         #  8 tests - Hierarchical groups
+├── groups.rs         #  9 tests - Hierarchical groups
 ├── tags.rs           #  9 tests - Tag system
 ├── connections.rs    #  5 tests - Recent connections
 ├── settings.rs       #  3 tests - User settings
 ├── migrations.rs     #  5 tests - Schema migrations
 └── integration.rs    # 22 tests - Multi-step workflows
 
-Total: 129 tests (all must pass before release)
+Total: 135 tests (all must pass before release)
 ```
 
 **Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
@@ -456,17 +456,17 @@ fn test_feature_success() {
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~41s for 129 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 135 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
-- **Comprehensive:** 107 unit tests + 22 integration tests covering all backend logic
+- **Comprehensive:** 113 unit tests + 22 integration tests covering all backend logic
 
 ### Pre-Release Testing Checklist
 
 Before creating a release PR:
 
 **Automated Tests:**
-- [ ] Run `cargo test --lib` → All 129 tests pass
+- [ ] Run `cargo test --lib` → All 135 tests pass
 - [ ] New features have corresponding automated tests
 - [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation

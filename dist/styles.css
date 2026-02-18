@@ -1162,10 +1162,11 @@ button.keyboard-selected {
     position: relative; /* Ensure positioning context */
 }
 
-/* Profile, Settings, and Group modals use flex layout for proper scrolling */
+/* These modals use flex layout so the header is fixed and only the body scrolls */
 #profile-modal .modal-content,
 #settings-modal .modal-content,
-#group-modal .modal-content {
+#group-modal .modal-content,
+#tag-manager-modal .modal-content {
     display: flex;
     flex-direction: column;
     overflow: hidden; /* Prevent all scroll propagation */
@@ -1929,11 +1930,13 @@ form {
 }
 
 .tag-manager-content {
-    padding: 24px 24px 0 24px; /* Consistent 24px spacing on top and sides */
-    max-height: calc(100vh - 200px); /* Prevent whole modal from scrolling */
-    overflow: visible; /* Allow tooltips to show */
+    padding: 24px 24px 0 24px;
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .tag-create-section {
@@ -2010,11 +2013,10 @@ form {
 }
 
 .tag-list-section {
-    flex: 1; /* Take remaining space */
     display: flex;
     flex-direction: column;
-    min-height: 0; /* Allow flex child to shrink */
-    padding-bottom: 0;
+    min-height: 0;
+    padding-bottom: 24px; /* Consistent bottom gap whether bulk actions are hidden or visible */
 }
 
 .tag-list-section h3 {
@@ -2026,12 +2028,12 @@ form {
 }
 
 .tag-list {
-    flex: 1; /* Take remaining space */
-    overflow-y: auto; /* Only this section scrolls */
+    overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     background: var(--bg-secondary);
-    min-height: 100px; /* Minimum height for empty state */
+    min-height: 59px; /* Always show at least one row (12px + 33px button + 12px padding + 2px border) */
+    max-height: 291px; /* Exactly 5 rows (58px × 4 + 57px last + 2px border = 291px); scrolls with more tags */
 }
 
 .tag-list:empty {
@@ -2094,7 +2096,7 @@ form {
 }
 
 .tag-list-empty {
-    padding: 40px 20px;
+    padding: 12px 16px; /* Match tag row height so empty state is same size as 1 tag */
     text-align: center;
     color: var(--text-muted);
     font-size: 14px;
@@ -2105,7 +2107,7 @@ form {
     display: flex;
     justify-content: center;
     gap: 40px;
-    padding: 24px 16px 24px 16px;
+    padding: 24px 16px 0 16px; /* Bottom gap provided by parent .tag-list-section */
 }
 
 .tag-bulk-actions.hidden {
