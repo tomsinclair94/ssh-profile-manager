@@ -57,17 +57,18 @@ const CURRENT_APP_VERSION = '0.7.0';
 
 const VERSION_CHANGELOG = {
     '0.7.0': {
-        title: 'Hierarchical Groups & Enhanced Organization',
-        subtitle: 'Hierarchical Groups & Enhanced Organization',
+        title: 'Groups, Favourites, Tags & Encryption',
+        subtitle: 'Groups, Favourites, Tags & Encryption',
         highlights: [
-            'Hierarchical group system with sub-groups (up to 3 levels)',
-            'Separate group management with Add, Rename, Delete options',
-            'Enhanced group filter with hierarchical display',
-            'Improved keyboard navigation with arrow key support',
-            'Version splash screen for major release announcements',
-            'Performance improvements and bug fixes'
+            'Hierarchical groups — sub-groups up to 3 levels deep (e.g., Work/Production/WebServers)',
+            'Favourites — star your most-used profiles for instant access',
+            'Encrypted exports — AES-256-GCM encryption for secure profile sharing',
+            'Profile icons — choose from 40+ icons for instant visual recognition',
+            'Tag system — colour-coded tags with tag:name search filtering',
+            'Individual export/import — share single profiles or entire group trees',
+            '30+ keyboard shortcuts — press ? to view all shortcuts'
         ],
-        releaseDate: '2026-01-16',
+        releaseDate: '2026-02-19',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.0'
     }
 };

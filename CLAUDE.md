@@ -26,7 +26,7 @@ bun run build    # Production build
 **In Development:** v0.7.0
 **See:** TODO.md for roadmap and feature backlog
 
-**v0.7.0 Features (In Development - 98% Complete):**
+**v0.7.0 Features (Released - 2026-02-19):**
 - ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
 - ✅ Individual profile/group export/import with duplicate detection
 - ✅ Favourites system for profiles with virtual group display
@@ -36,7 +36,7 @@ bun run build    # Production build
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
 - ✅ Encryption for exports (Phase 6 - all sub-phases 6A-6E complete)
-- ⏸️ Testing & documentation (Phase 8F - final docs, changelog)
+- ✅ Testing & documentation (Phase 8 - all sub-phases 8A-8F complete)
 
 ## Version Management
 
@@ -49,7 +49,7 @@ bun run build    # Production build
 4. `dist/index.html` (line ~22 + ~393: `vX.X.X` and `X.X.X`)
 5. `README.md` (line ~14 + ~16: badge versions)
 6. `dist/main.js` (line ~56: `CURRENT_APP_VERSION = 'X.X.X'`)
-7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry)
+7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry — placeholder highlights are fine at this stage; finalize during release documentation in Phase 8F)
 
 **Step 2: Enable Developer Tools:**
 `src-tauri/tauri.conf.json` (line ~19: `"devtools": true`)
@@ -83,7 +83,9 @@ git commit -m "Bump version to X.X.X for dev branch"
 11. Fix any GUI bugs found during manual testing
 12. **RUN MIGRATION TESTS** (if database migrations present): Open version-specific plan `plans/vX.X.X-migration-testing.md` and complete all migration validation tests (~1.5 hours total)
 13. Fix any migration issues found during testing
-14. Update CHANGELOG.md with **user-facing changes only**: new features and bug fixes (exclude minor security tweaks, dependency updates, or internal refactoring to keep changelog focused)
+14. Update **both changelogs**:
+    - `CHANGELOG.md` — full user-facing entry (Added/Changed/Fixed/Security); exclude internal refactoring, dependency updates, minor security tweaks
+    - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen; pull the key points from CHANGELOG.md
 15. Commit & push
 
 **Merge to Main:**

@@ -5,6 +5,37 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-02-19
+
+### Added
+- **Hierarchical groups** — organise profiles with nested sub-groups up to 3 levels deep (e.g., Work/Production/WebServers)
+- **Sub-group management** — add, rename, move, and delete groups with cascade or move-profiles options
+- **Favourites** — star any profile for quick access from the virtual "Favourites" group at the top of the list
+- **Profile icons** — choose from 40+ icons for instant visual recognition on profile cards
+- **Tag system** — colour-coded tags with multi-select management and `tag:name` search syntax
+- **Individual export/import** — export or import a single profile or an entire group tree with duplicate detection (skip, rename, or overwrite)
+- **Encrypted exports** — AES-256-GCM encryption with PBKDF2-HMAC-SHA256 key derivation for secure profile sharing
+- **Password strength metre** — 5-level scale (Weak / Fair / Good / Strong / Stronger) when setting an encryption password
+- **Version splash screen** — highlights changelog features automatically on first launch after an update
+- **30+ keyboard shortcuts** — comprehensive navigation throughout the app; press `?` to view all shortcuts
+
+### Changed
+- Settings "Export/Import" tab renamed to "Backup/Restore" for clarity
+- Profile names are now unique within the parent group only — the same profile name is permitted across different groups
+- Group filter and collapse state now persists between sessions
+
+### Fixed
+- **Windows:** SSH key path validation now works correctly for Windows home directory paths (e.g., `C:\Users\name\.ssh\id_ed25519`)
+- **Cross-platform:** Checkbox text is now properly vertically centred on both macOS and Windows
+- Group rename and move no longer corrupts sub-group paths when group names share a common prefix (e.g., renaming "Dev" no longer affects "Dev/DevOps")
+- Tag manager modal no longer expands to fill all available space when empty or when only a few tags are present
+
+### Security
+- Exports containing password-authenticated profiles now require encryption (mandatory enforcement)
+- HMAC-SHA256 integrity verification on all encrypted imports detects tampering before decryption
+- Encryption password requirements enforced on both frontend and backend: 12–128 characters
+- Encryption keys and passwords are zeroised from memory immediately after use
+
 ## [0.6.5] - 2026-01-09
 
 ### Fixed

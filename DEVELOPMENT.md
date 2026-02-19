@@ -35,7 +35,7 @@
    ```
 
 4. **Prepare for Release** - Before creating PR, ensure:
-   - ✅ **All tests passing** (`cargo test --lib` - 129 tests must pass)
+   - ✅ **All tests passing** (`cargo test --lib` - 135 tests must pass)
    - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
    - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
@@ -47,7 +47,9 @@
      5. `dist/index.html` (line ~336)
      6. `README.md` (line 14)
      7. `README.md` (line 16)
-   - ✅ CHANGELOG.md updated with new version entry
+   - ✅ **Both changelogs** updated:
+     - `CHANGELOG.md` — full user-facing entry (Added/Changed/Fixed/Security)
+     - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen
    - ✅ README.md updated (features, screenshots if needed)
    - ✅ Manual testing completed
    - ✅ All changes committed and pushed to `vX.X.X-dev`
@@ -212,14 +214,14 @@ src-tauri/src/tests/
 ├── encryption.rs     # 38 tests - AES-256-GCM encryption/decryption
 ├── validation.rs     # 27 tests - Input validation (hostname, username, etc.)
 ├── profiles.rs       # 11 tests - Profile CRUD operations
-├── groups.rs         #  8 tests - Hierarchical group management
+├── groups.rs         #  9 tests - Hierarchical group management
 ├── tags.rs           #  9 tests - Tag system operations
 ├── connections.rs    #  5 tests - Recent connections tracking
 ├── settings.rs       #  3 tests - User settings storage
 ├── migrations.rs     #  5 tests - Database schema migrations
 └── integration.rs    # 22 tests - Multi-step workflow validation
 
-Total: 129 tests (all must pass before release)
+Total: 135 tests (all must pass before release)
 ```
 
 ### Running Tests
@@ -241,7 +243,7 @@ cargo test --lib test_create_profile_success
 cargo test --lib -- --nocapture
 ```
 
-**Expected result:** `129 passed; 0 failed` in ~41 seconds
+**Expected result:** `135 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 

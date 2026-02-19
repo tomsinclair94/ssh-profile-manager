@@ -1,61 +1,26 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.6.5
+## Current Version: v0.7.0
 
-**Released:** 2026-01-09 ✅
-**Type:** Bug Fix Release
-**Focus:** UX improvements, validation fixes, startup issues
-
-## Current Development Version: v0.7.0
-
+**Released:** 2026-02-19 ✅
 **Type:** Major Feature Release
-**Focus:** Enhanced Group Management, Hierarchical Organization, Export/Import Improvements, Favorites, Icons & Tags
+**Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags, keyboard shortcuts
+
+## Current Development Version: v0.8.0
+
+**Type:** Feature Release
+**Focus:** Multi-tab system, pop-out windows
 
 ---
 
 ## Roadmap
 
 ```
-v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1.0.0
+v0.6.5 ✅ → v0.7.0 ✅ → v0.8.0 → v0.9.0 → v1.0.0
 ```
 
-### v0.7.0 - Hierarchical Groups & Enhanced Organization
-**Status:** In Development
-**Focus:** Enhanced group management, hierarchical organization, export/import improvements, favorites, icons & tags
-
-See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed plan.
-
-**Major Features:** 🔄 In Progress (Phase 8F next — Phase 8E complete, all bugs fixed, 135 tests passing)
-- ✅ Hierarchical group system with sub-groups (up to 3 levels)
-- ✅ Separate group management (Add, Rename, Delete with cascade/move options)
-- ✅ Individual profile/group export/import with append mode
-- ✅ Encrypted exports with AES-256-GCM and HMAC integrity verification
-- ✅ Favorites system for profiles and groups
-- ✅ Icon picker for profiles (predefined library)
-- ✅ Tag system with color-coding and filtering
-- ✅ Profile name uniqueness scoped to parent group (allows same name in different groups)
-- ✅ Settings Export/Import renamed to Backup/Restore
-
-**Phase 1 (Database Migration & Group CRUD):** ✅ Complete
-
-**Phase 2 (Hierarchical Groups & Backend):** ✅ Complete
-
-**Phase 3 (Frontend UI & Version Splash Screen):** ✅ Complete — hierarchical group UI, modal stack system, version splash screen, localStorage migration.
-
-**Phase 4 (Export/Import Modes):** ✅ Complete — 4A export format versioning (1.0/2.0), 4B backend commands with duplicate detection, 4C frontend conflict resolution UI. Refactored from UUID-based group_id to semantic group_path.
-
-**Phase 5 (Metadata System — Favourites, Icons, Tags):** ✅ Complete (2026-01-31) — 5A backend schema, 5B Lucide icons (40+ inline SVG), 5C favourites with virtual group, 5D tags with search (`tag:` syntax), 5E polish. See `plans/v0.7.0-phase-5-progress-tracking.md` for full detail.
-
-**Phase 6 (Encryption & Security):** ✅ Complete (2026-02-05) — AES-256-GCM encryption with PBKDF2 key derivation (600k iterations), HMAC-SHA256 integrity verification, mandatory encryption for password-auth exports, frontend encryption/decryption modals with 5-level password strength meter, 12-128 character password validation. All sub-phases 6A-6E complete. See `plans/v0.7.0-phase-6-encryption.md` for full details.
-
-**Phase 7 (UI Polish & Settings Migration):** ✅ Complete (2026-01-31) — Backup/Restore rename, localStorage migration, tooltips, 30+ keyboard shortcuts, CSS polish.
-
-**Phase 8 (Testing & Release Preparation):** 🔄 IN PROGRESS — ✅ 8A Complete (Automated Testing - 107 unit tests, modular structure, all passing in ~29s), ✅ 8B Complete (Agent Reviews - 20 issues fixed: 1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW; 12 issues deferred to v1.0.0), ✅ 8C Complete (Integration Tests - 22 tests added, 129 total tests passing in ~41s), ✅ 8D Complete (Manual GUI Testing - 558/558 tests passed, 2 platform-specific issues fixed), ✅ 8E Complete (Migration Testing - v0.6.5 → v0.7.0 validated, 100% data integrity, 3 bugs found and fixed, 135 total tests passing), 🔄 8F Next (Final Documentation). See `plans/v0.7.0-phase-8-testing-and-release-preparation.md` for full details.
-
----
-
 ### v0.8.0 - Multi-Tab System
-**Status:** Planned
+**Status:** Next Up
 **Focus:** App-level tabs, pop-out windows
 
 See `plans/v0.8.0-multi-tab-system.md` for detailed plan.
@@ -114,6 +79,18 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 ---
 
 ## Archive
+
+### v0.7.0 - Released 2026-02-19 ✅
+**Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags
+- Hierarchical group system with sub-groups (up to 3 levels)
+- Individual profile/group export/import with duplicate detection
+- Encrypted exports with AES-256-GCM and PBKDF2 key derivation
+- Favourites system for profiles with virtual Favourites group
+- Profile icon picker with 40+ Lucide icons
+- Tag system with colour-coding and `tag:` search filtering
+- 30+ keyboard shortcuts with help modal
+- Settings Export/Import renamed to Backup/Restore
+- 135 automated tests (107 unit + 22 integration + 6 additional from Phase 8E)
 
 ### v0.6.5 - Released 2026-01-09 ✅
 **Focus:** UX improvements and validation fixes
