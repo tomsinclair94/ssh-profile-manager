@@ -185,19 +185,25 @@ bun run build
 ```
 ssh-profile-manager/
 ├── dist/              # Frontend files (HTML, CSS, JS)
+│   └── vendor/        # Vendored libraries (xterm.js)
 ├── src-tauri/         # Rust backend
-│   ├── src/           # Rust source code
+│   ├── src/
+│   │   ├── lib.rs     # Main backend code
+│   │   └── tests/     # Test modules (135 tests)
 │   ├── icons/         # App icons
 │   └── Cargo.toml     # Rust dependencies
+├── plans/             # Development plans and test artefacts
+├── screenshots/       # App screenshots
 ├── package.json       # Node dependencies
-└── README.md          # This file
+├── CHANGELOG.md       # Version history
+└── SECURITY.md        # Security policy
 ```
 
 ## Data Storage
 
 - **Profiles:** SQLite database in application data directory
   - macOS: `~/Library/Application Support/ssh-profile-manager/profiles.db`
-  - Windows: `%APPDATA%\ssh-profile-manager\profiles.db`
+  - Windows: `%LOCALAPPDATA%\ssh-profile-manager\profiles.db`
 - **Passwords:** Stored securely in system keychain/credential manager
 
 ## Platform Support

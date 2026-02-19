@@ -168,6 +168,17 @@ For each major new feature introduced in this version:
 - [ ] **Feature 2:** [Name]
   - [ ] [Add specific test cases]
 
+#### Group Cascade Operations (if version includes hierarchical groups)
+
+This is a high-risk area — group rename/move must update all descendant group paths and profile paths correctly. A common bug is prefix-matching too broadly (e.g., renaming "Dev" incorrectly affecting "DevOps").
+
+- [ ] Create two groups with a shared name prefix (e.g., "Dev" and "DevOps") each containing profiles
+- [ ] Rename "Dev" → "Development"
+- [ ] Verify "DevOps" path is **not** affected
+- [ ] Verify all profiles in "Dev" (now "Development") have updated `group_path`
+- [ ] Move a group to a new parent → verify all child group paths updated
+- [ ] Verify all profile paths updated correctly after move
+
 #### Export/Import with Migrated Data
 - [ ] Export single migrated profile (no encryption)
 - [ ] Verify export contains v[NEW] format
@@ -258,6 +269,8 @@ When creating a version-specific migration test plan:
 
 6. **Link from phase plan:** Reference in Phase 8E section of version plan
 
+7. **Preserve test data:** Export profiles from the previous version before migrating and store the file in `plans/test-data/vX.X.X-test-profiles.json` for future reference
+
 ---
 
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-02-19

@@ -40,13 +40,13 @@
    - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
    - ✅ Version updated in ALL 7 locations:
-     1. `src-tauri/tauri.conf.json` (line 4)
-     2. `src-tauri/Cargo.toml` (line 3)
-     3. `package.json` (line 3)
-     4. `dist/index.html` (line 17)
-     5. `dist/index.html` (line ~336)
-     6. `README.md` (line 14)
-     7. `README.md` (line 16)
+     1. `src-tauri/tauri.conf.json`
+     2. `src-tauri/Cargo.toml`
+     3. `package.json`
+     4. `dist/index.html` (two occurrences)
+     5. `README.md` (two occurrences — version badge + download badge)
+     6. `dist/main.js` — `CURRENT_APP_VERSION` constant
+     7. `dist/main.js` — `VERSION_CHANGELOG` entry (add new version entry)
    - ✅ **Both changelogs** updated:
      - `CHANGELOG.md` — full user-facing entry (Added/Changed/Fixed/Security)
      - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen
@@ -306,7 +306,7 @@ dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
   ├── src/
   │   ├── lib.rs        # Main backend code (~5190 lines)
-  │   └── tests/        # Test modules (129 tests)
+  │   └── tests/        # Test modules (135 tests)
 ```
 
 See CLAUDE.md for detailed development notes (local file, not in repo).
