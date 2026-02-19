@@ -11,9 +11,9 @@
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.6.5-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
-[![Download Latest Release](https://img.shields.io/badge/Download-v0.6.5-brightgreen?style=for-the-badge&logo=github)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
+[![Download Latest Release](https://img.shields.io/badge/Download-v0.7.0-brightgreen?style=for-the-badge&logo=github)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
 <sub>**macOS 14.0+ | Windows 10+ | Native Performance**</sub>
 
@@ -37,9 +37,17 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 
 **Profile Management**
 - ✅ Create, edit, delete, and duplicate profiles
-- 📁 Organise with collapsible groups, search & filtering
+- 📂 Organise with hierarchical groups and sub-groups (up to 3 levels deep)
+- ⭐ Favourites — star profiles for instant access from the top of the list
+- 🎨 Profile icons — choose from 40+ icons for visual recognition
+- 🏷️ Tags — colour-coded labels with `tag:name` search filtering
 - 🔑 SSH Key, Password (keychain), or Keyboard-Interactive auth
-- 📤 Export/Import for team sharing
+
+**Export & Import**
+- 📤 Export/import individual profiles or entire group trees
+- 🔐 Encrypted exports with AES-256-GCM and PBKDF2 key derivation
+- 🔁 Duplicate detection with skip, rename, or overwrite options
+- 💾 Backup & restore all settings and profiles
 
 **SSH Connections**
 - ⚡ Connect via native terminal or embedded terminal (xterm.js)
@@ -47,30 +55,13 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 - 📊 Real-time connection status tracking
 
 **Keyboard Navigation**
-- ⌨️ Full keyboard shortcuts (press ? to view)
+- ⌨️ 30+ keyboard shortcuts — press `?` to view all shortcuts
 - Tab, arrow keys, and quick actions throughout
 
 **Modern UI**
 - 🌓 Dark/Light themes with system sync
 - 📱 Responsive layout with smooth animations
-
-**Settings & Backup**
-- 💾 Backup & restore settings and profiles
 - 🔄 Reset to defaults • Auto-update checker
-
-## Coming Soon in v0.7.0
-
-🚧 **Major Features in Development:**
-
-- 📂 **Hierarchical Groups** - Organize profiles with sub-groups (3 levels deep)
-- ⭐ **Favorites** - Star your most-used profiles and groups for quick access
-- 🏷️ **Tags** - Color-coded tags for better organization and filtering
-- 🎨 **Profile Icons** - Visual icons for instant profile recognition
-- 📦 **Individual Export/Import** - Export/import single profiles or groups (append mode)
-- 🔐 **Encrypted Exports** - AES-256-GCM encryption with HMAC integrity verification
-- 🎯 **Enhanced Organization** - Profile names unique per group, flexible workflows
-
-See [v0.7.0 plan](plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md) for full details.
 
 ## Screenshots
 
@@ -79,17 +70,27 @@ See [v0.7.0 plan](plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md)
 ### Main Interface
 <img src="screenshots/main-page.png" alt="Main Interface" width="800">
 
-*Profile list with collapsible groups, search, filtering, and recent connections bar*
+*Hierarchical groups, search, tag filtering, favourites, and recent connections bar*
 
-### Main Interface (Compact View)
-<img src="screenshots/main-page-compact.png" alt="Main Interface - Compact" width="600">
+### Favourites
+<img src="screenshots/favourites-group.png" alt="Favourites" width="800">
 
-*Responsive layout when window is narrower - search moves to separate row for a more compact look*
+*Star any profile to pin it to the Favourites group at the top of the list*
+
+### Encrypted Export
+<img src="screenshots/export-encryption.png" alt="Encrypted Export" width="800">
+
+*Export profiles and groups with AES-256-GCM encryption and a password strength metre*
+
+### Tag Manager
+<img src="screenshots/tag-manager.png" alt="Tag Manager" width="800">
+
+*Colour-coded tags with multi-select management and tag:name search filtering*
 
 ### Keyboard Shortcuts Help
 <img src="screenshots/keyboard-shortcuts-help.png" alt="Keyboard Shortcuts Help" width="800">
 
-*Press ? to view all available keyboard shortcuts*
+*Press ? to view all 30+ available keyboard shortcuts*
 
 ### Embedded Terminal
 <img src="screenshots/embedded-terminal.png" alt="Embedded Terminal" width="800">
@@ -104,7 +105,7 @@ See [v0.7.0 plan](plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md)
 ### Profile Editor
 <img src="screenshots/profile-editor.png" alt="Profile Editor" width="800">
 
-*Create and modify profiles with validation and tooltips*
+*Create and edit profiles with icon picker, auth method selection, and validation*
 
 </div>
 
@@ -122,13 +123,13 @@ See [v0.7.0 plan](plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md)
 
 ## Quick Start
 
-**Create a Profile:** Click "New Profile" → Fill in Name, Host, Username → Choose auth method → Save
+**Create a Profile:** Click "New Profile" → Fill in Name, Host, Username → Choose auth method → Pick an icon → Save
 
 **Connect:** Click the green "Connect" button → Terminal opens automatically → App minimises
 
-**Organise:** Group profiles → Collapse/expand groups → Use search & filters
+**Organise:** Create groups and sub-groups → Star profiles as Favourites → Add colour-coded tags → Use search & filters
 
-**Backup:** Settings → Backup Settings → Toggle "Include Profiles" for full backup → Export → Restore anytime
+**Backup:** Settings → Backup/Restore → Toggle "Include Profiles" → Export (optionally encrypted) → Restore anytime
 
 ## Keyboard Shortcuts
 
@@ -184,19 +185,25 @@ bun run build
 ```
 ssh-profile-manager/
 ├── dist/              # Frontend files (HTML, CSS, JS)
+│   └── vendor/        # Vendored libraries (xterm.js)
 ├── src-tauri/         # Rust backend
-│   ├── src/           # Rust source code
+│   ├── src/
+│   │   ├── lib.rs     # Main backend code
+│   │   └── tests/     # Test modules (135 tests)
 │   ├── icons/         # App icons
 │   └── Cargo.toml     # Rust dependencies
+├── plans/             # Development plans and test artefacts
+├── screenshots/       # App screenshots
 ├── package.json       # Node dependencies
-└── README.md          # This file
+├── CHANGELOG.md       # Version history
+└── SECURITY.md        # Security policy
 ```
 
 ## Data Storage
 
 - **Profiles:** SQLite database in application data directory
   - macOS: `~/Library/Application Support/ssh-profile-manager/profiles.db`
-  - Windows: `%APPDATA%\ssh-profile-manager\profiles.db`
+  - Windows: `%LOCALAPPDATA%\ssh-profile-manager\profiles.db`
 - **Passwords:** Stored securely in system keychain/credential manager
 
 ## Platform Support

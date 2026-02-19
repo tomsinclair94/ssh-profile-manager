@@ -19,12 +19,18 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <span class="version">v0.6.5</span>
+                    <a href="#" class="version version-link" id="main-version-link">v0.7.0</a>
                 </div>
             </div>
             <div class="header-buttons">
-                <button id="new-profile-btn" class="btn btn-primary">+ New Profile</button>
-                <button id="settings-btn" class="btn btn-settings">Settings</button>
+                <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile">+ New Profile</button>
+                <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles">+ New Group</button>
+                <button id="settings-btn" class="btn btn-settings" title="Open application settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
             </div>
         </header>
 
@@ -32,20 +38,23 @@
         <div class="search-bar">
             <div class="search-controls">
                 <div class="search-input-wrapper">
-                    <input type="text" id="search-input" placeholder="Search profiles..." />
+                    <input type="text" id="search-input" placeholder="Search profiles (use tag:name for tags)..." spellcheck="false" autocorrect="off" autocapitalize="off" />
+                    <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">×</button>
                     <div class="input-tooltip search-tooltip">
                         <div class="tooltip-content">
                             <div class="tooltip-title">Search Scope</div>
                             <ul class="tooltip-rules">
                                 <li>Searches profile names, hosts, and usernames</li>
+                                <li>Use <code>tag:name</code> to filter by tags (e.g., <code>tag:prod tag:dev</code>)</li>
+                                <li>Click tags on profile cards to add them to search</li>
                                 <li>Results are filtered by active group filters</li>
                                 <li>Clear group filters to search all profiles</li>
                             </ul>
                         </div>
                     </div>
                 </div>
-                <button id="expand-collapse-btn" class="btn btn-secondary">Expand Groups</button>
-                <button id="filter-btn" class="btn btn-secondary">
+                <button id="expand-collapse-btn" class="btn btn-secondary" title="Expand or collapse all groups">Expand Groups</button>
+                <button id="filter-btn" class="btn btn-secondary" title="Filter profiles by group">
                     Filter Groups
                     <span id="filter-badge" class="badge filter-badge">0/0</span>
                 </button>
@@ -78,7 +87,7 @@
                 <h3>Recent Connections</h3>
                 <div class="recent-connections-buttons">
                     <button id="toggle-recent-btn" class="btn btn-secondary btn-small" title="Collapse/Expand Recent Connections">▼</button>
-                    <button id="clear-recent-btn" class="btn btn-secondary btn-small">Clear</button>
+                    <button id="clear-recent-btn" class="btn btn-secondary btn-small" title="Clear all recent connections">Clear</button>
                 </div>
             </div>
             <div id="recent-connections-list" class="recent-connections-list">
@@ -100,6 +109,7 @@
                     </div>
                 </div>
                 <form id="profile-form">
+                    <!-- Profile Name (Row 1) -->
                     <div class="form-group">
                         <label for="profile-name">Profile Name <span class="required">*</span></label>
                         <input type="text" id="profile-name" required placeholder="e.g., Production Server">
@@ -116,9 +126,34 @@
                         <span class="char-counter" id="profile-name-counter">0 / 64</span>
                     </div>
 
+                    <!-- Icon and Favourite Row (Row 2) -->
+                    <div class="form-row form-row-icon-favorite">
+                        <div class="form-group">
+                            <label for="profile-icon">Icon</label>
+                            <div class="searchable-dropdown-wrapper">
+                                <div class="icon-input-wrapper">
+                                    <span id="profile-icon-display" class="icon-input-icon"></span>
+                                    <input type="text" id="profile-icon" placeholder="Icon..." autocomplete="off">
+                                </div>
+                                <div id="profile-icon-dropdown" class="searchable-dropdown icon-dropdown hidden">
+                                    <!-- Icon options will be populated dynamically -->
+                                </div>
+                            </div>
+                            <input type="hidden" id="profile-icon-value" value="">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Favourite</label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="profile-favorite-checkbox" />
+                                <span>Add to Favourites</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="profile-description">Description</label>
-                        <input type="text" id="profile-description" placeholder="Optional description">
+                        <textarea id="profile-description" placeholder="Optional description" rows="2"></textarea>
                         <div class="input-tooltip">
                             <div class="tooltip-content">
                                 <div class="tooltip-title">Description Requirements</div>
@@ -213,18 +248,34 @@
 
                     <div class="form-group">
                         <label for="profile-group">Group</label>
-                        <input type="text" id="profile-group" placeholder="e.g., Production, Development" spellcheck="false" autocorrect="off" autocapitalize="off">
-                        <div class="input-tooltip">
-                            <div class="tooltip-content">
-                                <div class="tooltip-title">Group Name Requirements</div>
-                                <ul class="tooltip-rules">
-                                    <li>Letters, numbers, and spaces allowed</li>
-                                    <li>Special characters: - _ ( ) . [ ] #</li>
-                                    <li>Maximum 64 characters</li>
-                                </ul>
+                        <div class="input-group">
+                            <div class="searchable-dropdown-wrapper">
+                                <input type="text" id="profile-group" placeholder="Type to search or select..." autocomplete="off">
+                                <div id="profile-group-dropdown" class="searchable-dropdown hidden">
+                                    <!-- Group options will be populated dynamically -->
+                                </div>
                             </div>
+                            <button type="button" class="btn btn-secondary btn-icon-text" id="add-group-from-profile-btn" title="Add new group">+ Group</button>
                         </div>
-                        <span class="char-counter" id="profile-group-counter">0 / 64</span>
+                        <input type="hidden" id="profile-group-id" value="">
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="profile-tags-input">Tags</label>
+                        <div class="input-group">
+                            <div class="searchable-dropdown-wrapper">
+                                <div class="tokenized-input-wrapper" id="profile-tags-wrapper">
+                                    <!-- Selected tags will appear here as pills -->
+                                    <input type="text" id="profile-tags-input" placeholder="Search or create tags..." autocomplete="off">
+                                </div>
+                                <div id="profile-tags-dropdown" class="searchable-dropdown hidden">
+                                    <!-- Tag options will be populated dynamically -->
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-icon-text" id="add-tag-from-profile-btn" title="Manage tags">+ Tag</button>
+                        </div>
+                        <small id="tag-create-hint" class="input-hint hidden"></small>
                     </div>
                 </form>
             </div>
@@ -246,6 +297,49 @@
                         <button type="button" class="btn btn-danger" id="confirm-ok">Yes</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Group Management Modal -->
+        <div id="group-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2 id="group-modal-title">New Group</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="submit" form="group-form" class="btn btn-primary" id="group-save-btn">Save</button>
+                        <button type="button" class="btn btn-secondary" id="group-close-btn">Close</button>
+                    </div>
+                </div>
+                <form id="group-form">
+                    <div class="form-group">
+                        <label for="group-name">Group Name <span class="required">*</span></label>
+                        <input type="text" id="group-name" required placeholder="e.g., Production Servers">
+                        <div class="input-tooltip">
+                            <div class="tooltip-content">
+                                <div class="tooltip-title">Group Name Requirements</div>
+                                <ul class="tooltip-rules">
+                                    <li>Letters, numbers, and spaces allowed</li>
+                                    <li>Special characters: - _ ( ) . [ ] #</li>
+                                    <li>Maximum 64 characters</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <span class="char-counter" id="group-name-counter">0 / 64</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="group-parent">Parent Group</label>
+                        <div class="searchable-dropdown-wrapper">
+                            <input type="text" id="group-parent" placeholder="Type to search or select..." autocomplete="off">
+                            <div id="group-parent-dropdown" class="searchable-dropdown hidden">
+                                <!-- Parent group options will be populated dynamically -->
+                            </div>
+                        </div>
+                        <input type="hidden" id="group-parent-id" value="">
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -271,14 +365,14 @@
                     <div class="settings-section">
                         <h3>Appearance</h3>
                         <div class="form-group settings-gap">
-                            <label for="theme-select">Theme</label>
+                            <label for="theme-select">Theme <span class="default-value">(Default: Follow System)</span></label>
                             <select id="theme-select">
                                 <option value="system">Follow System</option>
                                 <option value="dark">Dark Mode</option>
                                 <option value="light">Light Mode</option>
                             </select>
                         </div>
-                        <p class="settings-help">Choose your preferred color theme. System mode automatically matches your operating system's theme.</p>
+                        <p class="settings-help">Choose your preferred colour theme. System mode automatically matches your operating system's theme.</p>
                     </div>
 
                     <!-- Keyboard Shortcuts -->
@@ -288,6 +382,7 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="keyboard-shortcuts-check" checked>
                                 <span>Enable keyboard shortcuts</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
                         <button type="button" id="shortcuts-help-btn" class="btn btn-secondary settings-gap">View All Shortcuts</button>
@@ -298,7 +393,7 @@
                     <div class="settings-section">
                         <h3>Recent Connections</h3>
                         <div class="form-group settings-gap">
-                            <label for="recent-connections-limit">Number of recent connections to show (0 to disable)</label>
+                            <label for="recent-connections-limit">Number of recent connections to show (0 to disable) <span class="default-value">(Default: 5)</span></label>
                             <input type="number" id="recent-connections-limit" min="0" max="20" value="5">
                         </div>
                         <p class="settings-help">Display your most recent connections for quick reconnect. Set to 0 to hide the recent connections bar.</p>
@@ -308,7 +403,7 @@
                     <div class="settings-section">
                         <h3>Terminal</h3>
                         <div class="form-group settings-gap">
-                            <label for="terminal-select">Terminal Application</label>
+                            <label for="terminal-select">Terminal Application <span class="default-value">(Default: System Default)</span></label>
                             <select id="terminal-select">
                                 <!-- Options will be populated by JavaScript based on OS -->
                             </select>
@@ -324,9 +419,17 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="use-tabs-in-terminal-check" checked>
                                 <span>Open profiles in new tabs (when supported)</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).</p>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="minimize-on-launch-check" checked>
+                                <span>Minimize app when launching profile</span>
+                                <span class="default-value">(Default: On)</span>
+                            </label>
+                        </div>
+                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal). When minimize is enabled, the app will minimize after launching a connection.</p>
                     </div>
 
                     <!-- Import/Export Settings -->
@@ -335,16 +438,35 @@
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="include-passwords-check" checked>
-                                <span>Include Passwords in Export</span>
+                                <span>Include Passwords in Exports</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="require-encryption-check">
+                                <span>Require Encryption for All Exports</span>
+                                <span class="default-value">(Default: Off)</span>
+                            </label>
+                            <span class="settings-help-text">When enabled, all profile exports must be encrypted (recommended for organisations with security policies)</span>
+                        </div>
                         <div class="settings-actions">
-                            <button id="export-profiles-btn" class="btn btn-secondary">Export Profiles</button>
+                            <button id="export-profiles-btn" class="btn btn-primary">Export All Profiles</button>
                             <button id="import-profiles-btn" class="btn btn-secondary">Import Profiles</button>
-                            <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All Profiles</button>
+                            <button id="delete-all-profiles-btn" class="btn btn-danger">Delete All</button>
                             <input type="file" id="import-file-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles permanently.<br><strong>Security Warning:</strong> When "Include Passwords in Export" is enabled, exported files contain passwords in plaintext. Store exported files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Export profiles to share, import from JSON file, or delete all profiles and groups permanently.<br><strong>Security Note:</strong> Encryption is mandatory when exporting password-authenticated profiles. You can optionally encrypt other exports for additional security.</p>
+                    </div>
+
+                    <!-- Tag Management -->
+                    <div class="settings-section">
+                        <h3>Tag Management</h3>
+                        <div class="settings-actions">
+                            <button id="open-tag-manager-btn" class="btn btn-secondary">Manage Tags</button>
+                            <button id="delete-all-tags-btn" class="btn btn-danger">Delete All</button>
+                        </div>
+                        <p class="settings-help">Create, manage, and delete tags for organising and filtering your SSH profiles.</p>
                     </div>
 
                     <!-- Settings Management -->
@@ -354,15 +476,16 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="include-profiles-check" checked>
                                 <span>Include Profiles</span>
+                                <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
                         <div class="settings-actions">
-                            <button id="backup-settings-btn" class="btn btn-secondary">Backup Settings</button>
+                            <button id="backup-settings-btn" class="btn btn-primary">Backup Settings</button>
                             <button id="restore-settings-btn" class="btn btn-secondary">Restore Settings</button>
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Warning:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups will contain passwords in plaintext. Store backup files securely and consider using filesystem encryption.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Note:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups are automatically encrypted with a password you provide.</p>
                     </div>
 
                     <!-- Updates Section -->
@@ -390,7 +513,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.6.5" target="_blank" class="about-value version-link">0.6.5</a>
+                                <a href="#" class="about-value version-link" id="settings-version-link">0.7.0</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
@@ -414,7 +537,88 @@
                                 <span class="about-value">Tauri + Rust</span>
                             </div>
                         </div>
+                        <div class="github-actions">
+                            <button id="github-star-btn" class="btn btn-secondary">⭐ Star Project</button>
+                            <button id="github-bug-btn" class="btn btn-secondary">🐛 Report Bug</button>
+                            <button id="github-feature-btn" class="btn btn-secondary">💡 Request Feature</button>
+                        </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Encryption Password Modal (shown before export when passwords are included) -->
+        <div id="encryption-password-modal" class="modal hidden">
+            <div class="modal-content encryption-password-modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Encrypt Export</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-primary" id="encryption-password-submit">Export</button>
+                        <button type="button" class="btn btn-secondary" id="encryption-password-cancel">Cancel</button>
+                    </div>
+                </div>
+                <div class="encryption-password-body">
+                    <div class="form-group encryption-checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="encrypt-export-check">
+                            <span>Encrypt this export</span>
+                        </label>
+                        <span class="settings-help-text" id="encrypt-export-help"></span>
+                    </div>
+                    <p class="encryption-password-intro" id="encryption-password-intro">This export contains password-authenticated profiles. An encryption password is required to protect sensitive data.</p>
+                    <div class="form-group">
+                        <label for="encryption-password-input">Encryption Password <span class="required">*</span></label>
+                        <input type="password" id="encryption-password-input" placeholder="Enter encryption password (12+ characters)" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
+                        <div class="input-tooltip">
+                            <div class="tooltip-content">
+                                <div class="tooltip-title">Password Recommendations</div>
+                                <ul class="tooltip-rules">
+                                    <li>16+ characters for maximum security</li>
+                                    <li>Mix letters, numbers, and symbols</li>
+                                    <li>Maximum 128 characters</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <span class="char-counter" id="encryption-password-counter">0 / 128</span>
+                    </div>
+                    <div class="password-strength-container">
+                        <div class="password-strength-track">
+                            <div class="password-strength-bar" id="encryption-strength-bar"></div>
+                        </div>
+                        <span class="password-strength-label" id="encryption-strength-label"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="encryption-password-confirm">Confirm Password <span class="required">*</span></label>
+                        <input type="password" id="encryption-password-confirm" placeholder="Re-enter encryption password" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
+                        <span class="char-counter" id="encryption-password-confirm-counter">0 / 128</span>
+                    </div>
+                    <p class="encryption-password-error hidden" id="encryption-password-error"></p>
+                    <p class="encryption-password-help">Use a strong password you will remember.<br><strong>If you forget this password, the exported data cannot be recovered.</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decryption Password Modal (shown when importing an encrypted file) -->
+        <div id="decryption-password-modal" class="modal hidden">
+            <div class="modal-content decryption-password-modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Decrypt Import</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-primary" id="decryption-password-submit">Import</button>
+                        <button type="button" class="btn btn-secondary" id="decryption-password-cancel">Cancel</button>
+                    </div>
+                </div>
+                <div class="decryption-password-body">
+                    <p class="decryption-password-intro">This import file is encrypted. Enter the password that was used to encrypt it.</p>
+                    <div class="form-group">
+                        <label for="decryption-password-input">Decryption Password <span class="required">*</span></label>
+                        <input type="password" id="decryption-password-input" placeholder="Enter decryption password" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off">
+                    </div>
+                    <p class="decryption-password-error hidden" id="decryption-password-error"></p>
                 </div>
             </div>
         </div>
@@ -434,6 +638,122 @@
                 </div>
                 <div class="terminal-container" id="terminal-container">
                     <!-- xterm.js terminal will be mounted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Version Splash Screen Modal -->
+        <div id="version-splash-modal" class="modal hidden">
+            <div class="modal-content version-splash-content">
+                <div class="version-splash-header">
+                    <div class="version-splash-title-row">
+                        <h2 id="version-splash-title">What's New</h2>
+                        <p id="version-splash-description" class="version-splash-date"></p>
+                    </div>
+                    <div id="version-splash-intro">
+                        <h3 id="version-splash-subtitle"></h3>
+                    </div>
+                </div>
+                <div class="version-splash-body">
+                    <div id="version-splash-highlights-section">
+                        <h4>Key Features & Improvements</h4>
+                        <ul id="version-splash-highlights" class="version-splash-highlights">
+                            <!-- Highlights will be populated dynamically -->
+                        </ul>
+                    </div>
+                </div>
+                <div class="version-splash-footer">
+                    <p>
+                        <a href="#" id="version-splash-github-link" class="splash-github-link" target="_blank">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                            </svg>
+                            View Full Release Notes
+                        </a>
+                    </p>
+                </div>
+                <div class="version-splash-actions">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="version-splash-dont-show-checkbox" checked>
+                        <span>Don't show this again</span>
+                    </label>
+                    <button type="button" class="btn btn-secondary" id="version-splash-close-btn">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tag Manager Modal -->
+        <div id="tag-manager-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Tag Manager</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-secondary" id="tag-manager-close-btn">Close</button>
+                    </div>
+                </div>
+
+                <div class="tag-manager-content">
+                    <!-- Create New Tag -->
+                    <div class="tag-create-section">
+                        <h3>Create New Tag</h3>
+
+                        <div class="tag-create-row">
+                            <div class="form-group tag-name-group">
+                                <label for="new-tag-name-input">Tag Name <span class="required">*</span></label>
+                                <input
+                                    type="text"
+                                    id="new-tag-name-input"
+                                    placeholder="e.g., Production, Development, Testing"
+                                    maxlength="32"
+                                    spellcheck="false"
+                                    autocorrect="off"
+                                    autocapitalize="off"
+                                    required
+                                />
+                                <div class="input-tooltip">
+                                    <div class="tooltip-content">
+                                        <div class="tooltip-title">Tag Name Requirements</div>
+                                        <ul class="tooltip-rules">
+                                            <li>Letters and numbers allowed</li>
+                                            <li>Special characters: - _</li>
+                                            <li>No spaces allowed</li>
+                                            <li>Maximum 32 characters</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <span class="char-counter" id="tag-name-counter">0 / 32</span>
+                            </div>
+
+                            <div class="form-group tag-color-group">
+                                <label for="new-tag-color-input">Colour</label>
+                                <input
+                                    type="color"
+                                    id="new-tag-color-input"
+                                    value="#3b82f6"
+                                    title="Tag colour"
+                                />
+                            </div>
+
+                            <div class="tag-create-button-wrapper">
+                                <button id="create-tag-btn" class="btn btn-primary">Create Tag</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Existing Tags List -->
+                    <div class="tag-list-section">
+                        <h3>Existing Tags</h3>
+                        <div id="tag-list-container" class="tag-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <!-- Bulk Actions -->
+                        <div id="tag-bulk-actions" class="tag-bulk-actions hidden">
+                            <button id="select-all-tags-btn" class="btn btn-secondary">Select All</button>
+                            <button id="delete-selected-tags-btn" class="btn btn-danger">Delete Selected</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -49,7 +49,7 @@ body {
     display: flex;
     flex-wrap: wrap;
     gap: 8px 12px;
-    padding: 16px 24px;
+    padding: 8px 12px;
     background-color: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
     align-items: center;
@@ -69,7 +69,7 @@ body {
 }
 
 .app-header h1 {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 600;
     margin: 0;
     white-space: nowrap;
@@ -77,8 +77,8 @@ body {
 }
 
 .version {
-    font-size: 11px;
-    font-weight: 400;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--text-secondary);
     opacity: 0.7;
     white-space: nowrap;
@@ -101,6 +101,13 @@ body {
 }
 
 #new-profile-btn,
+#add-group-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+    width: 120px;
+    text-align: center;
+}
+
 #settings-btn {
     flex-shrink: 0;
     white-space: nowrap;
@@ -161,8 +168,8 @@ body {
 }
 
 .app-logo {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
     flex-shrink: 0;
 }
 
@@ -173,14 +180,14 @@ body {
 }
 
 .app-header h1 {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 600;
     margin: 0;
 }
 
 .version {
-    font-size: 12px;
-    font-weight: 400;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--text-secondary);
     opacity: 0.7;
 }
@@ -188,18 +195,32 @@ body {
 .btn-settings {
     background-color: #6c757d;
     color: white;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    width: 34px;
+}
+
+.btn-settings svg {
+    display: block;
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
 }
 
 .btn-settings:hover {
     background-color: #5a6268;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(108, 117, 125, 0.4);
 }
 
 /* Search Bar */
 .search-bar {
-    padding: 16px 24px;
-    padding-right: var(--scrollbar-width, 24px);
+    padding: 16px 12px;
+    padding-right: var(--scrollbar-width, 12px);
     background-color: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
     position: relative;
@@ -220,18 +241,46 @@ body {
 
 .search-bar input[type="text"] {
     width: 100%;
-    padding: 10px 16px;
+    height: 41px; /* Fixed height to prevent growth */
+    padding: 10px 40px 10px 16px; /* Extra right padding for clear button */
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     color: var(--text-color);
     font-size: 14px;
+    box-sizing: border-box; /* Ensure padding is included in height */
 }
 
-/* Show tooltip on search input focus */
-.search-bar input[type="text"]:focus + .input-tooltip {
-    opacity: 1;
-    visibility: visible;
+/* Search clear button */
+.search-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-top: -2px; /* Fine-tune vertical centering */
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-clear-btn:hover {
+    background-color: var(--hover-color);
+    color: var(--text-color);
+}
+
+.search-clear-btn.hidden {
+    display: none;
 }
 
 /* Narrow screens: search input on separate row, buttons grow dynamically */
@@ -247,11 +296,6 @@ body {
         flex: 1;
         min-width: 0;
     }
-}
-
-.search-bar input[type="text"]:focus {
-    outline: none;
-    border-color: var(--primary-color);
 }
 
 /* Search control buttons */
@@ -274,10 +318,13 @@ body {
 
 /* Focus styles for keyboard navigation */
 #new-profile-btn:focus,
+#add-group-btn:focus,
 #settings-btn:focus,
 #search-input:focus,
 #expand-collapse-btn:focus,
-#filter-btn:focus {
+#filter-btn:focus,
+#toggle-recent-btn:focus,
+#clear-recent-btn:focus {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
 }
@@ -360,6 +407,16 @@ body {
     color: var(--text-color);
     white-space: nowrap;
     margin-left: 8px;
+    position: relative;
+}
+
+/* Platform-specific vertical alignment adjustments */
+.platform-macos .filter-group-name {
+    top: -2px; /* macOS: shift up 2px for visual center alignment */
+}
+
+.platform-windows .filter-group-name {
+    top: -4px; /* Windows: shift up 4px for visual center alignment */
 }
 
 .filter-group-count {
@@ -380,20 +437,130 @@ body {
 .profiles-container {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 24px 0 24px;
+    padding: 16px 12px 0 12px;
     scrollbar-gutter: stable;
 }
 
 /* Profile Groups */
 .profile-group {
-    margin-bottom: 24px;
+    margin-bottom: 16px; /* Consistent spacing between all top-level groups */
 }
+
+/* Nested groups don't add margin - parent's content gap handles spacing */
+.profile-group-content > .profile-group {
+    margin-bottom: 0;
+}
+
+/* Favourites Group - Gold/Amber Theme */
+.favourites-group {
+    border: none; /* No border on container */
+    border-radius: var(--radius);
+    padding: 0;
+    background: transparent;
+    margin-bottom: 16px; /* Match standard group spacing */
+}
+
+.favourites-group .profile-group-header {
+    background-color: rgba(245, 158, 11, 0.1); /* Subtle gold tint */
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+}
+
+.favourites-group .profile-group-header:hover {
+    background-color: rgba(245, 158, 11, 0.15);
+    border-color: #f59e0b; /* Gold border on hover */
+}
+
+.favourites-group .profile-group-header.selected {
+    border-color: #f59e0b; /* Gold border on selection */
+}
+
+.favourites-group-icon {
+    color: #f59e0b; /* Gold/amber star icon */
+    margin-left: 8px; /* Space between title and star */
+    margin-right: 9px; /* Match gap to badge (cog has ~18px, was ~9px) */
+}
+
+/* Favourite cards styling */
+.profile-card.favourite-card {
+    border: 1px solid var(--border-color); /* Default border */
+    grid-template-areas:
+        "header"
+        "info"
+        "tags"
+        "path"
+        "actions";
+}
+
+/* Mobile: all buttons in one row under path, minimum size */
+.profile-card.favourite-card .favourite-card-actions {
+    flex-direction: row; /* Single row */
+    justify-content: flex-start; /* Left align the buttons */
+    gap: 12px; /* Gap between buttons to match other padding */
+    margin-top: 10px; /* 10px to achieve 12px visual gap (accounts for 2px offset) */
+    margin-bottom: -4px; /* Compensate for card padding and path negative margin */
+}
+
+.profile-card.favourite-card .favourite-actions-row {
+    display: contents; /* Flatten so all buttons are siblings */
+}
+
+.profile-card.favourite-card .favourite-actions-row .btn,
+.profile-card.favourite-card .goto-profile-btn {
+    flex: 0 0 auto; /* Don't grow */
+    width: auto; /* Auto width based on content */
+    min-width: 90px; /* Minimum width */
+}
+
+/* Gold border on hover/selection for favourite cards */
+.profile-card.favourite-card:hover {
+    border-color: #f59e0b; /* Gold border on hover */
+}
+
+.profile-card.favourite-card.selected,
+.profile-card.favourite-card:focus {
+    border-color: #f59e0b; /* Gold border on selection */
+}
+
+/* Ensure keyboard navigation keeps gold border on favourite cards */
+.keyboard-nav-active .profile-card.favourite-card.selected {
+    border-color: #f59e0b !important;
+}
+
+/* Favourite card actions - layout handled in mobile/desktop sections */
+.favourite-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Group path display (ONLY in Favourites cards) */
+.profile-group-path {
+    grid-area: path;
+    display: flex;
+    align-items: center; /* Vertically center content */
+    gap: 8px;
+    font-size: 13px; /* Increased from 12px for better readability */
+    color: var(--text-secondary);
+    padding: 8px 16px 8px 16px; /* Reduced bottom padding to minimize wasted space */
+    margin: 0 -16px -16px -16px; /* Negative margins: extend full width and eliminate bottom gap */
+    border-top: 1px solid var(--border-color);
+}
+
+.group-path-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Removed highlight animation - just navigate and focus profile */
 
 .profile-group-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 8px;
+    padding: 6px 16px;
+    height: 40px;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
@@ -419,6 +586,22 @@ body {
     font-size: 12px;
     color: var(--text-muted);
     transition: transform 0.2s ease;
+    min-width: 12px; /* Reserve space even when empty */
+}
+
+/* Empty groups have no chevron */
+.profile-group-header.group-empty .group-chevron {
+    visibility: hidden; /* Hide but maintain layout space */
+}
+
+/* Empty groups are not clickable */
+.profile-group-header.group-empty {
+    cursor: default;
+}
+
+.profile-group-header.group-empty:hover {
+    background-color: var(--surface-color); /* No hover effect */
+    border-color: var(--border-color);
 }
 
 .group-name {
@@ -432,6 +615,139 @@ body {
 
 .group-count-badge {
     /* Inherits from .badge class */
+    margin-left: auto; /* Push to the right */
+}
+
+/* Group menu button */
+.group-menu-btn {
+    padding: 3px;
+    line-height: 1;
+    opacity: 1; /* Always visible */
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: -8px; /* Reduce gap between menu button and badge */
+}
+
+.group-menu-btn svg {
+    display: block;
+}
+
+.btn-icon {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 4px 8px;
+}
+
+.btn-icon:hover {
+    color: var(--text-color);
+    background-color: var(--surface-hover);
+}
+
+/* Group context menu */
+.group-context-menu {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 4px 0;
+    min-width: 150px;
+}
+
+.group-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.group-menu-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.group-menu-item:focus {
+    outline: none;
+    background-color: var(--surface-hover);
+}
+
+.group-menu-edit {
+    color: var(--primary-color);
+}
+
+.group-menu-edit:hover,
+.group-menu-edit:focus {
+    background-color: rgba(0, 120, 212, 0.1);
+}
+
+.group-menu-delete {
+    color: var(--danger-color);
+}
+
+.group-menu-delete:hover,
+.group-menu-delete:focus {
+    background-color: rgba(255, 59, 48, 0.1);
+}
+
+/* Profile action menu */
+.profile-action-menu {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 4px 0;
+    min-width: 150px;
+    position: absolute;
+}
+
+.profile-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.profile-menu-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.profile-menu-item:focus {
+    outline: none;
+    background-color: var(--surface-hover);
+}
+
+.profile-menu-edit {
+    color: var(--primary-color);
+}
+
+.profile-menu-edit:hover,
+.profile-menu-edit:focus {
+    background-color: rgba(0, 120, 212, 0.1);
+}
+
+.profile-menu-delete {
+    color: var(--danger-color);
+}
+
+.profile-menu-delete:hover,
+.profile-menu-delete:focus {
+    background-color: rgba(255, 59, 48, 0.1);
 }
 
 .profile-group-content {
@@ -448,6 +764,32 @@ body {
     opacity: 0;
 }
 
+/* Hierarchical group indentation */
+.profile-group-header.depth-1 {
+    margin-left: 20px;
+}
+
+.profile-group-header.depth-2 {
+    margin-left: 40px;
+}
+
+.profile-group-header.depth-3 {
+    margin-left: 60px;
+}
+
+/* Profile card indentation to match parent group */
+.profile-card.depth-1 {
+    margin-left: 20px;
+}
+
+.profile-card.depth-2 {
+    margin-left: 40px;
+}
+
+.profile-card.depth-3 {
+    margin-left: 60px;
+}
+
 .profile-card {
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
@@ -460,6 +802,7 @@ body {
     grid-template-areas:
         "header"
         "info"
+        "tags"
         "actions";
     gap: 8px;
 }
@@ -506,9 +849,38 @@ button.keyboard-selected {
 .profile-card-header {
     grid-area: header;
     display: flex;
-    justify-content: space-between;
-    align-items: start;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
+}
+
+.favorite-star-wrapper {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.favorite-star-toggle {
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.favorite-star-wrapper:hover .favorite-star-toggle {
+    transform: scale(1.2);
+}
+
+.favorite-star-inactive {
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+.favorite-star-wrapper:hover .favorite-star-inactive {
+    opacity: 1;
+}
+
+.favorite-star-active {
+    color: #f59e0b; /* Gold/amber color for favorited */
 }
 
 .profile-card-title {
@@ -576,8 +948,16 @@ button.keyboard-selected {
 .profile-card-actions {
     grid-area: actions;
     display: flex;
-    gap: 8px;
+    gap: 12px; /* Consistent 12px gap */
+    justify-content: flex-start; /* Left align buttons */
     margin-top: 4px;
+}
+
+.profile-card-actions .btn {
+    flex: 0 0 auto; /* Don't grow */
+    width: 90px; /* Fixed width */
+    text-align: center;
+    white-space: nowrap;
 }
 
 /* Wide screens: buttons move to right side */
@@ -586,13 +966,53 @@ button.keyboard-selected {
         grid-template-columns: 1fr auto;
         grid-template-areas:
             "header actions"
-            "info actions";
+            "info actions"
+            "tags actions";
         gap: 8px 16px;
     }
 
     .profile-card-actions {
         align-self: center;
         margin-top: 0;
+    }
+
+    /* Favourite cards: buttons on right side, path spans full width below */
+    .profile-card.favourite-card {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "header actions"
+            "info actions"
+            "tags actions"
+            "path path";
+        gap: 8px 16px;
+    }
+
+    .profile-card.favourite-card .profile-card-actions {
+        flex-direction: column; /* Stack vertically on wide screens */
+        justify-content: flex-start; /* Align to top */
+        align-self: center; /* Center vertically for even spacing */
+        margin-top: 0;
+        margin-bottom: 0; /* Reset mobile margin */
+        gap: 12px; /* Gap between rows */
+    }
+
+    .profile-card.favourite-card .favourite-actions-row {
+        display: flex; /* Restore flex layout for row */
+        gap: 12px; /* Gap between Connect and Actions buttons */
+    }
+
+    .profile-card.favourite-card .favourite-actions-row .btn {
+        flex: 0 0 auto;
+        width: 90px; /* Fixed width on wide screens */
+    }
+
+    .profile-card.favourite-card .goto-profile-btn {
+        width: 192px; /* 90px + 12px gap + 90px = 192px */
+        flex: 0 0 auto;
+    }
+
+    .profile-card.favourite-card .profile-group-path {
+        margin-top: 8px; /* Add gap between info/buttons and path */
     }
 }
 
@@ -616,7 +1036,7 @@ button.keyboard-selected {
 
 .btn-primary:hover {
     background-color: var(--primary-hover);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(0, 120, 212, 0.4);
 }
 
@@ -632,6 +1052,19 @@ button.keyboard-selected {
     background-color: var(--border-color);
 }
 
+.btn-secondary-header {
+    background-color: rgba(108, 117, 125, 0.2);
+    border: 1px solid rgba(108, 117, 125, 0.4);
+    color: var(--text-color);
+}
+
+.btn-secondary-header:hover {
+    background-color: rgba(108, 117, 125, 0.3);
+    border-color: rgba(108, 117, 125, 0.6);
+    transform: scale(1.02);
+    box-shadow: 0 2px 6px rgba(108, 117, 125, 0.3);
+}
+
 .btn-secondary {
     background-color: transparent;
     border: 1px solid var(--border-color);
@@ -641,7 +1074,7 @@ button.keyboard-selected {
 .btn-secondary:hover {
     background-color: var(--surface-hover);
     border-color: var(--primary-color);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(255, 255, 255, 0.1);
 }
 
@@ -657,8 +1090,20 @@ button.keyboard-selected {
 
 .btn-danger:hover {
     background-color: #d00016;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(232, 17, 35, 0.4);
+}
+
+.btn-danger:disabled {
+    background-color: var(--border-color);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.btn-danger:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    background-color: var(--border-color);
 }
 
 .btn-success {
@@ -668,7 +1113,7 @@ button.keyboard-selected {
 
 .btn-success:hover {
     background-color: #2A9F47;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(52, 199, 89, 0.4);
 }
 
@@ -679,7 +1124,7 @@ button.keyboard-selected {
 
 .btn-info:hover {
     background-color: var(--primary-hover);
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(0, 120, 212, 0.4);
 }
 
@@ -713,21 +1158,189 @@ button.keyboard-selected {
     max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
-    overflow-x: hidden;
+    padding-bottom: 12px;
+    position: relative; /* Ensure positioning context */
+}
+
+/* These modals use flex layout so the header is fixed and only the body scrolls */
+#profile-modal .modal-content,
+#settings-modal .modal-content,
+#group-modal .modal-content,
+#tag-manager-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent all scroll propagation */
+    padding-bottom: 0;
+}
+
+/* Group modal should be smaller and fit its content */
+#group-modal .modal-content {
+    max-height: fit-content;
+    overflow-y: auto;
 }
 
 .confirm-modal-content {
-    max-width: 400px;
+    max-width: 420px;
+    padding-bottom: 0;
+}
+
+.delete-group-modal-content {
+    max-width: 480px;
+    padding-bottom: 0;
+}
+
+/* Encryption/Decryption Password Modals */
+.encryption-password-modal-content,
+.decryption-password-modal-content {
+    max-width: 460px;
+    padding-bottom: 0;
+}
+
+/* Fixed width for modal action buttons */
+#encryption-password-submit,
+#encryption-password-cancel,
+#decryption-password-submit,
+#decryption-password-cancel {
+    min-width: 80px;
+}
+
+.encryption-password-body {
+    padding: 20px 24px 24px 24px;
+}
+
+.encryption-password-body .form-group.encryption-checkbox-group {
+    margin-bottom: 20px;  /* Space for the intro paragraph below */
+}
+
+.encryption-password-body .form-group:first-of-type {
+    margin-bottom: 7px;  /* Reduced from default 20px for compact spacing above strength bar */
+}
+
+.encryption-password-body .form-group:last-of-type {
+    margin-bottom: 12px;  /* Reduced from default 20px for more compact spacing */
+}
+
+/* Decryption body uses a split: 8px form-group margin + 16px body padding = 24px
+   when the error is hidden.  When the error appears the 8px margin collapses with
+   the error's 6px margin-top (→ 8px gap above error), and 16px padding sits below
+   the error — keeping the modal proportions balanced either way. */
+.decryption-password-body {
+    padding: 20px 24px 16px 24px;
+}
+
+.decryption-password-body .form-group {
+    margin-bottom: 8px;
+}
+
+.encryption-password-intro,
+.decryption-password-intro {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: -8px;  /* Negative margin to pull up closer, matching pattern of encryption-password-help */
+    margin-bottom: 12px;
+}
+
+.encryption-password-help {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: -22px;  /* Negative margin to pull up closer to confirm password field */
+    margin-bottom: 0;
+}
+
+.encryption-password-error,
+.decryption-password-error {
+    font-size: 13px;
+    color: var(--danger-color);
+    margin-top: 6px;
+    margin-bottom: 0;
+    line-height: 1.4;
+}
+
+/* Red border on invalid password inputs */
+.input-error {
+    border-color: var(--danger-color) !important;
+}
+
+/* Password Strength Meter */
+.password-strength-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 1px;   /* Reduced from 8px for more compact spacing */
+    margin-bottom: 14px;  /* Reduced from 16px for more compact spacing */
+}
+
+.password-strength-track {
+    flex: 1;
+    height: 4px;
+    background-color: var(--border-color);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.password-strength-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.25s ease, background-color 0.25s ease;
+    width: 0%;
+    background-color: transparent;
+}
+
+.password-strength-bar.strength-empty      { width: 0%;   background-color: transparent; }
+.password-strength-bar.strength-width-20   { width: 20%; }
+.password-strength-bar.strength-width-40   { width: 40%; }
+.password-strength-bar.strength-width-60   { width: 60%; }
+.password-strength-bar.strength-width-80   { width: 80%; }
+.password-strength-bar.strength-width-100  { width: 100%; }
+.password-strength-bar.strength-weak       { background-color: var(--danger-color); }
+.password-strength-bar.strength-fair       { background-color: #f97316; }
+.password-strength-bar.strength-good       { background-color: #eab308; }
+.password-strength-bar.strength-strong     { background-color: var(--success-color); }
+.password-strength-bar.strength-stronger   { background-color: #16a34a; }
+
+.password-strength-label {
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 56px;
+    min-height: 16px;
+}
+
+.password-strength-label.strength-weak     { color: var(--danger-color); }
+.password-strength-label.strength-fair     { color: #f97316; }
+.password-strength-label.strength-good     { color: #eab308; }
+.password-strength-label.strength-strong   { color: var(--success-color); }
+.password-strength-label.strength-stronger { color: #16a34a; }
+
+/* Ensure input fields are constrained within their containers */
+.modal-content input[type="text"],
+.modal-content input[type="password"],
+.modal-content input[type="number"],
+.modal-content textarea {
+    max-width: 100%; /* Never exceed parent width */
+    box-sizing: border-box; /* Include padding in width calculation */
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
+}
+
+/* Textarea specific styling */
+.modal-content textarea {
+    resize: vertical; /* Allow vertical resize only */
+    min-height: 48px; /* Minimum 2 rows */
+    max-height: 200px; /* Maximum height before scroll */
+    font-family: inherit;
+    line-height: 1.5;
 }
 
 .confirm-body {
-    padding: 20px 24px;
+    padding: 20px 24px 12px 24px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-color);
 }
 
 .confirm-body #confirm-message {
-    line-height: 1.6;
-    color: var(--text-color);
-    font-size: 14px;
+    /* Inherits from .confirm-body */
 }
 
 .confirm-body .profile-name {
@@ -753,11 +1366,33 @@ button.keyboard-selected {
     padding-left: 24px;
 }
 
+/* Conflict dialog styling (replaces inline styles) */
+.conflict-message-first-line {
+    margin-bottom: 16px;
+}
+
+.conflict-question {
+    margin-bottom: 8px;
+}
+
+.conflict-list {
+    margin-left: 20px;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+.conflict-list-item {
+    margin-bottom: 4px;
+}
+
+.conflict-list-item:last-child {
+    margin-bottom: 0;
+}
+
 .confirm-modal-content .form-actions {
-    padding-top: 16px;
-    padding-bottom: 20px;
+    padding: 12px 0 12px 0;
     margin-top: 0;
-    justify-content: center;
+    justify-content: center; /* Center button group */
 }
 
 .confirm-modal-content .form-actions-left {
@@ -765,7 +1400,13 @@ button.keyboard-selected {
 }
 
 .confirm-modal-content .form-actions-right {
-    justify-content: center;
+    justify-content: center; /* Group buttons together */
+    gap: 40px; /* Generous gap between buttons */
+}
+
+/* Fixed width buttons for balanced appearance */
+.confirm-modal-content button {
+    min-width: 100px; /* Fixed width for visual balance */
 }
 
 /* Focus indicator for confirm modal buttons */
@@ -773,6 +1414,91 @@ button.keyboard-selected {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Delete group modal with three buttons centered together */
+.delete-group-modal-content .form-actions {
+    padding: 12px 0 12px 0;
+    margin-top: 0;
+    justify-content: center;
+    gap: 30px; /* Tighter spacing for 3-button layout */
+}
+
+.delete-group-modal-content .form-actions-left {
+    display: flex;
+}
+
+.delete-group-modal-content .form-actions-right {
+    display: flex;
+    gap: 30px; /* Tighter spacing for 3-button layout */
+}
+
+/* Fixed width buttons for balanced appearance */
+.delete-group-modal-content button {
+    min-width: 100px; /* Match 2-button modal */
+}
+
+/* Colored action labels in delete group modal */
+.delete-group-modal-content .action-delete-all {
+    color: #e81123;
+    font-weight: 700;
+}
+
+.delete-group-modal-content .action-move-to-parent {
+    color: #0078d4;
+    font-weight: 700;
+}
+
+/* Conflict resolution buttons (horizontal layout) */
+.conflict-buttons-horizontal {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.conflict-buttons-horizontal .btn {
+    width: 110px;
+    white-space: nowrap;
+}
+
+/* Highlighted name in conflict modals */
+.highlight-name {
+    color: #0078d4;
+    font-weight: 500;
+}
+
+/* Colored text for conflict options */
+.conflict-text-skip {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.conflict-text-primary {
+    color: #0078d4;
+    font-weight: 500;
+}
+
+.conflict-text-danger {
+    color: #e81123;
+    font-weight: 500;
+}
+
+.conflict-text-warning {
+    color: #ff9500;
+    font-weight: 500;
+}
+
+.btn-warning {
+    background-color: #ff9500;
+    color: white;
+}
+
+.btn-warning:hover {
+    background-color: #e68600;
+}
+
+.btn-warning:active {
+    background-color: #cc7a00;
 }
 
 .modal-header {
@@ -783,13 +1509,40 @@ button.keyboard-selected {
     border-bottom: 1px solid var(--border-color);
 }
 
-/* Sticky header for settings and profile modals */
+/* Fixed header for settings, profile, and group modals */
 #settings-modal .modal-header,
-#profile-modal .modal-header {
-    position: sticky;
-    top: 0;
+#profile-modal .modal-header,
+#group-modal .modal-header {
+    flex-shrink: 0;
     background-color: var(--surface-color);
     z-index: 10;
+}
+
+/* Scrollable body for profile modal form */
+#profile-modal form {
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    flex: 1;
+    padding-bottom: 24px;
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
+}
+
+/* Group modal form - sizes to content, no scrollbar unless dropdown extends */
+#group-modal form {
+    overflow-y: hidden;
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    flex: 0 1 auto;
+    padding-bottom: 24px;
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
+}
+
+/* Scrollable body for settings modal content */
+.settings-content {
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    flex: 1;
+    padding-bottom: 12px;
+    overscroll-behavior-x: contain; /* Prevent horizontal scroll-chaining during trackpad/mouse wheel scrolling */
 }
 
 .modal-header h2 {
@@ -879,7 +1632,8 @@ form {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 10px 12px;
     background-color: var(--bg-color);
@@ -887,14 +1641,28 @@ form {
     border-radius: var(--radius);
     color: var(--text-color);
     font-size: 14px;
-    height: 42px; /* Ensure consistent height for inputs and selects */
     box-sizing: border-box;
 }
 
+.form-group input,
+.form-group select {
+    height: 42px; /* Ensure consistent height for inputs and selects */
+}
+
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+/* Disabled input styles - make it obvious the field is disabled */
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--surface-color);
 }
 
 .form-group small {
@@ -906,8 +1674,21 @@ form {
 
 .form-row {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 3fr 1fr; /* Host wider, Port narrower */
     gap: 16px;
+}
+
+/* Icon and Favourite row - Equal split with larger gap */
+.form-row-icon-favorite {
+    grid-template-columns: 1fr 1fr; /* Equal width for Icon and Favourite */
+    gap: 48px; /* Large gap for better spacing */
+}
+
+/* Center the checkbox within the Favourite field to match Icon input height (42px) */
+.form-row-icon-favorite .checkbox-label {
+    display: flex;
+    align-items: center;
+    min-height: 42px; /* Match input field height */
 }
 
 .form-actions {
@@ -1001,12 +1782,36 @@ form {
     margin: 0;
 }
 
+/* Help text below checkboxes (same styling as .settings-help) */
+.settings-help-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: block;
+    margin-top: 4px;
+    margin-bottom: 16px;  /* Add bottom margin to prevent clipping buttons below */
+}
+
+/* Red/warning text for mandatory encryption */
+.text-danger {
+    color: var(--danger-color);
+    font-weight: 600;
+}
+
+.default-value {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+}
+
 /* Checkbox Label */
 .checkbox-label {
     display: flex;
     align-items: center;
     cursor: pointer;
     user-select: none;
+    min-height: 24px; /* Compact height for checkbox rows */
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -1017,7 +1822,7 @@ form {
 
 .checkbox-label input[type="checkbox"]:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
@@ -1025,6 +1830,23 @@ form {
     font-size: 14px;
     color: var(--text-color);
     margin-left: 8px;
+    position: relative;
+}
+
+/* Platform-specific vertical alignment adjustments */
+.platform-macos .checkbox-label span {
+    top: -2px; /* macOS: shift up 2px for visual center alignment */
+}
+
+.platform-windows .checkbox-label span {
+    top: -4px; /* Windows: shift up 4px for visual center alignment */
+}
+
+/* Smaller default values inside checkbox labels */
+.checkbox-label span.default-value {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 0; /* Minimal spacing to match inline labels */
 }
 
 /* About Section */
@@ -1032,12 +1854,26 @@ form {
     border-top: 1px solid var(--border-color);
     padding-top: 24px;
     margin-top: 8px;
+    margin-bottom: 0; /* Remove default margin */
+    padding-bottom: 0; /* No extra padding - settings-content already has 24px */
 }
 
 .about-content {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.github-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px; /* Space from "Built with" */
+    margin-bottom: 0; /* No extra margin below */
+}
+
+.github-actions .btn {
+    flex: 1;
+    min-width: 0;
 }
 
 .about-item {
@@ -1087,6 +1923,326 @@ form {
     flex-shrink: 0;
 }
 
+/* Tag Manager Modal */
+#tag-manager-modal .modal-content {
+    max-width: 600px;
+    padding-bottom: 0;
+}
+
+.tag-manager-content {
+    padding: 24px 24px 0 24px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.tag-create-section {
+    background: var(--bg-secondary);
+    padding: 0; /* No padding - children will handle spacing */
+    border-radius: var(--radius);
+    margin-bottom: 4px; /* Tight spacing between sections (12px row padding + 4px margin = 16px total) */
+    flex-shrink: 0; /* Don't shrink when content overflows */
+}
+
+.tag-create-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 0; /* Remove bottom margin, handled by form padding */
+    padding: 0 12px 12px 0; /* Right + bottom padding only, no top/left to keep at 24px from edges */
+    color: var(--text-color);
+}
+
+.tag-create-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto; /* Name flexible, color and button fixed */
+    gap: 16px;
+    align-items: start; /* Align to top, then add spacing for proper alignment */
+    padding: 0 12px 12px 0; /* Right + bottom padding only, no left to align with heading */
+}
+
+.tag-name-group {
+    margin-bottom: 0 !important;
+}
+
+.tag-color-group {
+    margin-bottom: 0 !important;
+}
+
+/* Ensure all labels have same height/spacing */
+.tag-create-row .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    height: 22px; /* Fixed height for alignment */
+    line-height: 22px;
+}
+
+.tag-color-group input[type="color"] {
+    width: 60px;
+    height: 42px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-color);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.tag-color-group input[type="color"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.tag-create-button-wrapper {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+    margin-top: 34px; /* Label (22px) + margin (8px) + centering offset (4px) = 34px to vertically center with inputs */
+}
+
+.tag-create-button-wrapper .btn {
+    white-space: nowrap;
+    /* Use default button height for consistency */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tag-list-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding-bottom: 24px; /* Consistent bottom gap whether bulk actions are hidden or visible */
+}
+
+.tag-list-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-color);
+    flex-shrink: 0;
+}
+
+.tag-list {
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    min-height: 59px; /* Always show at least one row (12px + 33px button + 12px padding + 2px border) */
+    max-height: 291px; /* Exactly 5 rows (58px × 4 + 57px last + 2px border = 291px); scrolls with more tags */
+}
+
+.tag-list:empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+}
+
+.tag-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+
+.tag-list-item:last-child {
+    border-bottom: none;
+}
+
+.tag-list-item:hover {
+    background: var(--hover-bg);
+}
+
+/* Layout: Checkbox > Colour > Name > Space > Count > Delete */
+.tag-list-item .tag-checkbox {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.tag-list-item .tag-color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.tag-list-item .tag-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tag-list-item .tag-usage {
+    font-size: 14px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.tag-list-empty {
+    padding: 12px 16px; /* Match tag row height so empty state is same size as 1 tag */
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+/* Bulk Actions */
+.tag-bulk-actions {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 24px 16px 0 16px; /* Bottom gap provided by parent .tag-list-section */
+}
+
+.tag-bulk-actions.hidden {
+    display: none;
+}
+
+.tag-bulk-actions .btn {
+    width: 145px;
+    white-space: nowrap;
+}
+
+/* Tag Selector (Profile Editor) - Tokenized Input */
+.tokenized-input-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--input-bg);
+    cursor: text;
+    transition: border-color 0.2s;
+    line-height: 1;
+}
+
+.tokenized-input-wrapper:focus-within {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.tokenized-input-wrapper input {
+    flex: 1;
+    min-width: 50px;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    line-height: 19px;
+    height: 19px;
+    color: var(--text-color);
+}
+
+.tokenized-input-wrapper input::placeholder {
+    color: var(--text-muted);
+}
+
+.tokenized-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    /* color is set dynamically via JavaScript based on background luminance */
+    user-select: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.tokenized-tag-pill .remove-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    margin-left: 2px;
+}
+
+.tokenized-tag-pill .remove-tag:hover {
+    opacity: 1;
+}
+
+.tokenized-tag-pill .remove-tag svg {
+    width: 10px;
+    height: 10px;
+    stroke-width: 2.5;
+}
+
+.tag-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.tag-dropdown-item:hover {
+    background: var(--hover-bg);
+}
+
+.tag-dropdown-item.keyboard-focus {
+    background: var(--hover-bg);
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.tag-dropdown-item.selected {
+    background: var(--primary-color-light);
+}
+
+.tag-dropdown-color-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.tag-dropdown-item-name {
+    flex: 1;
+    font-size: 14px;
+}
+
+.tag-dropdown-item .check-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--success-color);
+    flex-shrink: 0;
+}
+
+.tag-dropdown-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
 /* Toast Notification */
 .toast {
     position: fixed;
@@ -1110,6 +2266,56 @@ form {
 
 .toast.toast-error {
     background-color: var(--danger-color);
+}
+
+.toast.toast-loading {
+    background-color: #374151;
+    display: flex;
+    align-items: center;
+}
+
+.toast.toast-loading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: toast-spinner 0.6s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes toast-spinner {
+    to { transform: rotate(360deg); }
+}
+
+/* Button loading state — spinner centred, text hidden, pointer disabled.
+   Uses a real <span class="btn-spinner"> rather than ::before because
+   WKWebView (Tauri on macOS) does not position pseudo-elements correctly
+   inside <button> elements. */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.btn-spinner {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: toast-spinner 0.6s linear infinite;
+}
+
+.btn-loading .btn-spinner {
+    display: block;
 }
 
 .toast.hidden {
@@ -1136,25 +2342,98 @@ form {
 .input-group .btn-browse {
     flex-shrink: 0;
     white-space: nowrap;
+    width: 85px;
+    padding: 8px 12px;
+    text-align: center;
 }
 
 .input-group .btn-browse:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
 }
 
 .input-group .btn-toggle-password {
     flex-shrink: 0;
-    width: 65px;
+    width: 85px;
     padding: 8px 12px;
     text-align: center;
 }
 
 .input-group .btn-toggle-password:focus {
     outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline-offset: 1px;
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.input-group .btn-icon-text {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    width: 85px;
+    text-align: center;
+}
+
+.input-group .btn-icon-text:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+/* Searchable Dropdown */
+.searchable-dropdown-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+.searchable-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    margin-top: 4px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    max-height: 300px;
+    overflow-y: auto;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.searchable-dropdown.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.searchable-dropdown-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background-color 0.15s ease;
+    font-size: 14px;
+}
+
+.searchable-dropdown-item:hover,
+.searchable-dropdown-item.focused {
+    background-color: var(--surface-hover);
+}
+
+.searchable-dropdown-item.selected {
+    background-color: rgba(0, 120, 212, 0.1);
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.searchable-dropdown-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
 }
 
 /* Scrollbar */
@@ -1200,33 +2479,46 @@ form {
     overflow-y: auto;
 }
 
-/* For the last form group, show tooltip above instead of below */
-.form-group:last-child .input-tooltip {
-    top: auto;
-    bottom: 100%;
-    margin-top: 0;
-    margin-bottom: 4px;
+/* Tooltips always show below - simple and consistent */
+
+/* Show on hover (even when focused) */
+.form-group input:hover + .input-tooltip,
+.form-group select:hover + .input-tooltip,
+.form-group textarea:hover + .input-tooltip {
+    opacity: 1;
+    visibility: visible;
 }
 
-/* For form groups near the bottom of scrollable containers, show tooltip above */
-.modal-content .form-group:nth-last-child(-n+2) .input-tooltip {
-    top: auto;
-    bottom: 100%;
-    margin-top: 0;
-    margin-bottom: 4px;
+/* Hide tooltip on disabled inputs */
+.form-group input:disabled:hover + .input-tooltip,
+.form-group select:disabled:hover + .input-tooltip,
+.form-group textarea:disabled:hover + .input-tooltip {
+    opacity: 0;
+    visibility: hidden;
 }
 
-/* Dynamic tooltip positioning - added by JavaScript when viewport space is limited */
-.input-tooltip.tooltip-above {
-    top: auto !important;
-    bottom: 100% !important;
-    margin-top: 0 !important;
-    margin-bottom: 4px !important;
+/* Show tooltip when hovering over the label */
+.form-group label:hover ~ .input-tooltip {
+    opacity: 1;
+    visibility: visible;
 }
 
-/* Show on focus */
-.form-group input:focus + .input-tooltip,
-.form-group select:focus + .input-tooltip {
+/* Show search tooltip on hover */
+#search-input:hover + .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Hide tooltip when user is typing */
+.input-tooltip.tooltip-hidden-typing {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Show when field is invalid */
+.form-group input.validation-error + .input-tooltip,
+.form-group select.validation-error + .input-tooltip,
+.form-group textarea.validation-error + .input-tooltip {
     opacity: 1;
     visibility: visible;
 }
@@ -1272,13 +2564,15 @@ form {
 
 /* Error state for invalid fields */
 .form-group input.validation-error,
-.form-group select.validation-error {
+.form-group select.validation-error,
+.form-group textarea.validation-error {
     border-color: var(--danger-color);
     background-color: rgba(232, 17, 35, 0.05);
 }
 
 .form-group input.validation-error:focus,
-.form-group select.validation-error:focus {
+.form-group select.validation-error:focus,
+.form-group textarea.validation-error:focus {
     border-color: var(--danger-color);
     box-shadow: 0 0 0 2px rgba(232, 17, 35, 0.2);
 }
@@ -1295,6 +2589,12 @@ form {
 .char-counter.over-limit {
     color: var(--danger-color);
     font-weight: 600;
+}
+
+/* Tag create hint (CSP-compliant) */
+#tag-create-hint {
+    color: var(--text-muted);
+    margin-top: 4px;
 }
 
 /* Keyboard Shortcuts Help Modal */
@@ -1475,12 +2775,211 @@ form {
 }
 
 /* ===========================
+   Version Splash Screen Styles
+   =========================== */
+
+.version-splash-content {
+    max-width: 640px;
+    max-height: 85vh;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent modal itself from scrolling */
+    padding-bottom: 0; /* Override modal-content's 20px padding-bottom */
+}
+
+/* Header - Fixed at top */
+.version-splash-header {
+    flex-shrink: 0;
+    padding: 24px 24px 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Title row with date on same line */
+.version-splash-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.version-splash-title-row h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-color);
+    flex-shrink: 0;
+}
+
+.version-splash-date {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    font-size: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#version-splash-intro h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* Body - Scrollable content */
+.version-splash-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    min-height: 0; /* Important for flex scrolling */
+}
+
+#version-splash-highlights-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.version-splash-highlights {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.version-splash-highlights li {
+    padding: 8px 0 8px 24px;
+    position: relative;
+    color: var(--text-color);
+    line-height: 1.5;
+}
+
+.version-splash-highlights li::before {
+    content: "•";
+    position: absolute;
+    left: 8px;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Footer - Fixed at bottom */
+.version-splash-footer {
+    flex-shrink: 0;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    min-height: 68px; /* Prevent footer from collapsing at smaller widths */
+    display: flex;
+    align-items: center;
+}
+
+.version-splash-footer p {
+    margin: 0;
+    text-align: center;
+    width: 100%; /* Ensure paragraph takes full width for centered content */
+}
+
+.splash-github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background-color 0.15s ease;
+}
+
+.splash-github-link:hover {
+    background-color: var(--surface-hover);
+}
+
+.splash-github-link:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.splash-github-link svg {
+    flex-shrink: 0;
+}
+
+/* Actions - Fixed at bottom with Close button */
+.version-splash-actions {
+    flex-shrink: 0;
+    padding: 14px 24px 16px 24px; /* Balanced padding for clean spacing */
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center; /* Center the checkbox and button together */
+    align-items: center;
+    gap: 16px;
+    flex-wrap: nowrap; /* Prevent wrapping to new line */
+}
+
+.version-splash-actions .checkbox-label {
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.version-splash-actions input[type="checkbox"]:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.version-splash-actions button {
+    flex-shrink: 0;
+}
+
+/* Responsive splash screen sizing */
+@media (max-width: 500px) {
+    .version-splash-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .version-splash-header {
+        padding: 16px 16px 12px 16px;
+    }
+
+    /* Stack title and date on mobile */
+    .version-splash-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        margin-bottom: 12px;
+    }
+
+    .version-splash-body {
+        padding: 16px;
+    }
+
+    .version-splash-footer {
+        padding: 12px 16px;
+        min-height: 60px; /* Maintain consistent height on mobile */
+    }
+
+    .version-splash-actions {
+        padding: 12px 16px 14px 16px; /* Balanced padding for clean spacing */
+        /* Keep flex-direction: row (default) - don't stack */
+        gap: 12px;
+    }
+}
+
+/* ===========================
    Recent Connections Styles
    =========================== */
 
 .recent-connections-section {
-    padding: 12px 24px;
-    padding-right: var(--scrollbar-width, 24px);
+    padding: 12px 12px;
+    padding-right: var(--scrollbar-width, 12px);
     background-color: var(--bg-color);
     border-top: 1px solid var(--border-color);
 }
@@ -1571,10 +3070,10 @@ form {
 .recent-connection-item {
     /* Dynamic width: fits 3 boxes perfectly whether scrollbar is present or not */
     /* Calculation: (800px - left padding - right padding - 2 gaps) / 3 */
-    /* When no scrollbar: (800 - 24 - 24 - 24) / 3 = 242.67px */
-    /* When scrollbar: (800 - 24 - 39 - 24) / 3 = 237.67px */
-    width: calc((100vw - 24px - var(--scrollbar-width, 24px) - 24px) / 3);
-    max-width: 243px; /* Cap at 243px for very wide screens */
+    /* When no scrollbar: (800 - 12 - 12 - 24) / 3 = 250.67px */
+    /* When scrollbar: (800 - 12 - 27 - 24) / 3 = 245.67px */
+    width: calc((100vw - 12px - var(--scrollbar-width, 12px) - 24px) / 3);
+    max-width: 251px; /* Cap at 251px for very wide screens */
     flex-shrink: 0;
     padding: 12px 16px;
     background: var(--surface-color);
@@ -1650,7 +3149,7 @@ form {
 
 .recent-connection-delete:hover {
     background: #d00016;
-    transform: scale(1.05);
+    transform: scale(1.02);
     box-shadow: 0 2px 6px rgba(232, 17, 35, 0.4);
 }
 
@@ -1670,5 +3169,140 @@ form {
 /* Hidden state */
 .recent-connections-section.hidden {
     display: none;
+}
+
+/* ============================================================================
+   PROFILE ICON STYLES
+   ============================================================================ */
+
+/* Icon Input Field with Icon Display */
+.icon-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.icon-input-icon {
+    position: absolute;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.icon-input-icon svg {
+    color: var(--text-color);
+}
+
+/* Adjust input padding when icon is present */
+.icon-input-wrapper.has-icon input {
+    padding-left: 36px;
+}
+
+/* Icon Dropdown in Profile Form */
+.icon-dropdown .icon-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+}
+
+.icon-dropdown .dropdown-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.icon-dropdown .dropdown-icon-preview {
+    color: var(--text-color);
+}
+
+.icon-dropdown .dropdown-icon-label {
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+.icon-dropdown .icon-dropdown-item:hover .dropdown-icon-preview {
+    color: var(--primary-color);
+}
+
+.icon-dropdown .icon-dropdown-item.selected .dropdown-icon-preview {
+    color: var(--primary-color);
+}
+
+.icon-dropdown .icon-dropdown-item.focused .dropdown-icon-preview {
+    color: var(--primary-color);
+}
+
+/* Profile Card Layout - Icon under name, info to right */
+.profile-card-header {
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+.profile-card-title {
+    font-weight: 600;
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-card-body {
+    grid-area: info;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    min-width: 0; /* Allow flex children to shrink below content size */
+}
+
+.profile-card-icon-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.profile-card-icon {
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.profile-card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0; /* Critical: allows children to respect text-overflow */
+    overflow: hidden; /* Ensures no overflow from children */
+}
+
+/* Profile Card Tags */
+.profile-card-tags {
+    grid-area: tags;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+
+.tag-badge:hover {
+    opacity: 0.8;
 }
 

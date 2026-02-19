@@ -1,38 +1,26 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.6.5
+## Current Version: v0.7.0
 
-**Released:** 2026-01-09 ✅
-**Type:** Bug Fix Release
-**Focus:** UX improvements, validation fixes, startup issues
+**Released:** 2026-02-19 ✅
+**Type:** Major Feature Release
+**Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags, keyboard shortcuts
+
+## Current Development Version: v0.8.0
+
+**Type:** Feature Release
+**Focus:** Multi-tab system, pop-out windows
 
 ---
 
 ## Roadmap
 
 ```
-v0.6.3 ✅ → v0.6.4 ✅ → v0.6.5 ✅ → v0.7.0 → v0.8.0 → v0.9.0 → v1.0.0
+v0.6.5 ✅ → v0.7.0 ✅ → v0.8.0 → v0.9.0 → v1.0.0
 ```
 
-### v0.7.0 - Hierarchical Groups & Enhanced Organization
-**Status:** Planned
-**Focus:** Enhanced group management, hierarchical organization, export/import improvements, favorites & tags
-
-See `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md` for detailed plan.
-
-**Major Features:**
-- Hierarchical group system with sub-groups (up to 3 levels)
-- Separate group management (Add, Rename, Delete with cascade/move options)
-- Individual profile/group export/import with append mode
-- Encrypted exports with AES-256-GCM and HMAC integrity verification
-- Favorites system for profiles and groups
-- Icon picker for profiles (predefined library)
-- Tag system with color-coding and filtering
-- Profile name uniqueness scoped to parent group
-- Settings Export/Import renamed to Backup/Restore
-
 ### v0.8.0 - Multi-Tab System
-**Status:** Planned
+**Status:** Next Up
 **Focus:** App-level tabs, pop-out windows
 
 See `plans/v0.8.0-multi-tab-system.md` for detailed plan.
@@ -46,6 +34,23 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 ### v1.0.0 - Major Refactoring Sprint
 **Status:** Planned
 **Focus:** 40-50% complexity reduction, stable release
+
+**Key Refactoring Tasks:**
+- **Modularize Backend (M-13):** Split `lib.rs` (5190 lines) into modules:
+  - `db.rs` (~700 lines) - Database operations
+  - `validation.rs` (~200 lines) - Input validation
+  - `crypto.rs` (~200 lines) - Encryption/decryption
+  - `export_import.rs` (~900 lines) - Export/import logic
+  - `terminal.rs` (~500 lines) - Terminal session management
+  - `ssh.rs` (~300 lines) - SSH connection logic
+  - Improves maintainability, reduces merge conflicts, enables parallel development
+
+- **Modularize Frontend (M-14):** Refactor `main.js` (10,771 lines) with ES modules + bundler:
+  - Use esbuild or Vite for module bundling
+  - Split into logical modules (profiles, groups, tags, settings, modals, etc.)
+  - Improves code organization, enables tree-shaking, faster dev rebuilds
+
+- **Additional Optimization:** Apply deferred performance improvements (M-5, L-1 done, others remaining)
 
 ---
 
@@ -74,6 +79,18 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 ---
 
 ## Archive
+
+### v0.7.0 - Released 2026-02-19 ✅
+**Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags
+- Hierarchical group system with sub-groups (up to 3 levels)
+- Individual profile/group export/import with duplicate detection
+- Encrypted exports with AES-256-GCM and PBKDF2 key derivation
+- Favourites system for profiles with virtual Favourites group
+- Profile icon picker with 40+ Lucide icons
+- Tag system with colour-coding and `tag:` search filtering
+- 30+ keyboard shortcuts with help modal
+- Settings Export/Import renamed to Backup/Restore
+- 135 automated tests (107 unit + 22 integration + 6 additional from Phase 8E)
 
 ### v0.6.5 - Released 2026-01-09 ✅
 **Focus:** UX improvements and validation fixes

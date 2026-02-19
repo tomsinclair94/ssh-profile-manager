@@ -35,18 +35,21 @@
    ```
 
 4. **Prepare for Release** - Before creating PR, ensure:
-   - ✅ Code review completed (use code-reviewer agent)
-   - ✅ Security review completed (use security-engineer agent)
+   - ✅ **All tests passing** (`cargo test --lib` - 135 tests must pass)
+   - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
+   - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
    - ✅ Version updated in ALL 7 locations:
-     1. `src-tauri/tauri.conf.json` (line 4)
-     2. `src-tauri/Cargo.toml` (line 3)
-     3. `package.json` (line 3)
-     4. `dist/index.html` (line 17)
-     5. `dist/index.html` (line ~336)
-     6. `README.md` (line 14)
-     7. `README.md` (line 16)
-   - ✅ CHANGELOG.md updated with new version entry
+     1. `src-tauri/tauri.conf.json`
+     2. `src-tauri/Cargo.toml`
+     3. `package.json`
+     4. `dist/index.html` (two occurrences)
+     5. `README.md` (two occurrences — version badge + download badge)
+     6. `dist/main.js` — `CURRENT_APP_VERSION` constant
+     7. `dist/main.js` — `VERSION_CHANGELOG` entry (add new version entry)
+   - ✅ **Both changelogs** updated:
+     - `CHANGELOG.md` — full user-facing entry (Added/Changed/Fixed/Security)
+     - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen
    - ✅ README.md updated (features, screenshots if needed)
    - ✅ Manual testing completed
    - ✅ All changes committed and pushed to `vX.X.X-dev`
@@ -199,11 +202,101 @@ The repository uses four automated workflows for quality assurance and releases:
 - Regular pushes: No workflows triggered (saves CI minutes)
 - Release merges: Auto-tag → Release workflow chain
 
+## Testing
+
+### Test Structure
+
+All tests are located in `src-tauri/src/tests/` with a modular structure:
+
+```
+src-tauri/src/tests/
+├── helpers.rs        # Shared test utilities (create_test_db, make_test_*)
+├── encryption.rs     # 38 tests - AES-256-GCM encryption/decryption
+├── validation.rs     # 27 tests - Input validation (hostname, username, etc.)
+├── profiles.rs       # 11 tests - Profile CRUD operations
+├── groups.rs         #  9 tests - Hierarchical group management
+├── tags.rs           #  9 tests - Tag system operations
+├── connections.rs    #  5 tests - Recent connections tracking
+├── settings.rs       #  3 tests - User settings storage
+├── migrations.rs     #  5 tests - Database schema migrations
+└── integration.rs    # 22 tests - Multi-step workflow validation
+
+Total: 135 tests (all must pass before release)
+```
+
+### Running Tests
+
+```bash
+cd src-tauri
+
+# Run all tests
+cargo test --lib
+
+# Run specific test module
+cargo test --lib tests::encryption
+cargo test --lib tests::profiles
+
+# Run specific test
+cargo test --lib test_create_profile_success
+
+# Run with output
+cargo test --lib -- --nocapture
+```
+
+**Expected result:** `135 passed; 0 failed` in ~41 seconds
+
+### Writing Tests for New Features
+
+**When adding new features, you MUST write tests:**
+
+1. **Create tests in the appropriate module** (or create new module if needed)
+2. **Follow existing patterns:**
+   - Use `create_test_db()` for database operations
+   - Use `make_test_*()` helpers for test data
+   - Test both success and failure cases
+   - Use descriptive test names (e.g., `test_create_profile_success`)
+
+3. **Test module imports:**
+   ```rust
+   use super::helpers::*;  // For test utilities
+   use crate::X;           // For lib.rs functions
+   ```
+
+4. **Verify tests pass:**
+   ```bash
+   cargo test --lib
+   ```
+
+**Example test:**
+```rust
+#[test]
+fn test_new_feature_success() {
+    let db = create_test_db();
+    // Test implementation
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_new_feature_validation_fails() {
+    // Test failure case
+    assert!(result.is_err());
+}
+```
+
+### Coverage Goals
+
+- **Critical functions:** Tauri commands, database operations, validation
+- **Target:** 60%+ coverage on critical paths
+- **Required:** All new features must have tests before merging to main
+
+---
+
 ## Quick Start
 
 ```bash
 bun run dev      # Development with hot reload
 bun run build    # Production build
+cargo test --lib # Run all tests (required before release)
 ```
 
 ## Project Structure
@@ -211,6 +304,9 @@ bun run build    # Production build
 ```
 dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
+  ├── src/
+  │   ├── lib.rs        # Main backend code (~5190 lines)
+  │   └── tests/        # Test modules (135 tests)
 ```
 
 See CLAUDE.md for detailed development notes (local file, not in repo).

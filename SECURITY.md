@@ -6,8 +6,8 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.6.x   | :white_check_mark: |
-| < 0.6.0 | :x:                |
+| 0.7.x   | :white_check_mark: |
+| < 0.7.0 | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -17,16 +17,13 @@ We take the security of SSH Profile Manager seriously. If you discover a securit
 
 **Please do NOT report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via one of these methods:
+Instead, please use **GitHub Security Advisories**:
 
-1. **GitHub Security Advisories** (Preferred)
-   - Go to the [Security tab](https://github.com/tomsinclair94/ssh-profile-manager/security/advisories)
-   - Click "Report a vulnerability"
-   - Fill out the form with details
+1. Go to the [Security tab](https://github.com/tomsinclair94/ssh-profile-manager/security/advisories)
+2. Click "Report a vulnerability"
+3. Fill out the form with details
 
-2. **Email**
-   - Send details to: [Create an issue with security label if urgent]
-   - Include "SECURITY" in the subject line
+Your report will be received privately and you will be kept updated throughout the process.
 
 ### What to Include
 
@@ -61,6 +58,10 @@ SSH Profile Manager includes several security measures:
 - **Command Injection Prevention:** Shell commands properly escaped
 - **Rate Limiting:** Protection against DoS via rapid operations
 - **Temp File Security:** Minimal exposure time for temporary connection scripts
+- **Encrypted Exports:** AES-256-GCM authenticated encryption with PBKDF2-HMAC-SHA256 key derivation (600k iterations)
+- **Export Integrity:** HMAC-SHA256 verification detects tampering before decryption begins
+- **Mandatory Encryption:** Exports containing password-authenticated profiles require encryption (cannot be bypassed)
+- **CSP Compliance:** Strict Content Security Policy with no external CDN dependencies (xterm.js vendored locally)
 
 ## Security Updates
 
@@ -71,7 +72,10 @@ Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-mana
 ## Security Review History
 
 This project undergoes regular security reviews:
-- **v0.6.0:** Comprehensive security review (0 CRITICAL, 0 HIGH, 3 MEDIUM, 2 LOW findings - all MEDIUM/HIGH resolved)
+- **v0.7.0:** Comprehensive security review (1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW findings — 20 resolved, 12 deferred to v1.0.0)
+- **v0.6.4:** Security hardening sprint (16+ fixes — temp file security, SSH host key verification, session management, CDN elimination)
+- **v0.6.3:** Security fixes (2 CRITICAL mutex/script exposure, 3 MEDIUM findings resolved)
+- **v0.6.0:** Comprehensive security review (0 CRITICAL, 0 HIGH, 3 MEDIUM, 2 LOW findings — all resolved)
 - **v0.5.2:** Security enhancements (2 MEDIUM, 1 LOW findings resolved)
 - **v0.5.1:** Security fixes (3 MEDIUM XSS/injection fixes)
 - **v0.5.0:** Critical security fixes (2 CRITICAL command injection, 1 HIGH fixes)
