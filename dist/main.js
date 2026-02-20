@@ -62,9 +62,8 @@ const VERSION_CHANGELOG = {
         highlights: [
             'Fixed Parent Group dropdown flickering and disappearing when opened',
             'Fixed group modal occasionally getting stuck at an expanded size',
-            'Compact view: profile card buttons now stay on the right and stack vertically',
-            'Compact view: favourite card buttons stack vertically with balanced spacing',
-            'Compact view: icon and hostname/username are now vertically centred on favourite cards'
+            'Fixed "What\'s New" splash showing on app reload instead of only on launch',
+            'Compact view improvements: polished card layout for standard and favourite profile cards'
         ],
         releaseDate: '',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.1'
@@ -2911,6 +2910,13 @@ function performPostLoadMigration() {
 function shouldShowVersionSplash() {
     const LAST_SPLASH_VERSION_KEY = 'lastSplashVersion';
     const SPLASH_DISMISSED_UNCHECKED_KEY = 'splashDismissedUnchecked';
+    const SESSION_SPLASH_SHOWN_KEY = 'splashShownThisSession';
+
+    // sessionStorage persists across page reloads (Cmd+R) but is cleared on app quit/relaunch.
+    // If the splash was already shown this session, skip it to avoid showing on hot reload.
+    if (sessionStorage.getItem(SESSION_SPLASH_SHOWN_KEY)) {
+        return false;
+    }
 
     const lastShownVersion = localStorage.getItem(LAST_SPLASH_VERSION_KEY);
     const dismissedUnchecked = localStorage.getItem(SPLASH_DISMISSED_UNCHECKED_KEY) === 'true';
@@ -3030,6 +3036,9 @@ function showVersionSplashScreen(version) {
     // Show modal
     versionSplashModal.classList.remove('hidden');
     pushModal('versionSplash');
+
+    // Mark as shown this session so a hot reload (Cmd+R) doesn't re-trigger it
+    sessionStorage.setItem('splashShownThisSession', 'true');
 
     // Focus GitHub link as first tabbable element
     if (versionSplashGithubLink) {
