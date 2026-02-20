@@ -1,26 +1,25 @@
-# v0.9.0 - Terminal Customization & Accessibility
+# Feature Plan: Terminal Customization & Accessibility
 
-**Status:** Planned (starts after v0.8.0 release)
-**Target Release:** TBD
-**Branch:** `v0.9.0-dev` (to be created)
+**Status:** Planned (not yet assigned to a version)
+**Target Release:** TBD — assigned when development begins
+**Dependency:** Multi-tab system (`plans/feature-multi-tab-system.md`) should be complete first, as per-tab customization builds on that infrastructure
 
 ## Overview
 
-This release focuses on terminal customization and accessibility features. After establishing the multi-tab infrastructure in v0.8.0, v0.9.0 makes the terminal experience personalizable and accessible to all users.
+This feature focuses on terminal customization and accessibility. After establishing the multi-tab infrastructure, this release makes the terminal experience personalisable and accessible to all users.
 
-**Focus:** User-facing customization, appearance options, and accessibility
-**Prerequisites:** v0.8.0 multi-tab system must be complete
+**Focus:** User-facing customisation, appearance options, and accessibility
 
 ## Features
 
 ### 1. Terminal Appearance Settings
 
-**Description:** Comprehensive terminal appearance customization with live preview in Settings modal.
+**Description:** Comprehensive terminal appearance customisation with live preview in Settings modal.
 
 **User Stories:**
 - As a user, I want to choose my preferred terminal font and size
-- As a user, I want to select from different color schemes
-- As a user, I want to customize cursor appearance
+- As a user, I want to select from different colour schemes
+- As a user, I want to customise cursor appearance
 - As a user, I want to control scrollback buffer size
 - As a user, I want to preview changes before applying them
 
@@ -43,7 +42,7 @@ This release focuses on terminal customization and accessibility features. After
    - Slider has tick marks at 12, 14, 16, 18
    - Number input allows direct entry
 
-3. **Color Scheme** (Dropdown)
+3. **Colour Scheme** (Dropdown)
    - Default (current xterm.js theme)
    - Solarized Dark
    - Solarized Light
@@ -66,7 +65,7 @@ This release focuses on terminal customization and accessibility features. After
 
 6. **Live Preview** (Read-only Terminal)
    - Mini xterm.js instance (10 lines tall, 80 cols wide)
-   - Shows sample output with colors:
+   - Shows sample output with colours:
      ```
      user@host:~$ ls -la
      total 64
@@ -76,7 +75,7 @@ This release focuses on terminal customization and accessibility features. After
      drwxr-xr-x  4 user  staff   128 Jan  1 08:00 Documents
      ```
    - Updates in real-time as user changes settings
-   - Shows ANSI colors (use in sample output)
+   - Shows ANSI colours (use in sample output)
 
 **Settings Persistence:**
 - Stored in `user_settings` table (key-value pairs)
@@ -87,9 +86,9 @@ This release focuses on terminal customization and accessibility features. After
 
 ---
 
-#### Color Scheme Definitions
+#### Colour Scheme Definitions
 
-**Complete 16-color ANSI palette + background/foreground for each scheme:**
+**Complete 16-colour ANSI palette + background/foreground for each scheme:**
 
 ```javascript
 const COLOR_SCHEMES = {
@@ -187,11 +186,11 @@ pub struct SettingsData {
 ```
 
 **Export/Import Settings:**
-- Include new fields in `export_settings()` serialization
+- Include new fields in `export_settings()` serialisation
 - Validate on `import_settings()`:
   - Font family: alphanumeric + spaces, hyphens (max 64 chars)
   - Font size: clamp to 10-24
-  - Color scheme: check against known schemes, default to "default"
+  - Colour scheme: check against known schemes, default to "default"
   - Cursor style: check against ["block", "underline", "bar"]
   - Scrollback lines: clamp to 100-10000
 
@@ -263,14 +262,14 @@ term.onSelectionChange(() => {
 
 ---
 
-### 3. Per-Tab Customization
+### 3. Per-Tab Customisation
 
 **Description:** Allow users to override global terminal settings for individual tabs
 
 **User Stories:**
-- As a user, I want to use a different color scheme for production vs development servers
+- As a user, I want to use a different colour scheme for production vs development servers
 - As a user, I want to increase font size for a specific tab with small text output
-- As a user, I want to customize cursor style per tab for visual distinction
+- As a user, I want to customise cursor style per tab for visual distinction
 
 ---
 
@@ -281,7 +280,7 @@ Add "Tab Settings" to meatball menu (...)
 - Shows current tab's settings
 - Options:
   - Use Global Settings (default)
-  - Override: Color Scheme
+  - Override: Colour Scheme
   - Override: Font Size
   - Override: Cursor Style
 - Changes apply immediately to active tab
@@ -322,11 +321,11 @@ function applyTabSettings(term, tabId) {
 **Controls in Settings Modal:**
 
 - **High Contrast Terminal** (Checkbox)
-  - Enabled: Use high contrast colors (WCAG AAA compliant)
-  - Disabled: Use standard color schemes
+  - Enabled: Use high contrast colours (WCAG AAA compliant)
+  - Disabled: Use standard colour schemes
   - Default: Disabled
 
-**High Contrast Color Scheme:**
+**High Contrast Colour Scheme:**
 ```javascript
 high_contrast: {
   background: '#000000',
@@ -412,29 +411,29 @@ document.addEventListener('keydown', (e) => {
 
 ---
 
-### 5. Custom Color Scheme Creator
+### 5. Custom Colour Scheme Creator
 
-**Description:** Allow users to create their own color schemes with a color picker UI
+**Description:** Allow users to create their own colour schemes with a colour picker UI
 
 **User Stories:**
-- As a user, I want to create a color scheme that matches my brand colors
-- As a user, I want to save multiple custom color schemes
-- As a user, I want to share my color schemes with teammates
+- As a user, I want to create a colour scheme that matches my brand colours
+- As a user, I want to save multiple custom colour schemes
+- As a user, I want to share my colour schemes with teammates
 
 ---
 
-**Color Scheme Editor:**
+**Colour Scheme Editor:**
 
 **Access:** Settings → Terminal Appearance → "Create Custom Scheme" button
 
 **UI:**
 - Scheme name input
-- Color pickers for each property:
+- Colour pickers for each property:
   - Background
   - Foreground
   - Cursor
-  - Black, Red, Green, Yellow, Blue, Magenta, Cyan, White (8 colors)
-  - Bright variants (8 colors)
+  - Black, Red, Green, Yellow, Blue, Magenta, Cyan, White (8 colours)
+  - Bright variants (8 colours)
 - Live preview terminal (same as main settings)
 - Save/Cancel buttons
 
@@ -470,8 +469,8 @@ document.addEventListener('keydown', (e) => {
 
 **Tasks:**
 1. Add "Terminal Appearance" section to Settings modal
-2. Implement font family, size, color scheme, cursor, scrollback controls
-3. Define all color scheme palettes (8 schemes)
+2. Implement font family, size, colour scheme, cursor, scrollback controls
+3. Define all colour scheme palettes (8 schemes)
 4. Implement live preview terminal (mini xterm instance)
 5. Wire up preview updates on setting changes
 6. Apply settings to new terminal tabs
@@ -495,7 +494,7 @@ document.addEventListener('keydown', (e) => {
 
 ---
 
-### Phase 4: Per-Tab Customization
+### Phase 4: Per-Tab Customisation
 **Goal:** Override global settings per tab
 
 **Tasks:**
@@ -504,7 +503,7 @@ document.addEventListener('keydown', (e) => {
 3. Implement override logic (tab settings > global settings)
 4. Store tab settings in tab metadata
 5. Apply tab settings on tab creation/switch
-6. Test: Override color scheme, font size, cursor per tab
+6. Test: Override colour scheme, font size, cursor per tab
 
 **Files:** `dist/main.js`, `dist/styles.css`
 
@@ -514,7 +513,7 @@ document.addEventListener('keydown', (e) => {
 **Goal:** High contrast, screen reader, zoom
 
 **Tasks:**
-1. Implement high contrast color scheme
+1. Implement high contrast colour scheme
 2. Add high contrast toggle to Settings modal
 3. Implement screen reader announcements for tab actions
 4. Implement font size zoom keyboard shortcuts (Cmd+/-, Cmd+0)
@@ -524,14 +523,14 @@ document.addEventListener('keydown', (e) => {
 
 ---
 
-### Phase 6: Custom Color Scheme Creator
-**Goal:** User-created color schemes
+### Phase 6: Custom Colour Scheme Creator
+**Goal:** User-created colour schemes
 
 **Tasks:**
-1. Create color scheme editor UI (modal or dedicated page)
-2. Implement color pickers for all 16+ properties
+1. Create colour scheme editor UI (modal or dedicated page)
+2. Implement colour pickers for all 16+ properties
 3. Implement save/load custom schemes
-4. Add custom schemes to color scheme dropdown
+4. Add custom schemes to colour scheme dropdown
 5. Implement export/import for sharing
 6. Test: Create, save, apply, export, import custom schemes
 
@@ -547,11 +546,10 @@ document.addEventListener('keydown', (e) => {
 2. Cross-platform testing (macOS, Windows)
 3. Accessibility testing (screen reader, keyboard navigation)
 4. Code review (`voltagent-qa-sec:code-reviewer` agent)
-5. Refactoring review (`voltagent-dev-exp:refactoring-specialist` agent - v1.0.0 only)
-6. Security review (`voltagent-infra:security-engineer` agent)
-7. Fix all CRITICAL/HIGH/MEDIUM findings
-8. Update documentation (CHANGELOG.md, README.md, CLAUDE.md)
-9. Create PR to main
+5. Security review (`voltagent-infra:security-engineer` agent)
+6. Fix all CRITICAL/HIGH/MEDIUM findings
+7. Update documentation (CHANGELOG.md, README.md, CLAUDE.md)
+8. Create PR to main
 
 **Files:** All modified files, documentation
 
@@ -560,15 +558,15 @@ document.addEventListener('keydown', (e) => {
 ## Files to Modify
 
 ### Frontend
-- **dist/index.html** - Add Terminal Appearance section, color scheme editor
-- **dist/main.js** - Settings application, color schemes, per-tab settings, accessibility
-- **dist/styles.css** - Settings UI, color scheme editor, high contrast
+- **dist/index.html** - Add Terminal Appearance section, colour scheme editor
+- **dist/main.js** - Settings application, colour schemes, per-tab settings, accessibility
+- **dist/styles.css** - Settings UI, colour scheme editor, high contrast
 
 ### Backend
 - **src-tauri/src/lib.rs** - Update SettingsData, export/import validation
 
 ### Documentation
-- **CHANGELOG.md** - Add v0.9.0 entry
+- **CHANGELOG.md** - Add new version entry
 - **README.md** - Update features, screenshots
 - **CLAUDE.md** - Update status when released
 
@@ -581,7 +579,7 @@ document.addEventListener('keydown', (e) => {
 #### Terminal Appearance
 - [ ] Change font family → preview updates, applies to new tabs
 - [ ] Change font size → preview updates, slider syncs, applies to new tabs
-- [ ] Change color scheme → preview shows correct colors, applies to new tabs
+- [ ] Change colour scheme → preview shows correct colours, applies to new tabs
 - [ ] Change cursor style → preview shows block/underline/bar, applies to new tabs
 - [ ] Change scrollback lines → value saves, applies to new tabs
 - [ ] Save settings → settings persist after app restart
@@ -604,16 +602,16 @@ document.addEventListener('keydown', (e) => {
 - [ ] Right-click Duplicate Tab → duplicates tab
 - [ ] Right-click Pop Out → pops out tab
 
-#### Per-Tab Customization
+#### Per-Tab Customisation
 - [ ] Tab Settings menu → opens inline panel
-- [ ] Override color scheme → applies to active tab only
+- [ ] Override colour scheme → applies to active tab only
 - [ ] Override font size → applies to active tab only
 - [ ] Override cursor style → applies to active tab only
 - [ ] Switch to different tab → reverts to that tab's settings
 - [ ] Use Global Settings → removes overrides, uses global
 
 #### Accessibility
-- [ ] High contrast mode → uses high contrast colors
+- [ ] High contrast mode → uses high contrast colours
 - [ ] Screen reader announces tab switches
 - [ ] Screen reader announces tab close
 - [ ] Screen reader announces tab creation
@@ -623,11 +621,11 @@ document.addEventListener('keydown', (e) => {
 - [ ] All actions accessible via keyboard
 - [ ] Clear focus indicators on all elements
 
-#### Custom Color Schemes
+#### Custom Colour Schemes
 - [ ] Create custom scheme → editor opens
-- [ ] Edit background color → preview updates
-- [ ] Edit foreground color → preview updates
-- [ ] Edit all 16 ANSI colors → preview updates
+- [ ] Edit background colour → preview updates
+- [ ] Edit foreground colour → preview updates
+- [ ] Edit all 16 ANSI colours → preview updates
 - [ ] Save custom scheme → appears in dropdown
 - [ ] Apply custom scheme → works correctly
 - [ ] Export custom scheme → JSON file downloads
@@ -637,18 +635,17 @@ document.addEventListener('keydown', (e) => {
 #### Edge Cases
 - [ ] Invalid font family on import → fallback to monospace
 - [ ] Font size out of range → clamped to 10-24
-- [ ] Color scheme not found → uses default
+- [ ] Colour scheme not found → uses default
 - [ ] Cursor style invalid → uses block
 - [ ] Scrollback out of range → clamped to 100-10000
 - [ ] Live preview fails → hides preview section
 - [ ] Multiple tabs with different per-tab settings → all work independently
-- [ ] Settings apply to existing open terminals (if implemented)
 
 #### Browser Console
 - [ ] No errors during settings changes
-- [ ] No errors during color scheme application
+- [ ] No errors during colour scheme application
 - [ ] No errors during custom scheme creation
-- [ ] No errors during per-tab customization
+- [ ] No errors during per-tab customisation
 
 ---
 
@@ -657,14 +654,14 @@ document.addEventListener('keydown', (e) => {
 **No new dependencies required.**
 - xterm.js 5.3.0 (already included)
 - xterm-addon-fit 0.8.0 (already included)
-- Color picker: Use native `<input type="color">` (no library needed)
+- Colour picker: Use native `<input type="color">` (no library needed)
 
 ---
 
 ## Risks & Mitigations
 
-**Risk:** Color scheme definitions incomplete (missing ANSI colors)
-**Mitigation:** Define complete 16-color palette for each scheme, research existing terminal themes
+**Risk:** Colour scheme definitions incomplete (missing ANSI colours)
+**Mitigation:** Define complete 16-colour palette for each scheme, research existing terminal themes
 
 **Risk:** Settings not applied to existing terminals (user confusion)
 **Mitigation:** Document clearly in settings UI, consider adding "Apply to All Open Terminals" button
@@ -672,7 +669,7 @@ document.addEventListener('keydown', (e) => {
 **Risk:** Very large scrollback (10000 lines) impacts performance
 **Mitigation:** Document memory usage in hint text, xterm.js handles this well
 
-**Risk:** Custom color schemes create unreadable terminals
+**Risk:** Custom colour schemes create unreadable terminals
 **Mitigation:** Add "Reset to Default" button, validate contrast ratios, show warning for low contrast
 
 **Risk:** Per-tab settings increase complexity
@@ -687,15 +684,15 @@ document.addEventListener('keydown', (e) => {
 
 - [ ] Terminal appearance settings persist across app restarts
 - [ ] Live preview accurately reflects selected settings
-- [ ] All 8 color schemes display correctly with full ANSI palette
+- [ ] All 8 colour schemes display correctly with full ANSI palette
 - [ ] Settings export/import includes terminal settings
 - [ ] Copy-on-select works as expected
 - [ ] Right-click context menu provides all necessary actions
-- [ ] Per-tab customization works without affecting other tabs
+- [ ] Per-tab customisation works without affecting other tabs
 - [ ] High contrast mode meets WCAG AAA standards (7:1 contrast)
 - [ ] Screen reader announces all tab actions clearly
 - [ ] Font size zoom works smoothly
-- [ ] Custom color schemes can be created, saved, and shared
+- [ ] Custom colour schemes can be created, saved, and shared
 - [ ] No browser console errors during normal usage
 - [ ] Code review passes with no CRITICAL/HIGH findings
 - [ ] Security review passes with no CRITICAL/HIGH findings
@@ -705,15 +702,13 @@ document.addEventListener('keydown', (e) => {
 
 ## Out of Scope (Future Enhancements)
 
-The following features are not included in v0.9.0 but may be considered for future releases:
+The following features are not included here but may be considered for future releases:
 
 - Split panes within a tab (vertical/horizontal)
-- Tab groups (organize related sessions)
-- Terminal themes (predefined sets of settings beyond color schemes)
+- Tab groups (organise related sessions)
+- Terminal themes (predefined sets of settings beyond colour schemes)
 - Custom keyboard shortcuts for terminal actions
 - Terminal macros/snippets
 - Session recording/playback
 - Terminal search (find in output)
 - Link detection and click-to-open
-
-These features may be considered for v1.0.0+ or v1.1.0+ depending on user feedback and priorities.

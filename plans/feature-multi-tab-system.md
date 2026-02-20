@@ -1,27 +1,26 @@
-# v0.8.0 - Multi-Tab System
+# Feature Plan: Multi-Tab System
 
-**Status:** Planned (starts after v0.7.0 release)
-**Target Release:** TBD
-**Branch:** `v0.8.0-dev` (to be created)
+**Status:** Planned (not yet assigned to a version)
+**Target Release:** TBD — assigned when development begins
 
 ## Overview
 
-This release transforms the SSH Profile Manager from a modal-based terminal UI to an app-level tabbed interface, similar to modern web browsers. This is a major architectural change that makes the embedded terminal a first-class feature with multi-tab support, pop-out windows, and efficient tab management.
+This feature transforms the SSH Profile Manager from a modal-based terminal UI to an app-level tabbed interface, similar to modern web browsers. This is a major architectural change that makes the embedded terminal a first-class feature with multi-tab support, pop-out windows, and efficient tab management.
 
 **Focus:** Infrastructure and architecture for multi-tab terminal sessions
-**Not in scope:** Terminal customization (color schemes, fonts, etc.) - moved to v0.9.0
+**Not in scope:** Terminal customization (color schemes, fonts, etc.) — see `plans/feature-terminal-customization.md`
 
 ## Key Architectural Changes
 
 ### From Modal to Tabs
 
-**Before (v0.6.1):**
+**Before (current):**
 - Profile list is the main screen
 - Terminal opens in a modal overlay
 - Only one terminal session visible at a time
 - Modal hides the profile list
 
-**After (v0.8.0):**
+**After (this feature):**
 - App-level tab bar with "Profiles" tab + Terminal tabs
 - Profiles tab shows the profile list (always present, can't close)
 - Each SSH connection opens in a new terminal tab
@@ -723,7 +722,7 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 
 **Scrollback Buffer:**
 - Default: 1000 lines (moderate memory usage)
-- User configurable in v0.8.0 (100-10000 lines)
+- User configurable (100-10000 lines) — see `plans/feature-terminal-customization.md`
 - Large buffers may impact performance on older machines
 
 **Tab Switching Optimization:**
@@ -737,11 +736,6 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 - Close pop-out window → terminate PTY with confirmation
 - App quit → terminate all PTYs with confirmation
 - No orphaned processes
-
-**Lazy Loading (Future - v0.9.0+):**
-- Inactive terminals pause data buffering (reduce memory)
-- Re-activate when tab becomes active
-- Requires PTY pause/resume support
 
 ---
 
@@ -807,7 +801,7 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 
 ### App Layout (Before/After)
 
-**Before (v0.6.1):**
+**Before (current):**
 ```
 +--------------------------------------------+
 | Logo  SSH Profile Manager    [Settings]   |
@@ -833,7 +827,7 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 +--------------------------------------------+
 ```
 
-**After (v0.8.0):**
+**After (this feature):**
 ```
 +----------------------------------------------------+
 | Logo  SSH Profile Manager              [Settings] |
@@ -950,10 +944,10 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 ---
 
 ### Phase 6: Performance & Polish
-**Goal:** Optimize performance, handle edge cases
+**Goal:** Optimise performance, handle edge cases
 
 **Tasks:**
-1. Optimize tab switching (CSS display toggle, no destroy/recreate)
+1. Optimise tab switching (CSS display toggle, no destroy/recreate)
 2. Truncate long profile names with ellipsis
 3. Improve tab close confirmation UX
 4. Add toast notifications for errors
@@ -972,11 +966,10 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 1. Manual testing checklist completion
 2. Cross-platform testing (macOS, Windows)
 3. Code review (`voltagent-qa-sec:code-reviewer` agent)
-4. Refactoring review (`voltagent-dev-exp:refactoring-specialist` agent - v1.0.0 only)
-5. Security review (`voltagent-infra:security-engineer` agent)
-6. Fix all CRITICAL/HIGH/MEDIUM findings
-7. Update documentation (CHANGELOG.md, README.md, CLAUDE.md)
-8. Create PR to main
+4. Security review (`voltagent-infra:security-engineer` agent)
+5. Fix all CRITICAL/HIGH/MEDIUM findings
+6. Update documentation (CHANGELOG.md, README.md, CLAUDE.md)
+7. Create PR to main
 
 **Files:** All modified files, documentation
 
@@ -994,10 +987,10 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 
 ### New Files
 - **dist/terminal-window.html** - Dedicated HTML for pop-out windows
-- **dist/terminal-window.js** - JavaScript for pop-out window behavior
+- **dist/terminal-window.js** - JavaScript for pop-out window behaviour
 
 ### Documentation
-- **CHANGELOG.md** - Add v0.7.0 entry with features
+- **CHANGELOG.md** - Add new version entry
 - **README.md** - Update screenshots, feature list
 - **CLAUDE.md** - Update status when released
 
@@ -1027,7 +1020,7 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 - [ ] Mouse wheel on tab bar → scrolls horizontally
 - [ ] Arrow Left key → scrolls tab bar left (reveals left tabs)
 - [ ] Arrow Right key → scrolls tab bar right (reveals right tabs)
-- [ ] Switch to hidden tab → auto-scrolls into view (centered)
+- [ ] Switch to hidden tab → auto-scrolls into view (centred)
 - [ ] Active tab always visible after switching
 - [ ] Smooth scroll animation (~200ms)
 - [ ] Gradients hide when no overflow (few tabs)
@@ -1042,7 +1035,7 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 - [ ] Left gradient appears when scrolled right
 - [ ] Right gradient appears when more connections extend beyond right edge
 - [ ] Mouse wheel on recent connections bar → scrolls horizontally
-- [ ] Smooth scroll animation matches tab bar behavior
+- [ ] Smooth scroll animation matches tab bar behaviour
 - [ ] Gradients hide when no overflow
 - [ ] Visual consistency with tab bar gradient style
 
@@ -1063,7 +1056,7 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 - [ ] Cmd+Shift+O → pops out active terminal tab
 - [ ] Cmd+R → refreshes active terminal connection
 
-#### Connection Status Colors
+#### Connection Status Colours
 - [ ] Connected tab → subtle green tint
 - [ ] Connecting tab → subtle yellow tint
 - [ ] Error tab → subtle red tint
@@ -1140,31 +1133,10 @@ document.getElementById('close-btn').addEventListener('click', async () => {
 - [ ] Active tab auto-scrolls into view when switching
 - [ ] Gradient indicators clearly show when tabs are hidden
 - [ ] All keyboard shortcuts work correctly
-- [ ] Connection status colors are subtle and clear
+- [ ] Connection status colours are subtle and clear
 - [ ] Close confirmation prevents accidental disconnections
 - [ ] No memory leaks with repeated tab creation/destruction
 - [ ] No browser console errors during normal usage
 - [ ] Code review passes with no CRITICAL/HIGH findings
 - [ ] Security review passes with no CRITICAL/HIGH findings
 - [ ] Manual testing checklist 100% passed
-
----
-
-## Out of Scope (Moved to v0.9.0)
-
-The following features were originally considered for v0.8.0 but have been **moved to v0.9.0 - Terminal Customization & Accessibility** to keep this release focused on the multi-tab architecture:
-
-- Terminal font family/size settings
-- Terminal color scheme presets
-- Cursor style options
-- Scrollback buffer size configuration
-- Live preview in settings modal
-- Per-tab color schemes
-- Custom color scheme creation
-- Terminal bell settings
-- Copy-on-select
-- Right-click context menu
-- High contrast mode
-- Screen reader improvements
-
-These features will be implemented in v0.9.0 after the multi-tab foundation is stable.

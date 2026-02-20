@@ -23,8 +23,8 @@ bun run build    # Production build
 
 ## Current Status
 
-**In Development:** v0.7.0
-**See:** TODO.md for roadmap and feature backlog
+**Latest Release:** v0.7.0 (2026-02-19) ✅
+**Next:** See TODO.md for planned features and roadmap
 
 **v0.7.0 Features (Released - 2026-02-19):**
 - ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
@@ -37,6 +37,27 @@ bun run build    # Production build
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
 - ✅ Encryption for exports (Phase 6 - all sub-phases 6A-6E complete)
 - ✅ Testing & documentation (Phase 8 - all sub-phases 8A-8F complete)
+
+## Branch Naming Conventions
+
+| Branch pattern | Purpose | Example |
+|---|---|---|
+| `vX.Y.Z-dev` | Feature or patch release development | `v0.8.0-dev`, `v0.7.1-dev` |
+| `docs/description` | Documentation-only changes (no code) | `docs/versioning-policy` |
+
+**Doc-only branches** (`docs/*`) skip the security audit and build checks automatically via path filtering — no need to wait for CI before merging.
+
+**Release branches** (`vX.Y.Z-dev`) follow the full release process in the Release Process section below.
+
+## Versioning Policy
+
+**Pre-v1.0.0 release strategy:**
+
+- **Feature releases** (`vX.Y.0`) — new features, shipped when ready; order and timing are flexible
+- **Patch releases** (`vX.Y.1`) — bug fixes against the most recent feature release only; issued as needed
+- **v1.0.0** — major stable release after a full refactoring sprint; no patch releases planned before this point
+- Feature plans are **not locked to a version number** until development begins on that branch
+- See `plans/feature-*.md` for feature plans that may ship in any future `vX.Y.0` release
 
 ## Version Management
 
