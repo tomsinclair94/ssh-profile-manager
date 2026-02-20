@@ -1,5 +1,22 @@
 # Development Guide
 
+## Versioning Policy
+
+**Pre-v1.0.0 strategy:**
+- **Feature releases** (`vX.Y.0`) — new features, one minor bump per feature set; order is flexible and not predetermined
+- **Patch releases** (`vX.Y.1`) — bug fixes against the most recent feature release only; issued as needed
+- **v1.0.0** — major stable release following a full refactoring sprint
+- Feature plans (`plans/feature-*.md`) are not assigned to a specific version until development begins
+
+## Branch Naming Conventions
+
+| Branch pattern | Purpose | Example |
+|---|---|---|
+| `vX.Y.Z-dev` | Feature or patch release development | `v0.8.0-dev`, `v0.7.1-dev` |
+| `docs/description` | Documentation-only changes (no code) | `docs/versioning-policy` |
+
+**Doc-only PRs** trigger path filtering — security audit and build checks are skipped automatically, so they can be merged immediately once reviewed.
+
 ## Development Workflow
 
 **Branch-based development for new versions:**

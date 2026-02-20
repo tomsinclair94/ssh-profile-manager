@@ -3,40 +3,52 @@
 ## Current Version: v0.7.0
 
 **Released:** 2026-02-19 ✅
-**Type:** Major Feature Release
+**Type:** Feature Release
 **Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags, keyboard shortcuts
 
-## Current Development Version: v0.8.0
+---
 
-**Type:** Feature Release
-**Focus:** Multi-tab system, pop-out windows
+## Versioning Policy
+
+- **Feature releases** (`vX.Y.0`) — new features; order and timing are flexible and not predetermined
+- **Patch releases** (`vX.Y.1`) — bug fixes against the most recent feature release only; issued as needed
+- **v1.0.0** — major stable release following a full refactoring sprint
+- Feature plans are not assigned to a specific version until development begins on that branch
 
 ---
 
 ## Roadmap
 
 ```
-v0.6.5 ✅ → v0.7.0 ✅ → v0.8.0 → v0.9.0 → v1.0.0
+v0.7.0 ✅ → vNext (feature TBD) → ... → v1.0.0
 ```
 
-### v0.8.0 - Multi-Tab System
-**Status:** Next Up
-**Focus:** App-level tabs, pop-out windows
+The next release version will be determined when work begins. Features below are planned but their release order may change based on priorities.
 
-See `plans/v0.8.0-multi-tab-system.md` for detailed plan.
+---
 
-### v0.9.0 - Terminal Customization
+## Planned Features
+
+### Multi-Tab System
 **Status:** Planned
-**Focus:** Fonts, color schemes, accessibility
+**Focus:** App-level tabs, pop-out windows
+**Dependency:** None
 
-See `plans/v0.9.0-terminal-customization.md` for detailed plan.
+See `plans/feature-multi-tab-system.md` for detailed plan.
+
+### Terminal Customisation
+**Status:** Planned
+**Focus:** Fonts, colour schemes, accessibility
+**Dependency:** Multi-tab system should be complete first (per-tab customisation requires tab infrastructure)
+
+See `plans/feature-terminal-customization.md` for detailed plan.
 
 ### v1.0.0 - Major Refactoring Sprint
-**Status:** Planned
+**Status:** Planned (after all feature releases)
 **Focus:** 40-50% complexity reduction, stable release
 
 **Key Refactoring Tasks:**
-- **Modularize Backend (M-13):** Split `lib.rs` (5190 lines) into modules:
+- **Modularise Backend (M-13):** Split `lib.rs` (5190 lines) into modules:
   - `db.rs` (~700 lines) - Database operations
   - `validation.rs` (~200 lines) - Input validation
   - `crypto.rs` (~200 lines) - Encryption/decryption
@@ -45,12 +57,12 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
   - `ssh.rs` (~300 lines) - SSH connection logic
   - Improves maintainability, reduces merge conflicts, enables parallel development
 
-- **Modularize Frontend (M-14):** Refactor `main.js` (10,771 lines) with ES modules + bundler:
+- **Modularise Frontend (M-14):** Refactor `main.js` (10,771 lines) with ES modules + bundler:
   - Use esbuild or Vite for module bundling
   - Split into logical modules (profiles, groups, tags, settings, modals, etc.)
-  - Improves code organization, enables tree-shaking, faster dev rebuilds
+  - Improves code organisation, enables tree-shaking, faster dev rebuilds
 
-- **Additional Optimization:** Apply deferred performance improvements (M-5, L-1 done, others remaining)
+- **Additional Optimisation:** Apply deferred performance improvements (M-5, L-1 done, others remaining)
 
 ---
 
@@ -92,26 +104,4 @@ See `plans/v0.9.0-terminal-customization.md` for detailed plan.
 - Settings Export/Import renamed to Backup/Restore
 - 135 automated tests (107 unit + 22 integration + 6 additional from Phase 8E)
 
-### v0.6.5 - Released 2026-01-09 ✅
-**Focus:** UX improvements and validation fixes
-- Hash (#) character support in Username, Profile Name, and Group Name fields
-- Fixed group filter badge showing "0/0" on startup
-- Fixed filters not applying correctly on startup
-- Fixed group name validation (64-char limit)
-- Improved duplicate profile workflow
-- Fixed modal close button confirmation logic
-
-### v0.6.4 - Released 2025-01-09 ✅
-**Focus:** Windows Terminal fixes and security hardening
-- Windows Terminal tab mode fixes
-- Auto-close terminal behavior (macOS/Windows)
-- Windows icon background fix
-- Comprehensive security hardening (16+ fixes)
-
-### v0.6.3 - Released 2025-01-06 ✅
-**Focus:** Security hardening and UX improvements
-- Terminal tab setting for macOS/Windows
-- Password authentication fix (keyring native features)
-- Profile card UI redesign
-- Auto-tag workflow fix (PAT_TOKEN)
-- 6 critical/medium security fixes
+See `CHANGELOG.md` for full release history.
