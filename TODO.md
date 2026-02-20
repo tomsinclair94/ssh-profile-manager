@@ -84,6 +84,11 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 
 ## Known Issues
 
+### macOS "Open in New Tab" Silent Failure
+- When macOS Accessibility permission for SSH Profile Manager becomes stale, terminal connections set to "Open in new tab" silently fail — no tab opens, no error shown
+- **Workaround:** System Preferences → Privacy & Security → Accessibility → toggle SSH Profile Manager off and on to refresh the permission
+- **Fix planned:** v0.8.0 — actionable error toast shown when `osascript` is blocked by macOS
+
 ### macOS Code Signing
 - DMGs show "damaged" (not code-signed)
 - **Workaround:** Right-click → Open or `xattr -cr "/Applications/SSH Profile Manager.app"`
