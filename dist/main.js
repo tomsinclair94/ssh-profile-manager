@@ -57,10 +57,14 @@ const CURRENT_APP_VERSION = '0.7.1';
 
 const VERSION_CHANGELOG = {
     '0.7.1': {
-        title: 'Bug Fix Release',
-        subtitle: 'Bug Fix Release',
+        title: 'Bug Fixes & UI Polish',
+        subtitle: 'Bug Fixes & UI Polish',
         highlights: [
-            'Bug fixes and stability improvements'
+            'Fixed Parent Group dropdown flickering and disappearing when opened',
+            'Fixed group modal occasionally getting stuck at an expanded size',
+            'Compact view: profile card buttons now stay on the right and stack vertically',
+            'Compact view: favourite card buttons stack vertically with balanced spacing',
+            'Compact view: icon and hostname/username are now vertically centred on favourite cards'
         ],
         releaseDate: '',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.1'
@@ -3586,7 +3590,7 @@ function renderFavouriteProfileCard(profile) {
                     <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
                     <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
                 </div>
-                <button class="btn btn-secondary btn-small goto-profile-btn" data-id="${profile.id}" title="Go to profile's real location">Go to Profile</button>
+                <button class="btn btn-secondary btn-small goto-profile-btn" data-id="${profile.id}" title="Go to profile's real location"><span class="goto-label-wide">Go to Profile</span><span class="goto-label-compact">Go to...</span></button>
             </div>
         </div>
     `;
