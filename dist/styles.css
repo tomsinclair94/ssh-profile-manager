@@ -960,7 +960,67 @@ button.keyboard-selected {
     white-space: nowrap;
 }
 
-/* Wide screens: buttons move to right side */
+/* Compact view (< 800px): keep buttons on right side, stacked vertically */
+@media (max-width: 799px) {
+    /* Normal cards: 2-column grid, buttons stacked on right */
+    .profile-card:not(.favourite-card) {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "header actions"
+            "info actions"
+            "tags actions";
+        gap: 8px 16px;
+    }
+
+    .profile-card:not(.favourite-card) .profile-card-actions {
+        flex-direction: column;
+        gap: 12px;
+        align-self: center;
+        margin-top: 0;
+    }
+
+    /* Compact label: show short text, hide long text */
+    .goto-label-wide { display: none; }
+    .goto-label-compact { display: inline; }
+
+    /* Favourite cards: same right-side stacked layout, group path spans full width at bottom */
+    /* padding-top reduced to 12px (from 16px) so top and bottom gaps are equal (both 12px) */
+    /* grid-template-rows: info row uses 1fr so it expands to fill spare height from the button
+       stack, allowing profile-card-body to be vertically centred within it */
+    .profile-card.favourite-card {
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto 1fr auto auto; /* header, info (flex), tags, path */
+        grid-template-areas:
+            "header actions"
+            "info   actions"
+            "tags   actions"
+            "path   path";
+        padding-top: 12px;
+        gap: 12px 16px;
+    }
+
+    /* Centre the icon + user/host block vertically within the expanded info row */
+    .profile-card.favourite-card .profile-card-body {
+        align-self: center;
+    }
+
+    .profile-card.favourite-card .favourite-card-actions {
+        flex-direction: column;
+        gap: 12px;
+        align-self: center;
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    /* All 3 buttons (Connect, Actions, Go to...) get equal fixed width when stacked */
+    .profile-card.favourite-card .favourite-actions-row .btn,
+    .profile-card.favourite-card .goto-profile-btn {
+        width: 90px;
+        flex: 0 0 auto;
+    }
+}
+
+/* Wide screens: buttons move to right side in a row */
 @media (min-width: 800px) {
     .profile-card {
         grid-template-columns: 1fr auto;
@@ -1014,6 +1074,10 @@ button.keyboard-selected {
     .profile-card.favourite-card .profile-group-path {
         margin-top: 8px; /* Add gap between info/buttons and path */
     }
+
+    /* Wide label: show full text, hide compact text */
+    .goto-label-wide { display: inline; }
+    .goto-label-compact { display: none; }
 }
 
 /* Buttons */

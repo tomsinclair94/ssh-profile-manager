@@ -1,10 +1,10 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.7.0
+## Current Version: v0.7.1
 
-**Released:** 2026-02-19 ✅
-**Type:** Feature Release
-**Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags, keyboard shortcuts
+**Released:** 2026-02-20 ✅
+**Type:** Patch Release
+**Focus:** Bug fixes — dropdown flickering, group modal size, splash screen on reload, compact view layout
 
 ---
 
@@ -20,7 +20,7 @@
 ## Roadmap
 
 ```
-v0.7.0 ✅ → vNext (feature TBD) → ... → v1.0.0
+v0.7.0 ✅ → v0.7.1 ✅ → vNext (feature TBD) → ... → v1.0.0
 ```
 
 The next release version will be determined when work begins. Features below are planned but their release order may change based on priorities.
@@ -91,6 +91,13 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 ---
 
 ## Archive
+
+### v0.7.1 - Released 2026-02-20 ✅
+**Focus:** Bug fixes
+- Parent Group dropdown flickering fixed
+- Group modal stuck at expanded size fixed
+- Version splash screen reappearing on app reload fixed
+- Compact view card layout polished
 
 ### v0.7.0 - Released 2026-02-19 ✅
 **Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags

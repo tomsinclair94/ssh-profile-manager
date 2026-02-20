@@ -72,6 +72,7 @@ Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-mana
 ## Security Review History
 
 This project undergoes regular security reviews:
+- **v0.7.1:** Patch release — no security-specific findings; 4 UI/UX bug fixes only
 - **v0.7.0:** Comprehensive security review (1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW findings — 20 resolved, 12 deferred to v1.0.0)
 - **v0.6.4:** Security hardening sprint (16+ fixes — temp file security, SSH host key verification, session management, CDN elimination)
 - **v0.6.3:** Security fixes (2 CRITICAL mutex/script exposure, 3 MEDIUM findings resolved)

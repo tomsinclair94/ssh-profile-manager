@@ -67,6 +67,7 @@
    - ✅ **Both changelogs** updated:
      - `CHANGELOG.md` — full user-facing entry (Added/Changed/Fixed/Security)
      - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen
+   - ✅ **Documentation reviewed** — `CLAUDE.md`, `TODO.md`, `SECURITY.md` updated to reflect the new version (see step 15 in CLAUDE.md release process)
    - ✅ README.md updated (features, screenshots if needed)
    - ✅ Manual testing completed
    - ✅ All changes committed and pushed to `vX.X.X-dev`
