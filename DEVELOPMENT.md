@@ -75,6 +75,7 @@
 5. **Create Release PR** - Trigger automated checks and release:
    - Create pull request from `vX.X.X-dev` to `main`
    - **Important:** PR title MUST start with: `Release vX.X.X - Brief Description`
+   - **Add a label:** `bug` (patch/bug-fix release), `enhancement` (feature release), `documentation` (docs-only)
    - Add comprehensive PR description with summary of changes
    - Review all file changes one final time
    - **Automated PR checks will run** (if code changes detected):

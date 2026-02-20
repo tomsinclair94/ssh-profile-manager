@@ -123,7 +123,8 @@ git commit -m "Bump version to X.X.X for dev branch"
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled
-   - Create PR: `gh pr create --title "..." --body "..."`
+   - Create PR: `gh pr create --title "..." --body "..." --label "LABEL"`
+   - Labels: `bug` (patch/bug-fix release), `enhancement` (feature release), `documentation` (docs-only)
    - Enable auto-merge: `gh pr merge <PR_NUMBER> --auto --squash`
 2. Squash merge with title: `Release vX.X.X - Description`
 3. Auto-tag workflow creates git tag with CHANGELOG content

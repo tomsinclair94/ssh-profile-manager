@@ -53,9 +53,18 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.7.1';
+const CURRENT_APP_VERSION = '0.8.0';
 
 const VERSION_CHANGELOG = {
+    '0.8.0': {
+        title: 'Coming Soon',
+        subtitle: 'Coming Soon',
+        highlights: [
+            'New features coming in v0.8.0'
+        ],
+        releaseDate: '2026-TBD',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.8.0'
+    },
     '0.7.1': {
         title: 'Bug Fixes & UI Polish',
         subtitle: 'Bug Fixes & UI Polish',
