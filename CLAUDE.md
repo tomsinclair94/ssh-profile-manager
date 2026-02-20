@@ -23,8 +23,14 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.7.0 (2026-02-19) ✅
+**Latest Release:** v0.7.1 (2026-02-20) ✅
 **Next:** See TODO.md for planned features and roadmap
+
+**v0.7.1 Fixes (Released - 2026-02-20):**
+- ✅ Parent Group dropdown no longer flickers and disappears when opened
+- ✅ Group modal no longer gets stuck at an expanded size after closing
+- ✅ "What's New" splash screen no longer reappears on app reload
+- ✅ Compact view: improved card layout for standard and favourite profile cards
 
 **v0.7.0 Features (Released - 2026-02-19):**
 - ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
@@ -107,7 +113,13 @@ git commit -m "Bump version to X.X.X for dev branch"
 14. Update **both changelogs**:
     - `CHANGELOG.md` — full user-facing entry (Added/Changed/Fixed/Security); exclude internal refactoring, dependency updates, minor security tweaks
     - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen; pull the key points from CHANGELOG.md
-15. Commit & push
+15. **Review and update all documentation** to reflect the new version:
+    - `CLAUDE.md` — Update "Current Status" section with the new version, features/fixes, and test count if changed
+    - `TODO.md` — Update "Current Version", roadmap line, and move the release to "Archive"
+    - `SECURITY.md` — Add a new entry to the Security Review History
+    - `DEVELOPMENT.md` — Update any version-specific references in the pre-release checklist
+    - Verify `README.md` version badges are correct (usually handled by version bump step)
+16. Commit & push
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled

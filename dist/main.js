@@ -65,7 +65,7 @@ const VERSION_CHANGELOG = {
             'Fixed "What\'s New" splash showing on app reload instead of only on launch',
             'Compact view improvements: polished card layout for standard and favourite profile cards'
         ],
-        releaseDate: '',
+        releaseDate: '2026-02-20',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.1'
     },
     '0.7.0': {

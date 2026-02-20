@@ -5,6 +5,14 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-02-20
+
+### Fixed
+- Parent Group dropdown no longer flickers and disappears when opened
+- Group modal no longer occasionally gets stuck at an expanded size after closing
+- "What's New" splash screen no longer reappears on app reload — now only shown on genuine app launch
+- Compact view: improved card layout for both standard and favourite profile cards
+
 ## [0.7.0] - 2026-02-19
 
 ### Added
