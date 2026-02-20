@@ -53,9 +53,18 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.7.0';
+const CURRENT_APP_VERSION = '0.7.1';
 
 const VERSION_CHANGELOG = {
+    '0.7.1': {
+        title: 'Bug Fix Release',
+        subtitle: 'Bug Fix Release',
+        highlights: [
+            'Bug fixes and stability improvements'
+        ],
+        releaseDate: '',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.7.1'
+    },
     '0.7.0': {
         title: 'Groups, Favourites, Tags & Encryption',
         subtitle: 'Groups, Favourites, Tags & Encryption',
@@ -4922,30 +4931,37 @@ function setupEventListeners() {
         });
 
         parentGroupInput.addEventListener('keydown', handleParentGroupKeydown);
+
+        parentGroupInput.addEventListener('blur', () => {
+            // Hide dropdown when tabbing away (with slight delay to allow click on dropdown items)
+            setTimeout(() => {
+                hideParentGroupDropdown();
+            }, 150);
+        });
     }
 
     // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {
-        // Close profile group dropdown
+        // Close profile group dropdown — check the .form-group container so that clicks on
+        // the label or the "+ Group" button (both inside the same form-group) don't close it
         const profileGroupDropdown = document.getElementById('profile-group-dropdown');
         const profileGroupInput = document.getElementById('profile-group');
-        const addGroupBtn = document.getElementById('add-group-from-profile-btn');
 
         if (profileGroupDropdown && !profileGroupDropdown.classList.contains('hidden')) {
-            if (!profileGroupInput.contains(e.target) &&
-                !profileGroupDropdown.contains(e.target) &&
-                !addGroupBtn.contains(e.target)) {
+            const profileGroupContainer = profileGroupInput?.closest('.form-group');
+            if (!profileGroupContainer?.contains(e.target)) {
                 hideProfileGroupDropdown();
             }
         }
 
-        // Close parent group dropdown
+        // Close parent group dropdown — check the .form-group container so that clicks on
+        // the label (outside the wrapper but inside the form-group) don't close it
         const parentGroupDropdown = document.getElementById('group-parent-dropdown');
         const parentGroupInputElem = document.getElementById('group-parent');
 
         if (parentGroupDropdown && !parentGroupDropdown.classList.contains('hidden')) {
-            if (!parentGroupInputElem.contains(e.target) &&
-                !parentGroupDropdown.contains(e.target)) {
+            const parentGroupContainer = parentGroupInputElem?.closest('.form-group');
+            if (!parentGroupContainer?.contains(e.target)) {
                 hideParentGroupDropdown();
             }
         }
@@ -9486,6 +9502,14 @@ async function openGroupModal(group = null, preselectedParentId = null) {
     groupModal.classList.remove('hidden');
     pushModal('group');
 
+    // Safety net: clear any padding left over from a previous dropdown auto-scroll
+    // (normally cleaned up by hideParentGroupDropdown, but guards against edge cases)
+    const groupFormEl = groupModal.querySelector('form');
+    if (groupFormEl) {
+        groupFormEl.style.paddingBottom = '';
+        delete groupFormEl.dataset.originalPaddingBottom;
+    }
+
     // Reset scroll position (both vertical and horizontal)
     const modalContent = groupModal.querySelector('.modal-content');
     if (modalContent) {
@@ -9577,8 +9601,16 @@ function showParentGroupDropdown(filterText = '', excludeGroupId = null) {
         });
     });
 
-    // Auto-scroll modal to show dropdown
-    setTimeout(() => {
+    // Auto-scroll modal to show dropdown — guarded with a stored handle so that
+    // hideParentGroupDropdown() can cancel it before it fires (prevents phantom padding)
+    if (parentGroupScrollTimeout !== null) {
+        clearTimeout(parentGroupScrollTimeout);
+    }
+    parentGroupScrollTimeout = setTimeout(() => {
+        parentGroupScrollTimeout = null;
+        // Guard: if the dropdown was hidden before the timeout fired, do nothing
+        if (parentGroupDropdown.classList.contains('hidden')) return;
+
         // Find the scrollable container (form element for profile/group modals)
         const scrollContainer = parentGroupDropdown.closest('form') || parentGroupDropdown.closest('.modal-content');
         if (!scrollContainer) return;
@@ -9611,6 +9643,12 @@ function showParentGroupDropdown(filterText = '', excludeGroupId = null) {
 }
 
 function hideParentGroupDropdown() {
+    // Cancel any pending auto-scroll timeout so it can't add phantom padding after hide
+    if (parentGroupScrollTimeout !== null) {
+        clearTimeout(parentGroupScrollTimeout);
+        parentGroupScrollTimeout = null;
+    }
+
     const parentGroupDropdown = document.getElementById('group-parent-dropdown');
     if (parentGroupDropdown) {
         parentGroupDropdown.classList.add('hidden');
@@ -9695,12 +9733,14 @@ function populateParentGroupSelect(excludeGroupId = null) {
 let profileGroupDropdownVisible = false;
 let focusedDropdownIndex = -1;
 let filteredGroupOptions = [];
+let profileGroupScrollTimeout = null; // Handle for pending auto-scroll timeout
 
 // Parent group searchable dropdown state
 let parentGroupDropdownVisible = false;
 let focusedParentDropdownIndex = -1;
 let filteredParentGroupOptions = [];
 let currentExcludeGroupId = null; // For preventing circular references when editing groups
+let parentGroupScrollTimeout = null; // Handle for pending auto-scroll timeout
 
 function populateProfileGroupSelect() {
     // This function is now called to initialize the searchable dropdown
@@ -9759,23 +9799,24 @@ function showProfileGroupDropdown(filterText = '') {
         });
     });
 
-    // Auto-scroll modal to show dropdown
-    setTimeout(() => {
+    // Auto-scroll modal to show dropdown — guarded with a stored handle so that
+    // hideProfileGroupDropdown() can cancel it before it fires (prevents phantom padding)
+    if (profileGroupScrollTimeout !== null) {
+        clearTimeout(profileGroupScrollTimeout);
+    }
+    profileGroupScrollTimeout = setTimeout(() => {
+        profileGroupScrollTimeout = null;
+        // Guard: if the dropdown was hidden before the timeout fired, do nothing
+        if (profileGroupDropdown.classList.contains('hidden')) return;
+
         // Find the scrollable container (form element for profile/group modals)
         const scrollContainer = profileGroupDropdown.closest('form') || profileGroupDropdown.closest('.modal-content');
         if (!scrollContainer) return;
 
-        // Get positions after dropdown is fully rendered
         const dropdownRect = profileGroupDropdown.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
-
-        // We want 20px of breathing room below the dropdown
         const desiredPadding = 20;
-
-        // Calculate how much the dropdown extends beyond the container
         const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
-
-        console.log('[DROPDOWN] Dropdown extends beyond container by:', dropdownOverflow);
 
         if (dropdownOverflow > -desiredPadding) {
             // Calculate the current padding-bottom (might be from CSS)
@@ -9788,25 +9829,24 @@ function showProfileGroupDropdown(filterText = '') {
             scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
             scrollContainer.dataset.originalPaddingBottom = originalPaddingBottom;
 
-            console.log('[DROPDOWN] Added padding:', paddingNeeded);
-
-            // Now scroll to show the dropdown with proper spacing
             setTimeout(() => {
                 const scrollNeeded = Math.abs(dropdownOverflow) + desiredPadding;
-                console.log('[DROPDOWN] Scrolling by:', scrollNeeded);
-
                 scrollContainer.scrollBy({
                     top: scrollNeeded,
                     behavior: 'smooth'
                 });
             }, 10);
-        } else {
-            console.log('[DROPDOWN] Dropdown fits within container, no adjustment needed');
         }
-    }, 50); // Delay to ensure dropdown is fully rendered
+    }, 50);
 }
 
 function hideProfileGroupDropdown() {
+    // Cancel any pending auto-scroll timeout so it can't add phantom padding after hide
+    if (profileGroupScrollTimeout !== null) {
+        clearTimeout(profileGroupScrollTimeout);
+        profileGroupScrollTimeout = null;
+    }
+
     const profileGroupDropdown = document.getElementById('profile-group-dropdown');
     if (profileGroupDropdown) {
         profileGroupDropdown.classList.add('hidden');
@@ -9818,7 +9858,6 @@ function hideProfileGroupDropdown() {
         if (scrollContainer && scrollContainer.dataset.originalPaddingBottom !== undefined) {
             scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottom || '';
             delete scrollContainer.dataset.originalPaddingBottom;
-            console.log('[DROPDOWN] Restored original padding');
         }
     }
 }
