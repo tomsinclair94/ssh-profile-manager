@@ -1744,17 +1744,13 @@ form {
 }
 
 .settings-section .form-group.settings-inline {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-}
-
-.settings-section .form-group.settings-inline .checkbox-label {
-    flex-grow: 1;
+    position: relative;
 }
 
 .settings-section .form-group.settings-inline > .btn {
-    flex-shrink: 0;
+    position: absolute;
+    right: 0;
+    bottom: 0;
 }
 
 .settings-section .form-group.settings-top-gap {
