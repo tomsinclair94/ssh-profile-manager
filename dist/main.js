@@ -304,6 +304,7 @@ let originalSettingsValues = {}; // Track original settings values for change de
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
 let lastImportTime = 0; // Track last settings import time for rate limiting
 let keyboardShortcutsEnabled = true; // Enable/disable keyboard shortcuts
+let expandedCardActionsEnabled = false; // Show all card actions as individual buttons
 let selectedProfileId = null; // Currently selected profile for keyboard navigation
 let selectedGroupName = null; // Currently selected group header for keyboard navigation
 let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
@@ -787,6 +788,26 @@ function saveKeyboardShortcutsPreference() {
                 groupBtn.title = 'Create a new group to organise profiles';
             }
         }
+    }
+}
+
+// Expanded Card Actions
+function loadExpandedCardActions() {
+    const stored = localStorage.getItem('expandedCardActionsEnabled');
+    expandedCardActionsEnabled = stored === 'true';
+}
+
+function loadExpandedCardActionsCheckbox() {
+    const check = document.getElementById('expanded-card-actions-check');
+    if (check) check.checked = expandedCardActionsEnabled;
+}
+
+function saveExpandedCardActionsPreference() {
+    const check = document.getElementById('expanded-card-actions-check');
+    if (check) {
+        expandedCardActionsEnabled = check.checked;
+        localStorage.setItem('expandedCardActionsEnabled', expandedCardActionsEnabled);
+        renderProfiles(); // Re-render cards to apply new layout
     }
 }
 
@@ -2652,6 +2673,7 @@ async function init() {
     loadFilterState();
     loadCollapsedState();
     loadFavouritesCollapsedState();
+    loadExpandedCardActions(); // Load before renderProfiles() is called
 
     await loadTags(); // Load tags BEFORE profiles (needed for tag badge colors)
     await loadProfiles();
@@ -2746,6 +2768,18 @@ function setupScrollbarObserver() {
 
     // Also update on window resize
     window.addEventListener('resize', updateScrollbarWidth);
+
+    // Re-render cards when crossing the compact view boundary (800px) so the
+    // expanded card actions setting reverts to Connect/Actions in compact view.
+    let wasCompact = window.innerWidth < 800;
+    const debouncedCompactCheck = debounce(() => {
+        const isCompact = window.innerWidth < 800;
+        if (isCompact !== wasCompact) {
+            wasCompact = isCompact;
+            renderProfiles();
+        }
+    }, 100);
+    window.addEventListener('resize', debouncedCompactCheck);
 }
 
 // Load profiles from backend
@@ -3956,6 +3990,24 @@ function renderProfileCard(profile, depth) {
     const starTitle = profile.is_favorite ? 'Remove from Favourites' : 'Add to Favourites';
     const starSvg = createIcon(starIconName, 18, `favorite-star-toggle ${starClass}`);
 
+    const actionsHtml = expandedCardActionsEnabled && window.innerWidth >= 800
+        ? `<div class="profile-card-actions profile-card-actions-expanded">
+               <div class="expanded-actions-row">
+                   <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
+                   <button class="btn btn-primary btn-small edit-btn" data-id="${profile.id}" title="Edit profile">Edit</button>
+                   <button class="btn btn-secondary btn-small move-btn" data-id="${profile.id}" title="Move profile to another group">Move</button>
+               </div>
+               <div class="expanded-actions-row">
+                   <button class="btn btn-secondary btn-small duplicate-btn" data-id="${profile.id}" title="Duplicate profile">Duplicate</button>
+                   <button class="btn btn-secondary btn-small export-btn" data-id="${profile.id}" title="Export profile">Export</button>
+                   <button class="btn btn-danger btn-small delete-btn" data-id="${profile.id}" title="Delete profile">Delete</button>
+               </div>
+           </div>`
+        : `<div class="profile-card-actions">
+               <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
+               <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
+           </div>`;
+
     return `
         <div class="profile-card ${depthClass}" data-id="${profile.id}">
             <div class="profile-card-header">
@@ -3978,10 +4030,7 @@ function renderProfileCard(profile, depth) {
                 </div>
             </div>
             ${renderTagBadges(profile.tags)}
-            <div class="profile-card-actions">
-                <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
-                <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
-            </div>
+            ${actionsHtml}
         </div>
     `;
 }
@@ -4709,6 +4758,21 @@ function setupEventListeners() {
         } else if (target.classList.contains('actions-btn')) {
             e.stopPropagation();
             showProfileActionMenu(target.dataset.id, target);
+        } else if (target.classList.contains('edit-btn')) {
+            e.stopPropagation();
+            editProfile(target.dataset.id);
+        } else if (target.classList.contains('move-btn')) {
+            e.stopPropagation();
+            openMoveProfileModal(target.dataset.id);
+        } else if (target.classList.contains('duplicate-btn')) {
+            e.stopPropagation();
+            duplicateProfile(target.dataset.id);
+        } else if (target.classList.contains('export-btn')) {
+            e.stopPropagation();
+            await exportSingleProfile(target.dataset.id);
+        } else if (target.classList.contains('delete-btn')) {
+            e.stopPropagation();
+            await confirmDeleteProfile(target.dataset.id);
         } else if (target.classList.contains('tag-badge')) {
             e.stopPropagation();
             addTagToSearch(target.dataset.tagName);
@@ -5184,6 +5248,14 @@ function setupEventListeners() {
     if (keyboardShortcutsCheck) {
         keyboardShortcutsCheck.addEventListener('change', () => {
             // Don't save immediately - just track changes for Save button
+            debouncedCheckSettingsChanged();
+        });
+    }
+
+    // Expanded card actions
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    if (expandedCardActionsCheck) {
+        expandedCardActionsCheck.addEventListener('change', () => {
             debouncedCheckSettingsChanged();
         });
     }
@@ -6004,6 +6076,7 @@ function updateAuthMethodVisibility() {
 function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
     return {
@@ -6016,6 +6089,7 @@ function getCurrentSettingsValues() {
         requireEncryption: requireEncryptionCheck.checked,
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
+        expandedCardActionsEnabled: expandedCardActionsCheck ? expandedCardActionsCheck.checked : false,
         useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true,
         minimizeOnLaunch: minimizeOnLaunchCheck ? minimizeOnLaunchCheck.checked : true
     };
@@ -6061,6 +6135,7 @@ function openSettings() {
     // Load current settings values into form
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
+    loadExpandedCardActionsCheckbox();
     loadIncludePasswordsPreference();
     loadRequireEncryptionPreference();
     loadUseTabsInTerminalPreference();
@@ -6159,6 +6234,14 @@ function revertSettingsUI() {
             : true;
     }
 
+    // Validate expanded card actions - boolean with safe default
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    if (expandedCardActionsCheck) {
+        expandedCardActionsCheck.checked = typeof originalSettingsValues.expandedCardActionsEnabled === 'boolean'
+            ? originalSettingsValues.expandedCardActionsEnabled
+            : false;
+    }
+
     updateTerminalVisibility();
 }
 
@@ -6193,6 +6276,9 @@ function saveSettings() {
 
     // Save keyboard shortcuts preference
     saveKeyboardShortcutsPreference();
+
+    // Save expanded card actions preference
+    saveExpandedCardActionsPreference();
 
     // Reload recent connections with new limit
     loadRecentConnections();
@@ -6894,7 +6980,7 @@ function populateTerminalOptions() {
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
         if (helpText) {
-            helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).';
+            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).<br>When minimise is enabled, the app will minimise after launching a connection.</em>';
         }
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
@@ -6906,7 +6992,7 @@ function populateTerminalOptions() {
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
         if (helpText) {
-            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows.<br><strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.';
+            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows. <strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.</em>';
         }
     } else {
         // Unknown OS - show minimal options
@@ -8323,6 +8409,7 @@ async function backupSettings() {
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
         const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
         const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch') !== 'false'; // Default to true
+        const expandedCardActions = localStorage.getItem('expandedCardActionsEnabled') === 'true';
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -8363,6 +8450,7 @@ async function backupSettings() {
             collapsedGroups,
             includePasswordsInExports,
             requireEncryptionForAllExports,
+            expandedCardActionsEnabled: expandedCardActions,
             terminalPreference: terminalPreference,
             useTabsInTerminal: useTabsInTerminal,
             minimizeOnLaunch: minimizeOnLaunch,
@@ -8678,6 +8766,13 @@ async function restoreSettings(file) {
             localStorage.setItem('recentConnectionsLimit', limit.toString());
         }
 
+        // Validate and restore expanded card actions (must be boolean, default false)
+        const restoredExpandedCardActions = typeof result.settings.expanded_card_actions_enabled === 'boolean'
+            ? result.settings.expanded_card_actions_enabled
+            : false;
+        localStorage.setItem('expandedCardActionsEnabled', restoredExpandedCardActions.toString());
+        expandedCardActionsEnabled = restoredExpandedCardActions;
+
         // Validate and restore filtered/collapsed groups
         // Must be arrays, with reasonable length limits (max 1000 items to prevent DoS)
         if (result.settings.filtered_groups) {
@@ -8801,6 +8896,8 @@ async function resetSettings() {
         localStorage.setItem('terminalPreference', 'default');
         localStorage.setItem('customTerminalPath', '');
         localStorage.setItem('recentConnectionsLimit', '5');
+        localStorage.setItem('expandedCardActionsEnabled', 'false');
+        expandedCardActionsEnabled = false;
 
         // Reset window to default size
         await resetWindowState();

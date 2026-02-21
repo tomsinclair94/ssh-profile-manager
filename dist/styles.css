@@ -960,25 +960,46 @@ button.keyboard-selected {
     white-space: nowrap;
 }
 
-/* Compact view (< 800px): keep buttons on right side, stacked vertically */
+/* Standard profile cards: always 2-column layout with buttons stacked on the right */
+.profile-card:not(.favourite-card) {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        "header actions"
+        "info actions"
+        "tags actions";
+    gap: 8px 16px;
+}
+
+.profile-card:not(.favourite-card) .profile-card-actions {
+    flex-direction: column;
+    gap: 12px;
+    align-self: center;
+    margin-top: 0;
+}
+
+/* Expanded card actions: 3×2 grid of individual action buttons */
+.profile-card-actions-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-self: center;
+    margin-top: 0;
+}
+
+.expanded-actions-row {
+    display: flex;
+    gap: 12px;
+}
+
+.expanded-actions-row .btn {
+    flex: 0 0 auto;
+    width: 90px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Compact view (< 800px): favourite card layout adjustments */
 @media (max-width: 799px) {
-    /* Normal cards: 2-column grid, buttons stacked on right */
-    .profile-card:not(.favourite-card) {
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-            "header actions"
-            "info actions"
-            "tags actions";
-        gap: 8px 16px;
-    }
-
-    .profile-card:not(.favourite-card) .profile-card-actions {
-        flex-direction: column;
-        gap: 12px;
-        align-self: center;
-        margin-top: 0;
-    }
-
     /* Compact label: show short text, hide long text */
     .goto-label-wide { display: none; }
     .goto-label-compact { display: inline; }
@@ -1020,22 +1041,8 @@ button.keyboard-selected {
     }
 }
 
-/* Wide screens: buttons move to right side in a row */
+/* Wide screens (>= 800px): favourite card layout adjustments */
 @media (min-width: 800px) {
-    .profile-card {
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-            "header actions"
-            "info actions"
-            "tags actions";
-        gap: 8px 16px;
-    }
-
-    .profile-card-actions {
-        align-self: center;
-        margin-top: 0;
-    }
-
     /* Favourite cards: buttons on right side, path spans full width below */
     .profile-card.favourite-card {
         grid-template-columns: 1fr auto;
@@ -1706,6 +1713,10 @@ form {
 
 .settings-section .form-group.settings-no-gap {
     margin-bottom: 0 !important;
+}
+
+.settings-section .form-group.settings-top-gap {
+    margin-top: 16px !important;
 }
 
 .form-group label {

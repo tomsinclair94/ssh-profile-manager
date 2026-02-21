@@ -1933,6 +1933,8 @@ struct SettingsData {
     include_passwords_in_exports: bool,
     #[serde(default)]
     require_encryption_for_all_exports: bool,
+    #[serde(default)]
+    expanded_card_actions_enabled: bool,
 }
 
 fn default_include_passwords() -> bool {
@@ -2655,6 +2657,7 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MoveGroupInput {
     id: String,
     new_parent_id: Option<String>,
@@ -2763,6 +2766,7 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MoveProfileInput {
     profile_id: String,
     new_group_path: Option<String>,
@@ -3636,6 +3640,7 @@ fn export_settings(
     collapsed_groups: Option<Vec<String>>,
     include_passwords_in_exports: bool,
     require_encryption_for_all_exports: bool,
+    expanded_card_actions_enabled: bool,
     terminal_preference: String,
     use_tabs_in_terminal: Option<bool>,
     minimize_on_launch: Option<bool>,
@@ -3664,6 +3669,7 @@ fn export_settings(
         collapsed_groups,
         include_passwords_in_exports,
         require_encryption_for_all_exports,
+        expanded_card_actions_enabled,
     };
 
     let settings_os_specific = SettingsOsSpecific {

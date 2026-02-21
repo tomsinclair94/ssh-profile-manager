@@ -402,7 +402,14 @@
                                 <option value="light">Light Mode</option>
                             </select>
                         </div>
-                        <p class="settings-help">Choose your preferred colour theme. System mode automatically matches your operating system's theme.</p>
+                        <p class="settings-help">Choose your preferred colour theme.<br><em>System mode automatically matches your operating system's theme.</em></p>
+                        <div class="form-group settings-no-gap settings-top-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="expanded-card-actions-check">
+                                <span>Expand card actions <span class="default-value">(Default: Off)</span></span>
+                            </label>
+                        </div>
+                        <p class="settings-help">Show Edit, Move, Duplicate, Export and Delete as individual buttons on each profile card, rather than grouping them in the Actions menu.<br><em>Reverts to the Actions menu automatically in compact view.</em></p>
                     </div>
 
                     <!-- Keyboard Shortcuts -->
@@ -416,7 +423,7 @@
                             </label>
                         </div>
                         <button type="button" id="shortcuts-help-btn" class="btn btn-secondary settings-gap">View All Shortcuts</button>
-                        <p class="settings-help">Use keyboard shortcuts for quick navigation and actions. Press ? to see all available shortcuts.</p>
+                        <p class="settings-help">Use keyboard shortcuts for quick navigation and actions.<br><em>Press ? to see all available shortcuts.</em></p>
                     </div>
 
                     <!-- Recent Connections -->
@@ -426,7 +433,7 @@
                             <label for="recent-connections-limit">Number of recent connections to show (0 to disable) <span class="default-value">(Default: 5)</span></label>
                             <input type="number" id="recent-connections-limit" min="0" max="20" value="5">
                         </div>
-                        <p class="settings-help">Display your most recent connections for quick reconnect. Set to 0 to hide the recent connections bar.</p>
+                        <p class="settings-help">Display your most recent connections for quick reconnect.<br><em>Set to 0 to hide the recent connections bar.</em></p>
                     </div>
 
                     <!-- Terminal Settings -->
@@ -455,11 +462,11 @@
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="minimize-on-launch-check" checked>
-                                <span>Minimize app when launching profile</span>
+                                <span>Minimise app when launching profile</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal). When minimize is enabled, the app will minimize after launching a connection.</p>
+                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).<br>When minimise is enabled, the app will minimise after launching a connection.</em></p>
                     </div>
 
                     <!-- Import/Export Settings -->
