@@ -29,9 +29,9 @@ bun run build    # Production build
 **v0.8.0 Progress (In Development):**
 - ✅ macOS "open in new tab" silent failure — now surfaces actionable error toast
 - ✅ Phase 1: Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items, 4 new tests)
-- ✅ Phase 2: Padlock button + `drag_reorder_enabled` settings toggle — toolbar lock button, Settings checkbox, full backup/restore support
-- ✅ Phase 3: Drag profile between groups — HTML5 drag API, drop onto group headers, 5s undo toast, Favourites excluded as drop target
-- ✅ Phase 4: Custom sort order — drag-to-reorder profiles/groups within parent, group "Reset to A-Z" menu, Settings "Reset All to Alphabetical", 3 new tests
+- ✅ Phase 2: Padlock button (session-only) — toolbar lock button toggles drag reordering; resets to locked on app relaunch; no settings persistence
+- ✅ Phase 3: Drag profile between groups — pointer-events drag API, drop onto group headers or directly to a position within a group, 5s undo toast, Favourites excluded as drop target
+- ✅ Phase 4: Custom sort order — drag-to-reorder profiles/groups within parent, combined cross-group drag+position in one gesture, group "Reset to A-Z" menu, Settings "Reset Sorting Order", 3 new tests
 - 🔲 Phase 5: Testing & release
 
 **v0.7.1 Fixes (Released - 2026-02-20):**

@@ -828,23 +828,10 @@ function saveExpandedCardActionsPreference() {
 
 // Drag Reorder
 function loadDragReorderEnabled() {
-    const stored = localStorage.getItem('dragReorderEnabled');
+    // Session-only: resets to locked on every app launch, persists within the session
+    const stored = sessionStorage.getItem('dragReorderEnabled');
     dragReorderEnabled = stored === 'true';
     applyDragLockState();
-}
-
-function loadDragReorderCheckbox() {
-    const check = document.getElementById('drag-reorder-check');
-    if (check) check.checked = dragReorderEnabled;
-}
-
-function saveDragReorderPreference() {
-    const check = document.getElementById('drag-reorder-check');
-    if (check) {
-        dragReorderEnabled = check.checked;
-        localStorage.setItem('dragReorderEnabled', dragReorderEnabled);
-        applyDragLockState();
-    }
 }
 
 function applyDragLockState() {
@@ -1278,9 +1265,6 @@ function getSettingsModalTabbableItems() {
     if (includePasswordsCheck) items.push(includePasswordsCheck);
     const requireEncryptionCheck = document.getElementById('require-encryption-check');
     if (requireEncryptionCheck) items.push(requireEncryptionCheck);
-    const dragReorderCheck = document.getElementById('drag-reorder-check');
-    if (dragReorderCheck) items.push(dragReorderCheck);
-
     const resetSortOrderBtn = document.getElementById('reset-sort-order-btn');
     if (resetSortOrderBtn) items.push(resetSortOrderBtn);
 
@@ -2749,6 +2733,7 @@ async function init() {
     await setupWindowListeners();
     setupEventListeners();
     setupDragAndDrop();
+    setupSelectionContainment();
     setupKeyboardShortcutListeners();
     setupModifierKeyTracking();
 
@@ -4178,6 +4163,9 @@ function attachProfileEventListeners() {
         header.addEventListener('click', (e) => {
             if (e.target.classList.contains('group-menu-btn')) return; // Skip if clicking menu button
 
+            // Skip if the user just made a text selection (e.g. selecting the group name)
+            if (window.getSelection()?.toString()) return;
+
             // Skip if group is empty (no chevron to expand)
             if (header.classList.contains('group-empty')) return;
 
@@ -5327,20 +5315,12 @@ function setupEventListeners() {
         });
     }
 
-    // Drag reorder
-    const dragReorderCheck = document.getElementById('drag-reorder-check');
-    if (dragReorderCheck) {
-        dragReorderCheck.addEventListener('change', () => {
-            debouncedCheckSettingsChanged();
-        });
-    }
-
     // Padlock button (drag reorder toggle)
     const dragLockBtn = document.getElementById('drag-lock-btn');
     if (dragLockBtn) {
         dragLockBtn.addEventListener('click', () => {
             dragReorderEnabled = !dragReorderEnabled;
-            localStorage.setItem('dragReorderEnabled', dragReorderEnabled);
+            sessionStorage.setItem('dragReorderEnabled', dragReorderEnabled);
             applyDragLockState();
         });
     }
@@ -6203,7 +6183,6 @@ function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
-    const dragReorderCheck = document.getElementById('drag-reorder-check');
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
     return {
@@ -6217,7 +6196,6 @@ function getCurrentSettingsValues() {
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
         expandedCardActionsEnabled: expandedCardActionsCheck ? expandedCardActionsCheck.checked : false,
-        dragReorderEnabled: dragReorderCheck ? dragReorderCheck.checked : false,
         useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true,
         minimizeOnLaunch: minimizeOnLaunchCheck ? minimizeOnLaunchCheck.checked : true
     };
@@ -6264,7 +6242,6 @@ function openSettings() {
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
     loadExpandedCardActionsCheckbox();
-    loadDragReorderCheckbox();
     loadIncludePasswordsPreference();
     loadRequireEncryptionPreference();
     loadUseTabsInTerminalPreference();
@@ -6371,14 +6348,6 @@ function revertSettingsUI() {
             : false;
     }
 
-    // Validate drag reorder enabled - boolean with safe default
-    const dragReorderCheck = document.getElementById('drag-reorder-check');
-    if (dragReorderCheck) {
-        dragReorderCheck.checked = typeof originalSettingsValues.dragReorderEnabled === 'boolean'
-            ? originalSettingsValues.dragReorderEnabled
-            : false;
-    }
-
     updateTerminalVisibility();
 }
 
@@ -6416,9 +6385,6 @@ function saveSettings() {
 
     // Save expanded card actions preference
     saveExpandedCardActionsPreference();
-
-    // Save drag reorder preference
-    saveDragReorderPreference();
 
     // Reload recent connections with new limit
     loadRecentConnections();
@@ -8550,7 +8516,6 @@ async function backupSettings() {
         const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
         const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch') !== 'false'; // Default to true
         const expandedCardActions = localStorage.getItem('expandedCardActionsEnabled') === 'true';
-        const dragReorderEnabledVal = localStorage.getItem('dragReorderEnabled') === 'true';
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -8592,7 +8557,6 @@ async function backupSettings() {
             includePasswordsInExports,
             requireEncryptionForAllExports,
             expandedCardActionsEnabled: expandedCardActions,
-            dragReorderEnabled: dragReorderEnabledVal,
             terminalPreference: terminalPreference,
             useTabsInTerminal: useTabsInTerminal,
             minimizeOnLaunch: minimizeOnLaunch,
@@ -8915,13 +8879,6 @@ async function restoreSettings(file) {
         localStorage.setItem('expandedCardActionsEnabled', restoredExpandedCardActions.toString());
         expandedCardActionsEnabled = restoredExpandedCardActions;
 
-        // Validate and restore drag reorder enabled (must be boolean, default false)
-        const restoredDragReorder = typeof result.settings.drag_reorder_enabled === 'boolean'
-            ? result.settings.drag_reorder_enabled
-            : false;
-        localStorage.setItem('dragReorderEnabled', restoredDragReorder.toString());
-        dragReorderEnabled = restoredDragReorder;
-        applyDragLockState();
 
         // Validate and restore filtered/collapsed groups
         // Must be arrays, with reasonable length limits (max 1000 items to prevent DoS)
@@ -9048,9 +9005,6 @@ async function resetSettings() {
         localStorage.setItem('recentConnectionsLimit', '5');
         localStorage.setItem('expandedCardActionsEnabled', 'false');
         expandedCardActionsEnabled = false;
-        localStorage.setItem('dragReorderEnabled', 'false');
-        dragReorderEnabled = false;
-        applyDragLockState();
 
         // Reset window to default size
         await resetWindowState();
@@ -10572,6 +10526,49 @@ async function moveProfileDragDrop(profileId, newGroupPath) {
     }
 }
 
+// Move a profile to a different group and insert it at an exact position in one gesture
+async function moveProfileToPosition(profileId, targetProfileId, insertBefore) {
+    const profile = profiles.find(p => p.id === profileId);
+    const targetProfile = profiles.find(p => p.id === targetProfileId);
+    if (!profile || !targetProfile) return;
+
+    const oldGroupPath = profile.group_path ?? null;
+    const newGroupPath = targetProfile.group_path ?? null;
+
+    // Build the desired order for the target group with the moved profile inserted
+    let targetGroupProfiles = profiles
+        .filter(p => (p.group_path ?? null) === newGroupPath && p.id !== profileId)
+        .slice()
+        .sort((a, b) =>
+            (a.display_order ?? 0) !== (b.display_order ?? 0)
+                ? (a.display_order ?? 0) - (b.display_order ?? 0)
+                : a.name.localeCompare(b.name)
+        );
+
+    const targetIndex = targetGroupProfiles.findIndex(p => p.id === targetProfileId);
+    if (targetIndex === -1) return;
+    targetGroupProfiles.splice(insertBefore ? targetIndex : targetIndex + 1, 0, profile);
+    const orders = targetGroupProfiles.map((p, i) => ({ profile_id: p.id, display_order: i }));
+
+    try {
+        await invoke('move_profile', { input: { profileId, newGroupPath } });
+        await invoke('reorder_profiles', { orders });
+        await loadProfiles();
+        const destLabel = newGroupPath ? `"${formatGroupPathDisplay(newGroupPath)}"` : 'Ungrouped';
+        showUndoToast(`Moved "${profile.name}" to ${destLabel}`, async () => {
+            try {
+                await invoke('move_profile', { input: { profileId, newGroupPath: oldGroupPath } });
+                await loadProfiles();
+                showToast(`Moved "${profile.name}" back`, TOAST_DURATION_SHORT);
+            } catch (err) {
+                showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+            }
+        });
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
 // Reorder profiles within their group by assigning sequential display_order values
 async function reorderProfilesInGroup(draggedProfileId, targetProfileId, insertBefore) {
     const draggedProfile = profiles.find(p => p.id === draggedProfileId);
@@ -10739,6 +10736,83 @@ function getDragTargetGroupId(target) {
     return null;
 }
 
+// Contain text selection to the field it started in.
+// e.target at mousedown can be a raw text node or tiny inline element, so we walk up
+// to the nearest named selectable field. The rAF on mouseup fires after WKWebView has
+// finalised the selection, then clears it if it escaped the origin field.
+// Inputs/textareas are never caught by SELECTABLE_FIELDS so they behave normally.
+const SELECTABLE_FIELDS = '.group-name, .profile-card-title, .profile-info-value';
+
+function setupSelectionContainment() {
+    let selectionOrigin = null;
+
+    function getOrigin(target) {
+        // Inputs/textareas manage their own selection — don't intercept.
+        if (target.matches?.('input, textarea, [contenteditable]')) return null;
+        // Only selectable fields are valid origins; anything else returns null so
+        // the cleanup handler will clear any accidental selection.
+        return (target.closest && target.closest(SELECTABLE_FIELDS)) || null;
+    }
+
+    document.addEventListener('mousedown', (e) => { selectionOrigin = getOrigin(e.target); });
+    document.addEventListener('pointerdown', (e) => { selectionOrigin = getOrigin(e.target); });
+
+    // Real-time containment: clear selection when the cursor leaves the origin element,
+    // with a small tolerance margin so slight overshoot at the end of a text string
+    // doesn't immediately kill the selection.
+    const SELECTION_TOLERANCE_PX = 8;
+    document.addEventListener('mousemove', (e) => {
+        if (!selectionOrigin || !e.buttons) return;
+        if (!selectionOrigin.contains(e.target)) {
+            const rect = selectionOrigin.getBoundingClientRect();
+            const outside =
+                e.clientX < rect.left   - SELECTION_TOLERANCE_PX ||
+                e.clientX > rect.right  + SELECTION_TOLERANCE_PX ||
+                e.clientY < rect.top    - SELECTION_TOLERANCE_PX ||
+                e.clientY > rect.bottom + SELECTION_TOLERANCE_PX;
+            if (outside) window.getSelection()?.removeAllRanges();
+        }
+    });
+
+    // mouseup and pointerup both fire in WKWebView — guard against double execution.
+    let cleanupPending = false;
+
+    function onSelectEnd() {
+        if (cleanupPending) return;
+        cleanupPending = true;
+        const origin = selectionOrigin;
+        selectionOrigin = null;
+        // Fallback cleanup in case mousemove missed anything (e.g. fast movement).
+        requestAnimationFrame(() => {
+            cleanupPending = false;
+            // Inputs manage their own selection — don't interfere.
+            if (document.activeElement?.matches('input, textarea, [contenteditable]')) return;
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            // No valid origin means click was outside a selectable field — clear everything.
+            if (!origin) { sel.removeAllRanges(); return; }
+            const range = sel.getRangeAt(0);
+            if (!origin.contains(range.startContainer) ||
+                !origin.contains(range.endContainer)) {
+                sel.removeAllRanges();
+            }
+        });
+    }
+
+    document.addEventListener('mouseup', onSelectEnd);
+    document.addEventListener('pointerup', onSelectEnd);
+
+    // Block Cmd/Ctrl+A (select all) everywhere except inside inputs and textareas.
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+            const active = document.activeElement;
+            if (!active || !active.matches('input, textarea, [contenteditable]')) {
+                e.preventDefault();
+            }
+        }
+    });
+}
+
 // Setup drag-and-drop: drag profile cards and group headers to reorder,
 // or drag profiles between groups. Uses pointer events for WKWebView compatibility.
 function setupDragAndDrop() {
@@ -10771,14 +10845,13 @@ function setupDragAndDrop() {
 
             const el = document.elementFromPoint(e.clientX, e.clientY);
 
-            // Check: cursor over a profile card in the SAME group → within-group reorder
+            // Check: cursor over any profile card → show insertion indicator
+            // Works for both same-group reorder and cross-group move-to-position
             const targetCard = el ? el.closest('.profile-card:not(.favourite-card)') : null;
             if (targetCard && targetCard.dataset.id !== draggingProfileId) {
                 const targetProfile = profiles.find(p => p.id === targetCard.dataset.id);
                 const draggedProfile = profiles.find(p => p.id === draggingProfileId);
-                if (targetProfile && draggedProfile &&
-                    (targetProfile.group_path ?? null) === (draggedProfile.group_path ?? null)) {
-                    // Same group: show insertion indicator
+                if (targetProfile && draggedProfile) {
                     clearDragOverState();
                     clearGroupInsertState();
                     const rect = targetCard.getBoundingClientRect();
@@ -10882,10 +10955,18 @@ function setupDragAndDrop() {
 
         if (profileId) {
             if (targetProfileId) {
-                // Within-group profile reorder
-                await reorderProfilesInGroup(profileId, targetProfileId, insertBeforeProfile);
+                const draggedProfile = profiles.find(p => p.id === profileId);
+                const targetProfile = profiles.find(p => p.id === targetProfileId);
+                const sameGroup = (draggedProfile?.group_path ?? null) === (targetProfile?.group_path ?? null);
+                if (sameGroup) {
+                    // Within-group reorder
+                    await reorderProfilesInGroup(profileId, targetProfileId, insertBeforeProfile);
+                } else {
+                    // Cross-group move with exact position
+                    await moveProfileToPosition(profileId, targetProfileId, insertBeforeProfile);
+                }
             } else if (targetGroupId) {
-                // Cross-group move (existing behaviour)
+                // Cross-group move onto header → append to bottom
                 const newGroupPath = targetGroupId === 'ungrouped'
                     ? null
                     : (groups.find(g => g.id === targetGroupId)?.path ?? null);
