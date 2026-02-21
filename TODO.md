@@ -10,7 +10,7 @@
 - ✅ macOS "open in new tab" silent failure — actionable error toast
 - ✅ Phase 1: Move Profile & Move Group (modal + backend, 4 new tests)
 - ✅ Phase 2: Padlock button + drag_reorder_enabled settings toggle
-- 🔲 Phase 3: Drag profile between groups (instant move + 5s undo)
+- ✅ Phase 3: Drag profile between groups (instant move + 5s undo toast)
 - 🔲 Phase 4: Custom sort order (drag-to-reorder, reset to A-Z)
 - 🔲 Phase 5: Testing & release
 
@@ -91,6 +91,12 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 ---
 
 ## Known Issues
+
+### Settings Modal — Inline Checkbox + Button Alignment
+- In the Keyboard Shortcuts and Updates sections, the checkbox and button sit on the same row (`settings-inline` flex layout)
+- The button (37px tall) should have its bottom edge aligned with the checkbox row bottom (~21px), but WKWebView does not reliably apply cross-axis flex alignment (`align-items: flex-end` / `align-self: flex-end`)
+- The `flex: 1` shorthand (flex-basis: 0) on the checkbox-label inflates the container height; switching to `flex-grow: 1` partially helps but alignment still not consistent
+- **To fix:** Investigate absolute positioning approach or matching button height to checkbox height; or revisit during Phase 5 polish
 
 ### macOS Code Signing
 - DMGs show "damaged" (not code-signed)

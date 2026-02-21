@@ -378,6 +378,7 @@
         <!-- Toast Notification -->
         <div id="toast" class="toast hidden">
             <div id="toast-message"></div>
+            <button id="toast-undo-btn" class="toast-undo-btn hidden">Undo</button>
         </div>
 
         <!-- Settings Modal -->
@@ -417,14 +418,14 @@
                     <!-- Keyboard Shortcuts -->
                     <div class="settings-section">
                         <h3>Keyboard Shortcuts</h3>
-                        <div class="form-group settings-no-gap">
+                        <div class="form-group settings-no-gap settings-inline">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="keyboard-shortcuts-check" checked>
                                 <span>Enable keyboard shortcuts</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <button type="button" id="shortcuts-help-btn" class="btn btn-secondary">View All Shortcuts</button>
                         </div>
-                        <button type="button" id="shortcuts-help-btn" class="btn btn-secondary settings-gap">View All Shortcuts</button>
                         <p class="settings-help">Use keyboard shortcuts for quick navigation and actions.<br><em>Press ? to see all available shortcuts.</em></p>
                     </div>
 
@@ -446,6 +447,7 @@
                             <select id="terminal-select">
                                 <!-- Options will be populated by JavaScript based on OS -->
                             </select>
+                            <span class="settings-help-text">Choose which terminal application to use when connecting to SSH profiles.</span>
                         </div>
                         <div class="form-group hidden settings-gap" id="custom-terminal-group">
                             <label for="custom-terminal-path">Custom Terminal Path</label>
@@ -454,12 +456,13 @@
                                 <button type="button" class="btn btn-secondary btn-browse" id="browse-terminal-btn">Browse</button>
                             </div>
                         </div>
-                        <div class="form-group settings-no-gap">
+                        <div class="form-group settings-no-gap settings-top-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="use-tabs-in-terminal-check" checked>
                                 <span>Open profiles in new tabs (when supported)</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).</span>
                         </div>
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
@@ -467,8 +470,8 @@
                                 <span>Minimise app when launching profile</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When minimise is enabled, the app will minimise after launching a connection.</span>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).<br>When minimise is enabled, the app will minimise after launching a connection.</em></p>
                     </div>
 
                     <!-- Import/Export Settings -->
@@ -526,6 +529,7 @@
                                 <span>Include Profiles</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When enabled, all profiles will be included in the backup.<br><em>When "Include Passwords in Export" is also checked, backups are automatically encrypted with a password you provide.</em></span>
                         </div>
                         <div class="settings-actions">
                             <button id="backup-settings-btn" class="btn btn-primary">Backup Settings</button>
@@ -533,19 +537,17 @@
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Note:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups are automatically encrypted with a password you provide.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults.</p>
                     </div>
 
                     <!-- Updates Section -->
                     <div class="settings-section">
                         <h3>Updates</h3>
-                        <div class="form-group settings-no-gap">
+                        <div class="form-group settings-no-gap settings-inline">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="auto-update-check" checked>
                                 <span>Check for updates on launch</span>
                             </label>
-                        </div>
-                        <div class="settings-actions">
                             <button id="check-updates-btn" class="btn btn-secondary">Check for Updates</button>
                         </div>
                         <p class="settings-help">Automatically check for new versions when the app starts, or check manually.</p>

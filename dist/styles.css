@@ -1733,18 +1733,32 @@ form {
     margin-bottom: 0;
 }
 
-/* Override margin for settings sections - ensures consistent 12px gap before help text */
+/* settings-gap: no bottom margin — gap to help text is handled by .settings-help margin-top */
 .settings-section .form-group.settings-gap,
 .settings-section button.settings-gap {
-    margin-bottom: 12px !important;
+    margin-bottom: 0 !important;
 }
 
 .settings-section .form-group.settings-no-gap {
     margin-bottom: 0 !important;
 }
 
+.settings-section .form-group.settings-inline {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.settings-section .form-group.settings-inline .checkbox-label {
+    flex-grow: 1;
+}
+
+.settings-section .form-group.settings-inline > .btn {
+    flex-shrink: 0;
+}
+
 .settings-section .form-group.settings-top-gap {
-    margin-top: 16px !important;
+    margin-top: 12px !important;
 }
 
 .form-group label {
@@ -1872,7 +1886,7 @@ form {
 }
 
 .settings-section {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 }
 
 .settings-section:last-child {
@@ -1880,16 +1894,16 @@ form {
 }
 
 .settings-section h3 {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 600;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     color: var(--text-color);
 }
 
 .settings-actions {
     display: flex;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
 }
 
 .settings-actions .btn {
@@ -1909,7 +1923,8 @@ form {
     font-size: 13px;
     color: var(--text-muted);
     line-height: 1.5;
-    margin: 0;
+    margin-top: 8px;
+    margin-bottom: 0;
 }
 
 /* Help text below checkboxes (same styling as .settings-help) */
@@ -1918,8 +1933,8 @@ form {
     color: var(--text-muted);
     line-height: 1.5;
     display: block;
-    margin-top: 4px;
-    margin-bottom: 16px;  /* Add bottom margin to prevent clipping buttons below */
+    margin-top: 8px;
+    margin-bottom: 16px;
 }
 
 /* Red/warning text for mandatory encryption */
@@ -1942,6 +1957,12 @@ form {
     cursor: pointer;
     user-select: none;
     min-height: 24px; /* Compact height for checkbox rows */
+}
+
+/* Settings modal: let checkbox rows shrink to content height so the gap
+   below the checkbox matches the gap below other controls (select, input) */
+.settings-section .form-group .checkbox-label {
+    min-height: unset;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -2384,6 +2405,9 @@ form {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     z-index: 2000;
     opacity: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     transition:
         opacity 0.3s ease,
         transform 0.3s ease;
@@ -2400,8 +2424,6 @@ form {
 
 .toast.toast-loading {
     background-color: #374151;
-    display: flex;
-    align-items: center;
 }
 
 .toast.toast-loading::before {
@@ -2457,6 +2479,68 @@ form {
 .toast#toast-message {
     font-size: 14px;
     font-weight: 500;
+}
+
+.toast-undo-btn {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 4px;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.toast-undo-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.toast-undo-btn.hidden {
+    display: none;
+}
+
+/* Drag-and-drop profile between groups */
+/* Uses pointer events (not HTML5 drag API) for WKWebView compatibility */
+.drag-enabled .profile-card:not(.favourite-card) {
+    cursor: grab;
+}
+
+body.drag-in-progress {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+body.drag-in-progress,
+body.drag-in-progress * {
+    cursor: grabbing !important;
+}
+
+.profile-card.dragging {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.profile-group-header.drag-over {
+    background-color: rgba(59, 130, 246, 0.15);
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: inset 0 0 0 1px var(--primary-color, #3b82f6);
+}
+
+/* During drag: suppress hover/focus highlights on non-target group headers */
+body.drag-in-progress .profile-group-header:not(.drag-over) {
+    background-color: var(--surface-color);
+    border-color: var(--border-color);
+    box-shadow: none;
+}
+
+/* During drag: suppress hover/focus highlights on non-dragging profile cards */
+body.drag-in-progress .profile-card:not(.dragging) {
+    background-color: var(--surface-color);
+    border-color: var(--border-color);
+    box-shadow: none;
+    z-index: 0;
 }
 
 /* Input Group (for input + button combinations) */

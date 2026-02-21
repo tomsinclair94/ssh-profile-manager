@@ -30,7 +30,7 @@ bun run build    # Production build
 - ✅ macOS "open in new tab" silent failure — now surfaces actionable error toast
 - ✅ Phase 1: Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items, 4 new tests)
 - ✅ Phase 2: Padlock button + `drag_reorder_enabled` settings toggle — toolbar lock button, Settings checkbox, full backup/restore support
-- 🔲 Phase 3: Drag profile between groups (instant move + 5s undo toast)
+- ✅ Phase 3: Drag profile between groups — HTML5 drag API, drop onto group headers, 5s undo toast, Favourites excluded as drop target
 - 🔲 Phase 4: Custom sort order (drag-to-reorder within group, reset to A-Z)
 - 🔲 Phase 5: Testing & release
 

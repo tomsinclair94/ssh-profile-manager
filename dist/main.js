@@ -313,6 +313,8 @@ let lastImportTime = 0; // Track last settings import time for rate limiting
 let keyboardShortcutsEnabled = true; // Enable/disable keyboard shortcuts
 let expandedCardActionsEnabled = false; // Show all card actions as individual buttons
 let dragReorderEnabled = false; // Allow drag & drop reordering of profiles and groups
+let draggingProfileId = null;  // Profile currently being dragged
+let dragOverGroupId = null;    // data-group-id of current drag-over target
 let selectedProfileId = null; // Currently selected profile for keyboard navigation
 let selectedGroupName = null; // Currently selected group header for keyboard navigation
 let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
@@ -853,6 +855,12 @@ function applyDragLockState() {
         lockBtn.title = 'Drag reordering is locked — click to enable';
         lockBtn.classList.add('drag-lock-btn--locked');
     }
+
+    // Toggle drag-enabled class (controls grab cursor via CSS)
+    const profilesList = document.getElementById('profiles-list');
+    if (profilesList) {
+        profilesList.classList.toggle('drag-enabled', dragReorderEnabled);
+    }
 }
 
 function setupModifierKeyTracking() {
@@ -1226,6 +1234,10 @@ function getSettingsModalTabbableItems() {
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) items.push(themeSelect);
 
+    // Expanded card actions
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    if (expandedCardActionsCheck) items.push(expandedCardActionsCheck);
+
     // Keyboard shortcuts
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     if (keyboardShortcutsCheck) items.push(keyboardShortcutsCheck);
@@ -1261,6 +1273,8 @@ function getSettingsModalTabbableItems() {
     if (includePasswordsCheck) items.push(includePasswordsCheck);
     const requireEncryptionCheck = document.getElementById('require-encryption-check');
     if (requireEncryptionCheck) items.push(requireEncryptionCheck);
+    const dragReorderCheck = document.getElementById('drag-reorder-check');
+    if (dragReorderCheck) items.push(dragReorderCheck);
 
     // Profile management buttons
     const exportProfilesBtn = document.getElementById('export-profiles-btn');
@@ -1769,7 +1783,13 @@ function getAllTabbableItems() {
         items.push({ type: 'button', element: filterBtn, id: 'filter-btn' });
     }
 
-    // 7. All top-level group headers only (no subgroups)
+    // 7. Drag lock button
+    const dragLockBtn = document.getElementById('drag-lock-btn');
+    if (dragLockBtn) {
+        items.push({ type: 'button', element: dragLockBtn, id: 'drag-lock-btn' });
+    }
+
+    // 9. All top-level group headers only (no subgroups)
     const groupHeaders = document.querySelectorAll('.profile-group-header');
     groupHeaders.forEach(header => {
         const groupContent = header.closest('.profile-group-content');
@@ -1783,7 +1803,7 @@ function getAllTabbableItems() {
         }
     });
 
-    // 8-10. Recent Connections section (conditional based on settings and state)
+    // 10-12. Recent Connections section (conditional based on settings and state)
     const recentLimit = getRecentConnectionsLimit();
 
     // Only include Recent Connections in Tab cycle if enabled (limit > 0)
@@ -1825,32 +1845,13 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
     let currentIndex = -1;
     const activeElement = document.activeElement;
 
-    // Check if any focusable element is currently focused
-    const newProfileBtn = document.getElementById('new-profile-btn');
-    const addGroupBtn = document.getElementById('add-group-btn');
-    const settingsBtn = document.getElementById('settings-btn');
-    const searchInput = document.getElementById('search-input');
-    const filterBtn = document.getElementById('filter-btn');
-    const expandCollapseBtn = document.getElementById('expand-collapse-btn');
-    const toggleBtn = document.getElementById('toggle-recent-btn');
-    const clearBtn = document.getElementById('clear-recent-btn');
+    // Check if a button or input in the items list is currently focused
+    const focusedIndex = items.findIndex(item =>
+        (item.type === 'button' || item.type === 'input') && item.element === activeElement
+    );
 
-    if (activeElement === newProfileBtn) {
-        currentIndex = items.findIndex(item => item.id === 'new-profile-btn');
-    } else if (activeElement === addGroupBtn) {
-        currentIndex = items.findIndex(item => item.id === 'add-group-btn');
-    } else if (activeElement === settingsBtn) {
-        currentIndex = items.findIndex(item => item.id === 'settings-btn');
-    } else if (activeElement === searchInput) {
-        currentIndex = items.findIndex(item => item.id === 'search-input');
-    } else if (activeElement === filterBtn) {
-        currentIndex = items.findIndex(item => item.id === 'filter-btn');
-    } else if (activeElement === expandCollapseBtn) {
-        currentIndex = items.findIndex(item => item.id === 'expand-collapse-btn');
-    } else if (activeElement === toggleBtn) {
-        currentIndex = items.findIndex(item => item.id === 'toggle-recent-btn');
-    } else if (activeElement === clearBtn) {
-        currentIndex = items.findIndex(item => item.id === 'clear-recent-btn');
+    if (focusedIndex !== -1) {
+        currentIndex = focusedIndex;
     } else if (selectedRecentConnectionId) {
         currentIndex = items.findIndex(item => item.type === 'recent');
     } else if (selectedGroupName) {
@@ -2739,6 +2740,7 @@ async function init() {
     await loadWindowState();
     await setupWindowListeners();
     setupEventListeners();
+    setupDragAndDrop();
     setupKeyboardShortcutListeners();
     setupModifierKeyTracking();
 
@@ -6086,6 +6088,9 @@ async function showGroupConflictDialog(groupName, parentName) {
 
 // Toast notification
 function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
+    // Hide undo button on regular toasts
+    document.getElementById('toast-undo-btn')?.classList.add('hidden');
+
     // Cancel any pending auto-hide from the previous toast
     if (toastTimeoutId) {
         clearTimeout(toastTimeoutId);
@@ -6124,6 +6129,37 @@ function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
             toastTimeoutId = null;
         }, duration);
     }
+}
+
+// Undo toast — shows a toast with an Undo button for reversible actions
+function showUndoToast(message, undoFn, duration = 5000) {
+    // Cancel any pending toast timeout
+    if (toastTimeoutId) { clearTimeout(toastTimeoutId); toastTimeoutId = null; }
+
+    toastMessage.textContent = message;
+    toastElement.classList.remove('hidden', 'toast-error', 'toast-success', 'toast-loading');
+    toastElement.classList.add('toast-success');
+
+    // Show and wire undo button (clone to remove old listeners)
+    const oldBtn = document.getElementById('toast-undo-btn');
+    if (oldBtn) {
+        const undoBtn = oldBtn.cloneNode(true);
+        oldBtn.replaceWith(undoBtn);
+        undoBtn.classList.remove('hidden');
+        undoBtn.addEventListener('click', async () => {
+            clearTimeout(toastTimeoutId);
+            toastTimeoutId = null;
+            undoBtn.classList.add('hidden');
+            toastElement.classList.add('hidden');
+            await undoFn();
+        });
+    }
+
+    toastTimeoutId = setTimeout(() => {
+        toastElement.classList.add('hidden');
+        document.getElementById('toast-undo-btn')?.classList.add('hidden');
+        toastTimeoutId = null;
+    }, duration);
 }
 
 // Update form based on selected auth method
@@ -10474,6 +10510,137 @@ async function saveMoveModal() {
             showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
         }
     }
+}
+
+// Move a profile via drag-and-drop, with a 5-second undo toast
+async function moveProfileDragDrop(profileId, newGroupPath) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+    const oldGroupPath = profile.group_path ?? null;
+    if (oldGroupPath === newGroupPath) return; // no-op: same group
+
+    try {
+        await invoke('move_profile', { input: { profileId, newGroupPath } });
+        await loadProfiles();
+        const destLabel = newGroupPath ? `"${formatGroupPathDisplay(newGroupPath)}"` : 'Ungrouped';
+        showUndoToast(`Moved "${profile.name}" to ${destLabel}`, async () => {
+            try {
+                await invoke('move_profile', { input: { profileId, newGroupPath: oldGroupPath } });
+                await loadProfiles();
+                showToast(`Moved "${profile.name}" back`, TOAST_DURATION_SHORT);
+            } catch (err) {
+                showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+            }
+        });
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Clear drag-over highlight state from current group header
+function clearDragOverState() {
+    if (dragOverGroupId) {
+        document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(dragOverGroupId)}"]`)
+            ?.classList.remove('drag-over');
+        dragOverGroupId = null;
+    }
+}
+
+// Returns the valid drop target group ID under the drag cursor, or null.
+// Checks the group header directly (works for all sections including Ungrouped),
+// then falls back to the outer .profile-group div (named groups only — they carry
+// data-group-id on the wrapper, so dropping on a profile card inside the group works).
+function getDragTargetGroupId(target) {
+    const header = target.closest('.profile-group-header');
+    if (header && header.dataset.groupId && header.dataset.groupId !== '__favourites__') {
+        return header.dataset.groupId;
+    }
+    const profileGroup = target.closest('.profile-group[data-group-id]');
+    if (profileGroup && profileGroup.dataset.groupId !== '__favourites__') {
+        return profileGroup.dataset.groupId;
+    }
+    return null;
+}
+
+// Setup drag-and-drop: drag profile card to move it to another group.
+// Uses pointer events instead of the HTML5 drag API for WKWebView compatibility.
+function setupDragAndDrop() {
+    const container = document.getElementById('profiles-list');
+    if (!container) return;
+
+    const DRAG_THRESHOLD = 5; // px of movement before drag activates
+    let pointerStart = null;  // { profileId, x, y } — set on pointerdown
+
+    function onPointerMove(e) {
+        if (!pointerStart) return;
+        const dist = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+
+        // Activate drag once threshold exceeded
+        if (!draggingProfileId && dist > DRAG_THRESHOLD) {
+            draggingProfileId = pointerStart.profileId;
+            // Cache source group ID so we never highlight the source group
+            const sourceProfile = profiles.find(p => p.id === draggingProfileId);
+            const sourceGroupPath = sourceProfile?.group_path ?? null;
+            pointerStart.sourceGroupId = sourceGroupPath
+                ? (groups.find(g => g.path === sourceGroupPath)?.id ?? null)
+                : 'ungrouped';
+            document.body.classList.add('drag-in-progress');
+            const card = container.querySelector(`.profile-card[data-id="${CSS.escape(draggingProfileId)}"]`);
+            if (card) card.classList.add('dragging');
+        }
+
+        if (!draggingProfileId) return;
+
+        // Highlight whatever group the cursor is over (excluding the source group)
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const rawGroupId = el ? getDragTargetGroupId(el) : null;
+        const groupId = rawGroupId === pointerStart.sourceGroupId ? null : rawGroupId;
+        if (groupId !== dragOverGroupId) {
+            clearDragOverState();
+            if (groupId) {
+                dragOverGroupId = groupId;
+                document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(groupId)}"]`)
+                    ?.classList.add('drag-over');
+            }
+        }
+    }
+
+    function cancelDrag() {
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+        document.removeEventListener('pointercancel', cancelDrag);
+        if (draggingProfileId) {
+            const card = container.querySelector(`.profile-card[data-id="${CSS.escape(draggingProfileId)}"]`);
+            if (card) card.classList.remove('dragging');
+            document.body.classList.remove('drag-in-progress');
+        }
+        draggingProfileId = null;
+        pointerStart = null;
+        clearDragOverState();
+    }
+
+    async function onPointerUp() {
+        const profileId = draggingProfileId;
+        const targetGroupId = dragOverGroupId;
+        cancelDrag();
+        if (!profileId || !targetGroupId) return;
+        const newGroupPath = targetGroupId === 'ungrouped'
+            ? null
+            : (groups.find(g => g.id === targetGroupId)?.path ?? null);
+        await moveProfileDragDrop(profileId, newGroupPath);
+    }
+
+    container.addEventListener('pointerdown', e => {
+        if (!dragReorderEnabled) return;
+        if (e.button !== 0) return; // Primary button only
+        const card = e.target.closest('.profile-card:not(.favourite-card)');
+        if (!card) return;
+        if (e.target.closest('button')) return; // Don't intercept button clicks
+        pointerStart = { profileId: card.dataset.id, x: e.clientX, y: e.clientY };
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+        document.addEventListener('pointercancel', cancelDrag);
+    });
 }
 
 // Save group (create or update)
