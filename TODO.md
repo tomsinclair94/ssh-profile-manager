@@ -9,7 +9,7 @@
 **Progress:**
 - ✅ macOS "open in new tab" silent failure — actionable error toast
 - ✅ Phase 1: Move Profile & Move Group (modal + backend, 4 new tests)
-- 🔲 Phase 2: Padlock button + drag_reorder_enabled settings toggle
+- ✅ Phase 2: Padlock button + drag_reorder_enabled settings toggle
 - 🔲 Phase 3: Drag profile between groups (instant move + 5s undo)
 - 🔲 Phase 4: Custom sort order (drag-to-reorder, reset to A-Z)
 - 🔲 Phase 5: Testing & release

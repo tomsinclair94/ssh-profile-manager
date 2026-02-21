@@ -1935,6 +1935,8 @@ struct SettingsData {
     require_encryption_for_all_exports: bool,
     #[serde(default)]
     expanded_card_actions_enabled: bool,
+    #[serde(default)]
+    drag_reorder_enabled: bool,
 }
 
 fn default_include_passwords() -> bool {
@@ -3641,6 +3643,7 @@ fn export_settings(
     include_passwords_in_exports: bool,
     require_encryption_for_all_exports: bool,
     expanded_card_actions_enabled: bool,
+    drag_reorder_enabled: bool,
     terminal_preference: String,
     use_tabs_in_terminal: Option<bool>,
     minimize_on_launch: Option<bool>,
@@ -3670,6 +3673,7 @@ fn export_settings(
         include_passwords_in_exports,
         require_encryption_for_all_exports,
         expanded_card_actions_enabled,
+        drag_reorder_enabled,
     };
 
     let settings_os_specific = SettingsOsSpecific {

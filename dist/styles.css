@@ -156,7 +156,8 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 16px;
+    height: 40px;
+    padding: 0 16px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     background-color: transparent;
@@ -233,6 +234,10 @@ body {
     flex-wrap: wrap;
 }
 
+.search-controls .btn {
+    height: 42px;
+}
+
 .search-input-wrapper {
     flex: 1;
     position: relative;
@@ -241,7 +246,7 @@ body {
 
 .search-bar input[type="text"] {
     width: 100%;
-    height: 41px; /* Fixed height to prevent growth */
+    height: 40px; /* Fixed height to prevent growth */
     padding: 10px 40px 10px 16px; /* Extra right padding for clear button */
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
@@ -304,11 +309,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 40px;
     gap: 6px;
     white-space: nowrap;
     position: relative;
-    padding: 10px 16px;
-    height: auto;
+    padding: 0 16px;
 }
 
 #expand-collapse-btn,
@@ -645,6 +650,29 @@ body {
 .btn-icon:hover {
     color: var(--text-color);
     background-color: var(--surface-hover);
+}
+
+.drag-lock-btn {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+}
+
+.drag-lock-btn svg {
+    display: block;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+}
+
+.drag-lock-btn.drag-lock-btn--locked,
+.drag-lock-btn.drag-lock-btn--locked:hover {
+    color: #f59e0b;
 }
 
 /* Group context menu */

@@ -62,6 +62,8 @@
                     Profiles
                     <span id="profile-count-badge" class="badge profile-count-badge">0/0</span>
                 </div>
+                <button id="drag-lock-btn" class="btn btn-secondary drag-lock-btn" title="Drag reordering is locked — click to enable">
+                </button>
             </div>
 
             <!-- Filter Popup -->
@@ -478,6 +480,7 @@
                                 <span>Include Passwords in Exports</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When enabled, saved passwords are included in exported profile files.<br><em>Disable this to share profiles without exposing credentials.</em></span>
                         </div>
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
@@ -486,6 +489,14 @@
                                 <span class="default-value">(Default: Off)</span>
                             </label>
                             <span class="settings-help-text">When enabled, all profile exports must be encrypted (recommended for organisations with security policies)</span>
+                        </div>
+                        <div class="form-group settings-no-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="drag-reorder-check">
+                                <span>Allow Drag & Drop Reordering</span>
+                                <span class="default-value">(Default: Off)</span>
+                            </label>
+                            <span class="settings-help-text">Enables dragging profiles and groups into a custom order.<br><em>The padlock button in the toolbar also toggles this setting.</em></span>
                         </div>
                         <div class="settings-actions">
                             <button id="export-profiles-btn" class="btn btn-primary">Export All Profiles</button>

@@ -154,7 +154,14 @@ const PROFILE_ICONS = {
         { type: 'path', attrs: { d: 'm7.5 4.27 9 5.15' } }
     ],
     'shield': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-    'lock': 'M19 11H5c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2zM7 11V7c0-2.76 2.24-5 5-5s5 2.24 5 5v4',
+    'lock': [
+        { type: 'rect', attrs: { x: 3, y: 11, width: 18, height: 11, rx: 2, ry: 2 } },
+        { type: 'path', attrs: { d: 'M7 11V7a5 5 0 0 1 10 0v4' } }
+    ],
+    'lock-open': [
+        { type: 'rect', attrs: { x: 3, y: 11, width: 18, height: 11, rx: 2, ry: 2 } },
+        { type: 'path', attrs: { d: 'M7 11V7a5 5 0 0 1 9.9-1' } }
+    ],
     'key': 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4',
     'folder': 'M22 19c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h5l2 3h9c1.1 0 2 .9 2 2v11z',
     'file': 'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM14 2v6h6',
@@ -305,6 +312,7 @@ let filteredGroups = new Set(); // Groups to hide (empty = show all)
 let lastImportTime = 0; // Track last settings import time for rate limiting
 let keyboardShortcutsEnabled = true; // Enable/disable keyboard shortcuts
 let expandedCardActionsEnabled = false; // Show all card actions as individual buttons
+let dragReorderEnabled = false; // Allow drag & drop reordering of profiles and groups
 let selectedProfileId = null; // Currently selected profile for keyboard navigation
 let selectedGroupName = null; // Currently selected group header for keyboard navigation
 let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
@@ -808,6 +816,42 @@ function saveExpandedCardActionsPreference() {
         expandedCardActionsEnabled = check.checked;
         localStorage.setItem('expandedCardActionsEnabled', expandedCardActionsEnabled);
         renderProfiles(); // Re-render cards to apply new layout
+    }
+}
+
+// Drag Reorder
+function loadDragReorderEnabled() {
+    const stored = localStorage.getItem('dragReorderEnabled');
+    dragReorderEnabled = stored === 'true';
+    applyDragLockState();
+}
+
+function loadDragReorderCheckbox() {
+    const check = document.getElementById('drag-reorder-check');
+    if (check) check.checked = dragReorderEnabled;
+}
+
+function saveDragReorderPreference() {
+    const check = document.getElementById('drag-reorder-check');
+    if (check) {
+        dragReorderEnabled = check.checked;
+        localStorage.setItem('dragReorderEnabled', dragReorderEnabled);
+        applyDragLockState();
+    }
+}
+
+function applyDragLockState() {
+    const lockBtn = document.getElementById('drag-lock-btn');
+    if (!lockBtn) return;
+    lockBtn.innerHTML = '';
+    if (dragReorderEnabled) {
+        lockBtn.appendChild(createIcon('lock-open', 20));
+        lockBtn.title = 'Drag reordering is enabled — click to lock';
+        lockBtn.classList.remove('drag-lock-btn--locked');
+    } else {
+        lockBtn.appendChild(createIcon('lock', 20));
+        lockBtn.title = 'Drag reordering is locked — click to enable';
+        lockBtn.classList.add('drag-lock-btn--locked');
     }
 }
 
@@ -2674,6 +2718,7 @@ async function init() {
     loadCollapsedState();
     loadFavouritesCollapsedState();
     loadExpandedCardActions(); // Load before renderProfiles() is called
+    loadDragReorderEnabled(); // Load before renderProfiles() is called
 
     await loadTags(); // Load tags BEFORE profiles (needed for tag badge colors)
     await loadProfiles();
@@ -5260,6 +5305,24 @@ function setupEventListeners() {
         });
     }
 
+    // Drag reorder
+    const dragReorderCheck = document.getElementById('drag-reorder-check');
+    if (dragReorderCheck) {
+        dragReorderCheck.addEventListener('change', () => {
+            debouncedCheckSettingsChanged();
+        });
+    }
+
+    // Padlock button (drag reorder toggle)
+    const dragLockBtn = document.getElementById('drag-lock-btn');
+    if (dragLockBtn) {
+        dragLockBtn.addEventListener('click', () => {
+            dragReorderEnabled = !dragReorderEnabled;
+            localStorage.setItem('dragReorderEnabled', dragReorderEnabled);
+            applyDragLockState();
+        });
+    }
+
     const shortcutsHelpBtn = document.getElementById('shortcuts-help-btn');
     if (shortcutsHelpBtn) {
         shortcutsHelpBtn.addEventListener('click', () => {
@@ -6077,6 +6140,7 @@ function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    const dragReorderCheck = document.getElementById('drag-reorder-check');
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
     return {
@@ -6090,6 +6154,7 @@ function getCurrentSettingsValues() {
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
         expandedCardActionsEnabled: expandedCardActionsCheck ? expandedCardActionsCheck.checked : false,
+        dragReorderEnabled: dragReorderCheck ? dragReorderCheck.checked : false,
         useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true,
         minimizeOnLaunch: minimizeOnLaunchCheck ? minimizeOnLaunchCheck.checked : true
     };
@@ -6136,6 +6201,7 @@ function openSettings() {
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
     loadExpandedCardActionsCheckbox();
+    loadDragReorderCheckbox();
     loadIncludePasswordsPreference();
     loadRequireEncryptionPreference();
     loadUseTabsInTerminalPreference();
@@ -6242,6 +6308,14 @@ function revertSettingsUI() {
             : false;
     }
 
+    // Validate drag reorder enabled - boolean with safe default
+    const dragReorderCheck = document.getElementById('drag-reorder-check');
+    if (dragReorderCheck) {
+        dragReorderCheck.checked = typeof originalSettingsValues.dragReorderEnabled === 'boolean'
+            ? originalSettingsValues.dragReorderEnabled
+            : false;
+    }
+
     updateTerminalVisibility();
 }
 
@@ -6279,6 +6353,9 @@ function saveSettings() {
 
     // Save expanded card actions preference
     saveExpandedCardActionsPreference();
+
+    // Save drag reorder preference
+    saveDragReorderPreference();
 
     // Reload recent connections with new limit
     loadRecentConnections();
@@ -8410,6 +8487,7 @@ async function backupSettings() {
         const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
         const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch') !== 'false'; // Default to true
         const expandedCardActions = localStorage.getItem('expandedCardActionsEnabled') === 'true';
+        const dragReorderEnabledVal = localStorage.getItem('dragReorderEnabled') === 'true';
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -8451,6 +8529,7 @@ async function backupSettings() {
             includePasswordsInExports,
             requireEncryptionForAllExports,
             expandedCardActionsEnabled: expandedCardActions,
+            dragReorderEnabled: dragReorderEnabledVal,
             terminalPreference: terminalPreference,
             useTabsInTerminal: useTabsInTerminal,
             minimizeOnLaunch: minimizeOnLaunch,
@@ -8773,6 +8852,14 @@ async function restoreSettings(file) {
         localStorage.setItem('expandedCardActionsEnabled', restoredExpandedCardActions.toString());
         expandedCardActionsEnabled = restoredExpandedCardActions;
 
+        // Validate and restore drag reorder enabled (must be boolean, default false)
+        const restoredDragReorder = typeof result.settings.drag_reorder_enabled === 'boolean'
+            ? result.settings.drag_reorder_enabled
+            : false;
+        localStorage.setItem('dragReorderEnabled', restoredDragReorder.toString());
+        dragReorderEnabled = restoredDragReorder;
+        applyDragLockState();
+
         // Validate and restore filtered/collapsed groups
         // Must be arrays, with reasonable length limits (max 1000 items to prevent DoS)
         if (result.settings.filtered_groups) {
@@ -8898,6 +8985,9 @@ async function resetSettings() {
         localStorage.setItem('recentConnectionsLimit', '5');
         localStorage.setItem('expandedCardActionsEnabled', 'false');
         expandedCardActionsEnabled = false;
+        localStorage.setItem('dragReorderEnabled', 'false');
+        dragReorderEnabled = false;
+        applyDragLockState();
 
         // Reset window to default size
         await resetWindowState();
