@@ -1298,6 +1298,39 @@ impl Database {
         groups.next().transpose()
     }
 
+    fn get_group_by_path(&self, path: &str) -> SqlResult<Option<Group>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at
+             FROM groups WHERE path = ?1"
+        )?;
+
+        let mut groups = stmt.query_map([path], |row| {
+            Ok(Group {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                path: row.get(3)?,
+                icon: row.get(4)?,
+                is_favorite: row.get::<_, i32>(5)? != 0,
+                display_order: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+
+        groups.next().transpose()
+    }
+
+    fn move_profile_to_group(&self, profile_id: &str, new_group_path: Option<&str>) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE profiles SET group_path = ?1 WHERE id = ?2",
+            rusqlite::params![new_group_path, profile_id],
+        )?;
+        Ok(())
+    }
+
     fn create_group(&self, group: &Group) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
@@ -2727,6 +2760,30 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
     ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
 
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct MoveProfileInput {
+    profile_id: String,
+    new_group_path: Option<String>,
+}
+
+#[tauri::command]
+fn move_profile(db: State<Database>, input: MoveProfileInput) -> Result<(), String> {
+    // Validate profile exists
+    db.get_profile_by_id(&input.profile_id)
+        .map_err(|e| format!("Failed to get profile: {}", e))?
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    // If moving to a group, validate the group exists
+    if let Some(ref path) = input.new_group_path {
+        db.get_group_by_path(path)
+            .map_err(|e| format!("Failed to get group: {}", e))?
+            .ok_or_else(|| "Group not found".to_string())?;
+    }
+
+    db.move_profile_to_group(&input.profile_id, input.new_group_path.as_deref())
+        .map_err(|e| format!("Failed to move profile: {}", e))
 }
 
 #[tauri::command]
@@ -5325,6 +5382,7 @@ pub fn run() {
             update_group,
             delete_group,
             move_group,
+            move_profile,
             get_group_tree,
             export_profiles,
             import_profiles,

@@ -1465,6 +1465,25 @@ async function handleModalShortcuts(e) {
                 return;
             }
 
+            case 'move': {
+                const items = [
+                    document.getElementById('move-destination'),
+                    document.getElementById('move-save-btn'),
+                    document.getElementById('move-close-btn')
+                ].filter(Boolean);
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
+                    if (e.shiftKey) {
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
+                    items[nextIndex].focus();
+                }
+                return;
+            }
+
             case 'terminal':
                 // Terminal modal handles Tab internally via xterm.js
                 // Don't prevent default, let xterm process it
@@ -1518,6 +1537,10 @@ async function handleModalShortcuts(e) {
                 closeTagManager();
                 return;
 
+            case 'move':
+                closeMoveModal();
+                return;
+
             case 'encryptionPassword':
                 closeEncryptionPasswordModal(undefined); // undefined = user cancelled
                 return;
@@ -1558,6 +1581,11 @@ async function handleModalShortcuts(e) {
                 if (saveBtn && !saveBtn.disabled) {
                     saveGroup();
                 }
+                return;
+            }
+
+            case 'move': {
+                saveMoveModal();
                 return;
             }
         }
@@ -4173,6 +4201,7 @@ function showGroupMenu(groupId, event) {
 
     menu.innerHTML = `
         <button class="group-menu-item group-menu-edit" data-action="edit">Edit Group</button>
+        <button class="group-menu-item" data-action="move">Move Group</button>
         <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
         <button class="group-menu-item" data-action="export">Export Group</button>
         <button class="group-menu-item group-menu-delete" data-action="delete">Delete Group</button>
@@ -4222,6 +4251,8 @@ function showGroupMenu(groupId, event) {
 
             if (action === 'edit') {
                 await editGroup(groupId);
+            } else if (action === 'move') {
+                openMoveGroupModal(groupId);
             } else if (action === 'add-subgroup') {
                 openGroupModal(null, groupId); // Create new group with this as parent
             } else if (action === 'export') {
@@ -4301,6 +4332,7 @@ function showProfileActionMenu(profileId, buttonElement) {
 
     menu.innerHTML = `
         <button class="profile-menu-item profile-menu-edit" data-action="edit">Edit Profile</button>
+        <button class="profile-menu-item" data-action="move">Move Profile</button>
         <button class="profile-menu-item" data-action="duplicate">Duplicate Profile</button>
         <button class="profile-menu-item" data-action="export">Export Profile</button>
         <button class="profile-menu-item profile-menu-delete" data-action="delete">Delete Profile</button>
@@ -4353,6 +4385,8 @@ function showProfileActionMenu(profileId, buttonElement) {
 
             if (action === 'edit') {
                 editProfile(profileId);
+            } else if (action === 'move') {
+                openMoveProfileModal(profileId);
             } else if (action === 'duplicate') {
                 duplicateProfile(profileId);
             } else if (action === 'export') {
@@ -5441,6 +5475,40 @@ function setupEventListeners() {
             checkGroupFormChanged();
         });
     }
+
+    // Move modal buttons
+    document.getElementById('move-close-btn').addEventListener('click', () => closeMoveModal());
+    document.getElementById('move-save-btn').addEventListener('click', () => saveMoveModal());
+
+    // Move destination dropdown input
+    const moveDestInput = document.getElementById('move-destination');
+    moveDestInput.addEventListener('input', (e) => showMoveDestinationDropdown(e.target.value));
+    moveDestInput.addEventListener('focus', () => showMoveDestinationDropdown(moveDestInput.value));
+    moveDestInput.addEventListener('blur', () => {
+        setTimeout(() => hideMoveDestinationDropdown(), 150);
+    });
+    moveDestInput.addEventListener('keydown', (e) => {
+        if (!moveDestinationDropdownVisible) return;
+        const items = document.querySelectorAll('#move-destination-dropdown .searchable-dropdown-item');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            focusedMoveDropdownIndex = Math.min(focusedMoveDropdownIndex + 1, items.length - 1);
+            items.forEach((item, i) => item.classList.toggle('focused', i === focusedMoveDropdownIndex));
+            if (items[focusedMoveDropdownIndex]) items[focusedMoveDropdownIndex].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            focusedMoveDropdownIndex = Math.max(focusedMoveDropdownIndex - 1, 0);
+            items.forEach((item, i) => item.classList.toggle('focused', i === focusedMoveDropdownIndex));
+            if (items[focusedMoveDropdownIndex]) items[focusedMoveDropdownIndex].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (focusedMoveDropdownIndex >= 0 && filteredMoveOptions[focusedMoveDropdownIndex]) {
+                selectMoveDestination(filteredMoveOptions[focusedMoveDropdownIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            hideMoveDestinationDropdown();
+        }
+    });
 
     // Filter button and popup
     filterBtn.addEventListener('click', (e) => {
@@ -9764,6 +9832,14 @@ let filteredParentGroupOptions = [];
 let currentExcludeGroupId = null; // For preventing circular references when editing groups
 let parentGroupScrollTimeout = null; // Handle for pending auto-scroll timeout
 
+// Move modal state
+let moveModalMode = null; // 'profile' or 'group'
+let moveModalTargetId = null;
+let moveDestinationDropdownVisible = false;
+let focusedMoveDropdownIndex = -1;
+let filteredMoveOptions = [];
+let moveDropdownScrollTimeout = null;
+
 function populateProfileGroupSelect() {
     // This function is now called to initialize the searchable dropdown
     // Actual population happens in showProfileGroupDropdown()
@@ -9950,6 +10026,223 @@ async function closeGroupModal() {
     popModal('group');
     editingGroupId = null;
     groupForm.reset();
+}
+
+// ========== Move Profile / Group Modal ==========
+
+function openMoveProfileModal(profileId) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+
+    moveModalMode = 'profile';
+    moveModalTargetId = profileId;
+
+    document.getElementById('move-modal-title').textContent = 'Move Profile';
+    document.getElementById('move-modal-desc').textContent = `Move "${profile.name}" to a different group.`;
+
+    // Pre-fill current group
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    if (profile.group_path) {
+        destInput.value = formatGroupPathDisplay(profile.group_path);
+        const currentGroup = groups.find(g => g.path === profile.group_path);
+        destIdInput.value = currentGroup ? currentGroup.id : '';
+    } else {
+        destInput.value = '';
+        destIdInput.value = '';
+    }
+
+    document.getElementById('move-modal').classList.remove('hidden');
+    pushModal('move');
+    destInput.focus();
+}
+
+function openMoveGroupModal(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    moveModalMode = 'group';
+    moveModalTargetId = groupId;
+
+    document.getElementById('move-modal-title').textContent = 'Move Group';
+    document.getElementById('move-modal-desc').textContent = `Move "${group.name}" to a different parent group.`;
+
+    // Pre-fill current parent
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    if (group.parent_id) {
+        const parentGroup = groups.find(g => g.id === group.parent_id);
+        destInput.value = parentGroup ? formatGroupPathDisplay(parentGroup.path) : '';
+        destIdInput.value = group.parent_id;
+    } else {
+        destInput.value = '';
+        destIdInput.value = '';
+    }
+
+    document.getElementById('move-modal').classList.remove('hidden');
+    pushModal('move');
+    destInput.focus();
+}
+
+function showMoveDestinationDropdown(filterText = '') {
+    const destInput = document.getElementById('move-destination');
+    const destDropdown = document.getElementById('move-destination-dropdown');
+    if (!destInput || !destDropdown) return;
+
+    const normalizedFilter = filterText.replace(/\s*\/\s*/g, '/').toLowerCase();
+    const sortedGroups = [...groups].sort((a, b) => a.path.localeCompare(b.path));
+
+    if (moveModalMode === 'profile') {
+        // Profile: show all groups + "Ungrouped"
+        filteredMoveOptions = sortedGroups.filter(g =>
+            g.path.toLowerCase().includes(normalizedFilter)
+        );
+        filteredMoveOptions.unshift({ id: '', name: 'Ungrouped', path: 'Ungrouped' });
+    } else {
+        // Group: exclude self and all descendants (backend validates depth limit)
+        const targetGroup = groups.find(g => g.id === moveModalTargetId);
+        const excludePrefix = targetGroup ? targetGroup.path : null;
+        filteredMoveOptions = sortedGroups.filter(g => {
+            if (!excludePrefix) return true;
+            if (g.id === moveModalTargetId) return false;
+            if (g.path.startsWith(excludePrefix + '/')) return false;
+            return g.path.toLowerCase().includes(normalizedFilter);
+        });
+        filteredMoveOptions.unshift({ id: '', name: '-- Top Level --', path: '-- Top Level --' });
+    }
+
+    const currentDestId = document.getElementById('move-destination-id').value;
+    let html = '';
+    if (filteredMoveOptions.length === 0 || (moveModalMode === 'group' && filteredMoveOptions.length === 1)) {
+        html = '<div class="searchable-dropdown-empty">No groups found</div>';
+    } else {
+        filteredMoveOptions.forEach((g, index) => {
+            const isSelected = g.id === currentDestId;
+            const displayText = g.id === '' ? g.path : formatGroupPathDisplay(g.path);
+            html += `
+                <div class="searchable-dropdown-item ${isSelected ? 'selected' : ''}"
+                     data-group-id="${escapeHtml(g.id)}"
+                     data-index="${index}">
+                    ${escapeHtml(displayText)}
+                </div>
+            `;
+        });
+    }
+
+    destDropdown.innerHTML = html;
+    destDropdown.classList.remove('hidden');
+    moveDestinationDropdownVisible = true;
+    focusedMoveDropdownIndex = -1;
+
+    destDropdown.querySelectorAll('.searchable-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const groupId = e.currentTarget.dataset.groupId;
+            const g = filteredMoveOptions.find(opt => opt.id === groupId);
+            selectMoveDestination(g);
+        });
+    });
+
+    // Auto-scroll modal to show dropdown
+    if (moveDropdownScrollTimeout !== null) clearTimeout(moveDropdownScrollTimeout);
+    moveDropdownScrollTimeout = setTimeout(() => {
+        moveDropdownScrollTimeout = null;
+        if (destDropdown.classList.contains('hidden')) return;
+        const scrollContainer = destDropdown.closest('.modal-content');
+        if (!scrollContainer) return;
+        const dropdownRect = destDropdown.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const desiredPadding = 20;
+        const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
+        if (dropdownOverflow > -desiredPadding) {
+            const computedStyle = window.getComputedStyle(scrollContainer);
+            const currentPadding = parseInt(computedStyle.paddingBottom) || 0;
+            const paddingNeeded = currentPadding + Math.abs(dropdownOverflow) + desiredPadding;
+            scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
+            scrollContainer.dataset.originalPaddingBottom = computedStyle.paddingBottom;
+            setTimeout(() => {
+                scrollContainer.scrollBy({ top: Math.abs(dropdownOverflow) + desiredPadding, behavior: 'smooth' });
+            }, 10);
+        }
+    }, 50);
+}
+
+function hideMoveDestinationDropdown() {
+    if (moveDropdownScrollTimeout !== null) {
+        clearTimeout(moveDropdownScrollTimeout);
+        moveDropdownScrollTimeout = null;
+    }
+    const destDropdown = document.getElementById('move-destination-dropdown');
+    if (destDropdown) {
+        destDropdown.classList.add('hidden');
+        moveDestinationDropdownVisible = false;
+        focusedMoveDropdownIndex = -1;
+        const scrollContainer = destDropdown.closest('.modal-content');
+        if (scrollContainer && scrollContainer.dataset.originalPaddingBottom !== undefined) {
+            scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottom || '';
+            delete scrollContainer.dataset.originalPaddingBottom;
+        }
+    }
+}
+
+function selectMoveDestination(group) {
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    if (!group) return;
+    if (group.id === '') {
+        destInput.value = '';
+        destIdInput.value = '';
+    } else {
+        destInput.value = formatGroupPathDisplay(group.path);
+        destIdInput.value = group.id;
+    }
+    hideMoveDestinationDropdown();
+}
+
+function closeMoveModal() {
+    hideMoveDestinationDropdown();
+    document.getElementById('move-modal').classList.add('hidden');
+    popModal('move');
+    moveModalMode = null;
+    moveModalTargetId = null;
+    document.getElementById('move-destination').value = '';
+    document.getElementById('move-destination-id').value = '';
+}
+
+async function saveMoveModal() {
+    if (!moveModalTargetId || !moveModalMode) return;
+
+    const destId = document.getElementById('move-destination-id').value || null;
+
+    if (moveModalMode === 'profile') {
+        const profile = profiles.find(p => p.id === moveModalTargetId);
+        const destGroup = destId ? groups.find(g => g.id === destId) : null;
+        const newGroupPath = destGroup ? destGroup.path : null;
+
+        try {
+            await invoke('move_profile', { input: { profileId: moveModalTargetId, newGroupPath } });
+            closeMoveModal();
+            await loadProfiles();
+            const destLabel = newGroupPath ? `"${formatGroupPathDisplay(newGroupPath)}"` : 'Ungrouped';
+            showToast(`Moved "${profile ? profile.name : ''}" to ${destLabel}`, TOAST_DURATION_SHORT);
+        } catch (error) {
+            showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+        }
+    } else {
+        const group = groups.find(g => g.id === moveModalTargetId);
+        const newParentId = destId || null;
+
+        try {
+            await invoke('move_group', { input: { id: moveModalTargetId, newParentId } });
+            closeMoveModal();
+            await loadGroups();
+            await loadProfiles();
+            const destGroup = newParentId ? groups.find(g => g.id === newParentId) : null;
+            const destLabel = destGroup ? `"${formatGroupPathDisplay(destGroup.path)}"` : 'top level';
+            showToast(`Moved "${group ? group.name : ''}" to ${destLabel}`, TOAST_DURATION_SHORT);
+        } catch (error) {
+            showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+        }
+    }
 }
 
 // Save group (create or update)

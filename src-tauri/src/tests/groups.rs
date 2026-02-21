@@ -226,3 +226,54 @@ fn test_rename_group_cascade_updates_sub_group_profiles() {
     let child_profile_check = db.get_profile_by_id(&child_profile.id).unwrap().unwrap();
     assert_eq!(child_profile_check.group_path, Some("Development/DevOps".to_string()));
 }
+
+#[test]
+fn test_move_group_to_top_level() {
+    // Moving a sub-group to the top level updates its path and cascades to descendants
+    let db = create_test_db();
+
+    let parent = make_test_group("Work", None, "Work");
+    db.create_group(&parent).unwrap();
+
+    let child = make_test_group("Production", Some(parent.id.clone()), "Work/Production");
+    db.create_group(&child).unwrap();
+
+    let profile = make_test_profile("AppServer", Some("Work/Production"));
+    db.create_profile(&profile).unwrap();
+
+    // Simulate move_group: update the child group's path and parent_id
+    let old_path = child.path.clone();
+    let new_path = "Production".to_string();
+    let mut moved = child.clone();
+    moved.parent_id = None;
+    moved.path = new_path.clone();
+    moved.updated_at = chrono::Utc::now().to_rfc3339();
+    db.update_group(&moved).unwrap();
+
+    // Cascade: update profiles that were in Work/Production
+    let conn = db.conn.lock().unwrap();
+    let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
+    let like_pattern = format!("{}/%", escaped_path);
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE groups
+         SET path = ?2 || SUBSTR(path, LENGTH(?1) + 1),
+             updated_at = ?3
+         WHERE path LIKE ?4 ESCAPE '\\'",
+        (&old_path, &new_path, &now, &like_pattern),
+    ).unwrap();
+    conn.execute(
+        "UPDATE profiles
+         SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
+         WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
+        (&old_path, &new_path, &like_pattern),
+    ).unwrap();
+    drop(conn);
+
+    let moved_check = db.get_group_by_id(&child.id).unwrap().unwrap();
+    assert_eq!(moved_check.path, "Production");
+    assert_eq!(moved_check.parent_id, None);
+
+    let profile_check = db.get_profile_by_id(&profile.id).unwrap().unwrap();
+    assert_eq!(profile_check.group_path, Some("Production".to_string()));
+}

@@ -99,7 +99,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 135 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 139 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
@@ -426,15 +426,15 @@ src-tauri/src/tests/
 ├── helpers.rs        # Shared test utilities
 ├── encryption.rs     # 38 tests - AES-256-GCM encryption
 ├── validation.rs     # 27 tests - Input validation
-├── profiles.rs       # 11 tests - Profile CRUD
-├── groups.rs         #  9 tests - Hierarchical groups
+├── profiles.rs       # 14 tests - Profile CRUD + move
+├── groups.rs         # 10 tests - Hierarchical groups + move
 ├── tags.rs           #  9 tests - Tag system
 ├── connections.rs    #  5 tests - Recent connections
 ├── settings.rs       #  3 tests - User settings
 ├── migrations.rs     #  5 tests - Schema migrations
 └── integration.rs    # 22 tests - Multi-step workflows
 
-Total: 135 tests (all must pass before release)
+Total: 139 tests (all must pass before release)
 ```
 
 **Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
@@ -463,7 +463,7 @@ cargo test --lib -- --nocapture
 cargo llvm-cov --lib --open
 ```
 
-**Expected result:** `129 passed; 0 failed` in ~41 seconds
+**Expected result:** `139 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
@@ -492,7 +492,7 @@ fn test_feature_success() {
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~41s for 135 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 139 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Comprehensive:** 113 unit tests + 22 integration tests covering all backend logic
@@ -502,7 +502,7 @@ fn test_feature_success() {
 Before creating a release PR:
 
 **Automated Tests:**
-- [ ] Run `cargo test --lib` → All 135 tests pass
+- [ ] Run `cargo test --lib` → All 139 tests pass
 - [ ] New features have corresponding automated tests
 - [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation

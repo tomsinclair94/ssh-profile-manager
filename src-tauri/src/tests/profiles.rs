@@ -141,3 +141,47 @@ fn test_update_profile_icon() {
     let metadata = db.get_profile_metadata(&profile.id).unwrap().unwrap();
     assert_eq!(metadata.icon, Some("database".to_string()));
 }
+
+#[test]
+fn test_move_profile_to_group() {
+    let db = create_test_db();
+    let group = make_test_group("Work", None, "Work");
+    db.create_group(&group).unwrap();
+
+    let profile = make_test_profile("Server", None);
+    db.create_profile(&profile).unwrap();
+
+    assert!(db.move_profile_to_group(&profile.id, Some("Work")).is_ok());
+
+    let updated = db.get_profile_by_id(&profile.id).unwrap().unwrap();
+    assert_eq!(updated.group_path, Some("Work".to_string()));
+}
+
+#[test]
+fn test_move_profile_to_ungrouped() {
+    let db = create_test_db();
+    let group = make_test_group("Work", None, "Work");
+    db.create_group(&group).unwrap();
+
+    let profile = make_test_profile("Server", Some("Work"));
+    db.create_profile(&profile).unwrap();
+
+    assert!(db.move_profile_to_group(&profile.id, None).is_ok());
+
+    let updated = db.get_profile_by_id(&profile.id).unwrap().unwrap();
+    assert_eq!(updated.group_path, None);
+}
+
+#[test]
+fn test_get_group_by_path() {
+    let db = create_test_db();
+    let group = make_test_group("Staging", None, "Staging");
+    db.create_group(&group).unwrap();
+
+    let found = db.get_group_by_path("Staging").unwrap().unwrap();
+    assert_eq!(found.id, group.id);
+    assert_eq!(found.path, "Staging");
+
+    let not_found = db.get_group_by_path("Nonexistent").unwrap();
+    assert!(not_found.is_none());
+}
