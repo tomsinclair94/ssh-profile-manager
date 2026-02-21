@@ -277,3 +277,33 @@ fn test_move_group_to_top_level() {
     let profile_check = db.get_profile_by_id(&profile.id).unwrap().unwrap();
     assert_eq!(profile_check.group_path, Some("Production".to_string()));
 }
+
+#[test]
+fn test_reorder_groups() {
+    // Verify that updating display_order for sibling groups persists correctly
+    let db = create_test_db();
+    let g1 = make_test_group("Alpha", None, "Alpha");
+    let g2 = make_test_group("Beta", None, "Beta");
+    let g3 = make_test_group("Gamma", None, "Gamma");
+
+    db.create_group(&g1).unwrap();
+    db.create_group(&g2).unwrap();
+    db.create_group(&g3).unwrap();
+
+    // Assign reverse alphabetical order: Gamma=0, Beta=1, Alpha=2
+    {
+        let conn = db.conn.lock().unwrap();
+        conn.execute("UPDATE groups SET display_order = 0 WHERE id = ?1", [&g3.id]).unwrap();
+        conn.execute("UPDATE groups SET display_order = 1 WHERE id = ?1", [&g2.id]).unwrap();
+        conn.execute("UPDATE groups SET display_order = 2 WHERE id = ?1", [&g1.id]).unwrap();
+    }
+
+    // Verify display_order values are persisted correctly
+    let groups = db.get_all_groups().unwrap();
+    let gamma = groups.iter().find(|g| g.id == g3.id).unwrap();
+    let beta = groups.iter().find(|g| g.id == g2.id).unwrap();
+    let alpha = groups.iter().find(|g| g.id == g1.id).unwrap();
+    assert_eq!(gamma.display_order, 0);
+    assert_eq!(beta.display_order, 1);
+    assert_eq!(alpha.display_order, 2);
+}

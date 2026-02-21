@@ -573,6 +573,7 @@ body {
     transition: all 0.2s ease;
     margin-bottom: 12px;
     user-select: none;
+    position: relative;
 }
 
 .profile-group-header:hover {
@@ -607,6 +608,12 @@ body {
 .profile-group-header.group-empty:hover {
     background-color: var(--surface-color); /* No hover effect */
     border-color: var(--border-color);
+}
+
+/* Suppress button background highlight in empty groups — the header hover is disabled so
+   the button's surface-hover background would otherwise show as a visible rounded rectangle */
+.profile-group-header.group-empty .group-menu-btn:hover {
+    background-color: transparent;
 }
 
 .group-name {
@@ -2538,6 +2545,49 @@ body.drag-in-progress .profile-card:not(.dragging) {
     box-shadow: none;
     z-index: 0;
 }
+
+/* Group header being dragged */
+.profile-group-header.dragging {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Allow insertion indicator lines to escape the group container's overflow clip */
+body.drag-in-progress .profile-group-content {
+    overflow: visible;
+}
+
+/* Insertion indicator lines for within-group drag reorder */
+/* Centered in the 12px flex gap between cards.
+   Offset = gap/2 + line_height/2 + border_width = 6 + 2 + 1 = 9px
+   (absolute positioning is relative to the padding edge, so the 1px border must be added)
+   Line height must be even to keep the offset a whole number and avoid subpixel jitter. */
+.profile-card.drag-insert-above::before,
+.profile-group-header.drag-insert-above::before {
+    content: '';
+    position: absolute;
+    top: -9px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--primary-color, #3b82f6);
+    border-radius: 2px;
+    z-index: 10;
+}
+
+.profile-card.drag-insert-below::after,
+.profile-group-header.drag-insert-below::after {
+    content: '';
+    position: absolute;
+    bottom: -9px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--primary-color, #3b82f6);
+    border-radius: 2px;
+    z-index: 10;
+}
+
 
 /* Input Group (for input + button combinations) */
 .input-group {

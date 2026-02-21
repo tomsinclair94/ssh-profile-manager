@@ -313,8 +313,13 @@ let lastImportTime = 0; // Track last settings import time for rate limiting
 let keyboardShortcutsEnabled = true; // Enable/disable keyboard shortcuts
 let expandedCardActionsEnabled = false; // Show all card actions as individual buttons
 let dragReorderEnabled = false; // Allow drag & drop reordering of profiles and groups
-let draggingProfileId = null;  // Profile currently being dragged
-let dragOverGroupId = null;    // data-group-id of current drag-over target
+let draggingProfileId = null;     // Profile currently being dragged
+let dragOverGroupId = null;       // data-group-id of current drag-over target (cross-group move)
+let dragOverProfileId = null;     // Target profile card for within-group reorder
+let dragInsertBefore = true;      // Insert above (true) or below (false) target profile
+let draggingGroupId = null;       // Group header currently being dragged
+let dragOverGroupInsertId = null; // Target group header for within-group group reorder
+let dragGroupInsertBefore = true; // Insert above (true) or below (false) target group header
 let selectedProfileId = null; // Currently selected profile for keyboard navigation
 let selectedGroupName = null; // Currently selected group header for keyboard navigation
 let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
@@ -1275,6 +1280,9 @@ function getSettingsModalTabbableItems() {
     if (requireEncryptionCheck) items.push(requireEncryptionCheck);
     const dragReorderCheck = document.getElementById('drag-reorder-check');
     if (dragReorderCheck) items.push(dragReorderCheck);
+
+    const resetSortOrderBtn = document.getElementById('reset-sort-order-btn');
+    if (resetSortOrderBtn) items.push(resetSortOrderBtn);
 
     // Profile management buttons
     const exportProfilesBtn = document.getElementById('export-profiles-btn');
@@ -3878,6 +3886,7 @@ function renderProfiles(filter = '') {
         const bIsUngrouped = b.name.toLowerCase() === 'ungrouped';
         if (aIsUngrouped) return 1;  // a goes to bottom
         if (bIsUngrouped) return -1; // b goes to bottom
+        if ((a.display_order ?? 0) !== (b.display_order ?? 0)) return (a.display_order ?? 0) - (b.display_order ?? 0);
         return a.name.localeCompare(b.name);
     });
 
@@ -3977,13 +3986,21 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
             <div class="profile-group-content ${isCollapsed || isEmpty ? 'collapsed' : ''}">
     `;
 
-    // Render profiles in this group
-    groupProfiles.forEach(profile => {
+    // Render profiles in this group (sorted by display_order then name)
+    groupProfiles.slice().sort((a, b) =>
+        (a.display_order ?? 0) !== (b.display_order ?? 0)
+            ? (a.display_order ?? 0) - (b.display_order ?? 0)
+            : a.name.localeCompare(b.name)
+    ).forEach(profile => {
         html += renderProfileCard(profile, depth);
     });
 
-    // Render child groups
-    childGroups.sort((a, b) => a.name.localeCompare(b.name)).forEach(childGroup => {
+    // Render child groups (sorted by display_order then name)
+    childGroups.slice().sort((a, b) =>
+        (a.display_order ?? 0) !== (b.display_order ?? 0)
+            ? (a.display_order ?? 0) - (b.display_order ?? 0)
+            : a.name.localeCompare(b.name)
+    ).forEach(childGroup => {
         html += renderGroupNode(childGroup, profilesByGroupPath, depth + 1, filter);
     });
 
@@ -4303,6 +4320,7 @@ function showGroupMenu(groupId, event) {
         <button class="group-menu-item group-menu-edit" data-action="edit">Edit Group</button>
         <button class="group-menu-item" data-action="move">Move Group</button>
         <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
+        <button class="group-menu-item" data-action="reset-order">Reset to A-Z</button>
         <button class="group-menu-item" data-action="export">Export Group</button>
         <button class="group-menu-item group-menu-delete" data-action="delete">Delete Group</button>
     `;
@@ -4353,6 +4371,8 @@ function showGroupMenu(groupId, event) {
                 await editGroup(groupId);
             } else if (action === 'move') {
                 openMoveGroupModal(groupId);
+            } else if (action === 'reset-order') {
+                await resetGroupOrder(groupId);
             } else if (action === 'add-subgroup') {
                 openGroupModal(null, groupId); // Create new group with this as parent
             } else if (action === 'export') {
@@ -5477,6 +5497,13 @@ function setupEventListeners() {
     deleteAllProfilesBtn.addEventListener('click', async () => {
         await deleteAllProfiles();
     });
+
+    const resetSortOrderBtn = document.getElementById('reset-sort-order-btn');
+    if (resetSortOrderBtn) {
+        resetSortOrderBtn.addEventListener('click', async () => {
+            await resetAllSortOrders();
+        });
+    }
 
     const deleteAllTagsBtn = document.getElementById('delete-all-tags-btn');
     deleteAllTagsBtn.addEventListener('click', async () => {
@@ -9603,6 +9630,14 @@ async function saveProfile() {
             await invoke('update_profile', { profile: profileData });
             savedProfileId = editingProfileId;
         } else {
+            // When drag reorder is enabled, append new profile at the bottom of its group
+            if (dragReorderEnabled) {
+                const sameGroupProfiles = profiles.filter(p =>
+                    (p.group_path ?? null) === (selectedGroupPath ?? null)
+                );
+                const maxOrder = sameGroupProfiles.reduce((m, p) => Math.max(m, p.display_order ?? 0), 0);
+                profileData.display_order = sameGroupProfiles.length > 0 ? maxOrder + 1 : 0;
+            }
             debug.log('Creating profile:', profileData);
             savedProfileId = await invoke('create_profile', { profile: profileData });
         }
@@ -10537,12 +10572,154 @@ async function moveProfileDragDrop(profileId, newGroupPath) {
     }
 }
 
-// Clear drag-over highlight state from current group header
+// Reorder profiles within their group by assigning sequential display_order values
+async function reorderProfilesInGroup(draggedProfileId, targetProfileId, insertBefore) {
+    const draggedProfile = profiles.find(p => p.id === draggedProfileId);
+    if (!draggedProfile) return;
+
+    const groupPath = draggedProfile.group_path ?? null;
+
+    // Get all profiles in this group, sorted by current display_order then name
+    let groupProfiles = profiles
+        .filter(p => (p.group_path ?? null) === groupPath)
+        .slice()
+        .sort((a, b) =>
+            (a.display_order ?? 0) !== (b.display_order ?? 0)
+                ? (a.display_order ?? 0) - (b.display_order ?? 0)
+                : a.name.localeCompare(b.name)
+        );
+
+    // Remove dragged profile from current position, insert at new position
+    groupProfiles = groupProfiles.filter(p => p.id !== draggedProfileId);
+    const targetIndex = groupProfiles.findIndex(p => p.id === targetProfileId);
+    if (targetIndex === -1) return;
+    const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+    groupProfiles.splice(insertIndex, 0, draggedProfile);
+
+    // Assign sequential display_order (0, 1, 2, ...)
+    const orders = groupProfiles.map((p, i) => ({ profile_id: p.id, display_order: i }));
+
+    try {
+        await invoke('reorder_profiles', { orders });
+        await loadProfiles();
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reset all profiles and groups display_order to 0 (reverts to A-Z alphabetical sort everywhere)
+async function resetAllSortOrders() {
+    const confirmMessage = buildConfirmMessage({
+        lines: [],
+        warnings: ['This will reset the custom sort order for all profiles and groups everywhere.'],
+        question: 'Are you sure you want to reset all sort orders to A-Z?'
+    });
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Reset Sorting Order',
+        okText: 'Reset',
+        cancelText: 'Cancel',
+        okClass: 'btn-secondary'
+    });
+    if (!confirmed) return;
+
+    const profileOrders = profiles.map(p => ({ profile_id: p.id, display_order: 0 }));
+    const groupOrders = groups.map(g => ({ group_id: g.id, display_order: 0 }));
+
+    try {
+        if (profileOrders.length > 0) await invoke('reorder_profiles', { orders: profileOrders });
+        if (groupOrders.length > 0) await invoke('reorder_groups', { orders: groupOrders });
+        await loadGroups();
+        await loadProfiles();
+        showToast('All sort orders reset to A-Z');
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reset sort order to A-Z for a specific group (its direct profiles and immediate child groups)
+async function resetGroupOrder(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Reset display_order to 0 for all profiles directly in this group
+    const groupProfiles = profiles.filter(p => (p.group_path ?? null) === group.path);
+    const profileOrders = groupProfiles.map(p => ({ profile_id: p.id, display_order: 0 }));
+
+    // Reset display_order to 0 for all immediate child groups
+    const childGroups = groups.filter(g => g.parent_id === groupId);
+    const groupOrders = childGroups.map(g => ({ group_id: g.id, display_order: 0 }));
+
+    try {
+        if (profileOrders.length > 0) await invoke('reorder_profiles', { orders: profileOrders });
+        if (groupOrders.length > 0) await invoke('reorder_groups', { orders: groupOrders });
+        await loadGroups();
+        await loadProfiles();
+        showToast(`Sort order reset to A-Z for "${group.name}"`);
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reorder sibling groups by assigning sequential display_order values
+async function reorderGroupsSiblings(draggedGroupId, targetGroupId, insertBefore) {
+    const draggedGroup = groups.find(g => g.id === draggedGroupId);
+    if (!draggedGroup) return;
+
+    const parentId = draggedGroup.parent_id ?? null;
+
+    // Get all siblings (same parent), excluding Ungrouped (always at bottom)
+    let siblings = groups
+        .filter(g => (g.parent_id ?? null) === parentId && g.name.toLowerCase() !== 'ungrouped')
+        .slice()
+        .sort((a, b) =>
+            (a.display_order ?? 0) !== (b.display_order ?? 0)
+                ? (a.display_order ?? 0) - (b.display_order ?? 0)
+                : a.name.localeCompare(b.name)
+        );
+
+    // Remove dragged group from current position, insert at new position
+    siblings = siblings.filter(g => g.id !== draggedGroupId);
+    const targetIndex = siblings.findIndex(g => g.id === targetGroupId);
+    if (targetIndex === -1) return;
+    const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+    siblings.splice(insertIndex, 0, draggedGroup);
+
+    // Assign sequential display_order (0, 1, 2, ...)
+    const orders = siblings.map((g, i) => ({ group_id: g.id, display_order: i }));
+
+    try {
+        await invoke('reorder_groups', { orders });
+        await loadGroups();
+        await loadProfiles();
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Clear drag-over highlight state from current group header (cross-group move)
 function clearDragOverState() {
     if (dragOverGroupId) {
         document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(dragOverGroupId)}"]`)
             ?.classList.remove('drag-over');
         dragOverGroupId = null;
+    }
+}
+
+// Clear within-group profile insertion indicator
+function clearProfileInsertState() {
+    if (dragOverProfileId) {
+        const card = document.querySelector(`.profile-card[data-id="${CSS.escape(dragOverProfileId)}"]`);
+        if (card) card.classList.remove('drag-insert-above', 'drag-insert-below');
+        dragOverProfileId = null;
+    }
+}
+
+// Clear within-group group insertion indicator
+function clearGroupInsertState() {
+    if (dragOverGroupInsertId) {
+        const header = document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(dragOverGroupInsertId)}"]`);
+        if (header) header.classList.remove('drag-insert-above', 'drag-insert-below');
+        dragOverGroupInsertId = null;
     }
 }
 
@@ -10562,46 +10739,112 @@ function getDragTargetGroupId(target) {
     return null;
 }
 
-// Setup drag-and-drop: drag profile card to move it to another group.
-// Uses pointer events instead of the HTML5 drag API for WKWebView compatibility.
+// Setup drag-and-drop: drag profile cards and group headers to reorder,
+// or drag profiles between groups. Uses pointer events for WKWebView compatibility.
 function setupDragAndDrop() {
     const container = document.getElementById('profiles-list');
     if (!container) return;
 
     const DRAG_THRESHOLD = 5; // px of movement before drag activates
-    let pointerStart = null;  // { profileId, x, y } — set on pointerdown
+    let pointerStart = null;  // { type: 'profile'|'group', profileId?, groupId?, x, y }
 
     function onPointerMove(e) {
         if (!pointerStart) return;
         const dist = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
 
-        // Activate drag once threshold exceeded
-        if (!draggingProfileId && dist > DRAG_THRESHOLD) {
-            draggingProfileId = pointerStart.profileId;
-            // Cache source group ID so we never highlight the source group
-            const sourceProfile = profiles.find(p => p.id === draggingProfileId);
-            const sourceGroupPath = sourceProfile?.group_path ?? null;
-            pointerStart.sourceGroupId = sourceGroupPath
-                ? (groups.find(g => g.path === sourceGroupPath)?.id ?? null)
-                : 'ungrouped';
-            document.body.classList.add('drag-in-progress');
-            const card = container.querySelector(`.profile-card[data-id="${CSS.escape(draggingProfileId)}"]`);
-            if (card) card.classList.add('dragging');
-        }
-
-        if (!draggingProfileId) return;
-
-        // Highlight whatever group the cursor is over (excluding the source group)
-        const el = document.elementFromPoint(e.clientX, e.clientY);
-        const rawGroupId = el ? getDragTargetGroupId(el) : null;
-        const groupId = rawGroupId === pointerStart.sourceGroupId ? null : rawGroupId;
-        if (groupId !== dragOverGroupId) {
-            clearDragOverState();
-            if (groupId) {
-                dragOverGroupId = groupId;
-                document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(groupId)}"]`)
-                    ?.classList.add('drag-over');
+        if (pointerStart.type === 'profile') {
+            // ── Profile drag ──────────────────────────────────────────────
+            if (!draggingProfileId && dist > DRAG_THRESHOLD) {
+                draggingProfileId = pointerStart.profileId;
+                const sourceProfile = profiles.find(p => p.id === draggingProfileId);
+                const sourceGroupPath = sourceProfile?.group_path ?? null;
+                pointerStart.sourceGroupPath = sourceGroupPath;
+                pointerStart.sourceGroupId = sourceGroupPath
+                    ? (groups.find(g => g.path === sourceGroupPath)?.id ?? null)
+                    : 'ungrouped';
+                document.body.classList.add('drag-in-progress');
+                const card = container.querySelector(`.profile-card[data-id="${CSS.escape(draggingProfileId)}"]`);
+                if (card) card.classList.add('dragging');
             }
+
+            if (!draggingProfileId) return;
+
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+
+            // Check: cursor over a profile card in the SAME group → within-group reorder
+            const targetCard = el ? el.closest('.profile-card:not(.favourite-card)') : null;
+            if (targetCard && targetCard.dataset.id !== draggingProfileId) {
+                const targetProfile = profiles.find(p => p.id === targetCard.dataset.id);
+                const draggedProfile = profiles.find(p => p.id === draggingProfileId);
+                if (targetProfile && draggedProfile &&
+                    (targetProfile.group_path ?? null) === (draggedProfile.group_path ?? null)) {
+                    // Same group: show insertion indicator
+                    clearDragOverState();
+                    clearGroupInsertState();
+                    const rect = targetCard.getBoundingClientRect();
+                    const insertBefore = e.clientY < rect.top + rect.height / 2;
+                    const newTargetId = targetCard.dataset.id;
+                    if (newTargetId !== dragOverProfileId || insertBefore !== dragInsertBefore) {
+                        clearProfileInsertState();
+                        dragOverProfileId = newTargetId;
+                        dragInsertBefore = insertBefore;
+                        targetCard.classList.add(insertBefore ? 'drag-insert-above' : 'drag-insert-below');
+                    }
+                    return;
+                }
+            }
+
+            // Fallback: cross-group move (highlight target group header)
+            clearProfileInsertState();
+            const rawGroupId = el ? getDragTargetGroupId(el) : null;
+            const groupId = rawGroupId === pointerStart.sourceGroupId ? null : rawGroupId;
+            if (groupId !== dragOverGroupId) {
+                clearDragOverState();
+                if (groupId) {
+                    dragOverGroupId = groupId;
+                    document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(groupId)}"]`)
+                        ?.classList.add('drag-over');
+                }
+            }
+
+        } else if (pointerStart.type === 'group') {
+            // ── Group drag ────────────────────────────────────────────────
+            if (!draggingGroupId && dist > DRAG_THRESHOLD) {
+                draggingGroupId = pointerStart.groupId;
+                document.body.classList.add('drag-in-progress');
+                const header = container.querySelector(`.profile-group-header[data-group-id="${CSS.escape(draggingGroupId)}"]`);
+                if (header) header.classList.add('dragging');
+            }
+
+            if (!draggingGroupId) return;
+
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            const targetHeader = el ? el.closest('.profile-group-header') : null;
+
+            if (targetHeader && targetHeader.dataset.groupId &&
+                targetHeader.dataset.groupId !== draggingGroupId &&
+                targetHeader.dataset.groupId !== '__favourites__') {
+                const targetGroup = groups.find(g => g.id === targetHeader.dataset.groupId);
+                const draggedGroup = groups.find(g => g.id === draggingGroupId);
+
+                // Only reorder among siblings (same parent_id)
+                if (targetGroup && draggedGroup &&
+                    (targetGroup.parent_id ?? null) === (draggedGroup.parent_id ?? null) &&
+                    targetGroup.name.toLowerCase() !== 'ungrouped') {
+                    const rect = targetHeader.getBoundingClientRect();
+                    const insertBefore = e.clientY < rect.top + rect.height / 2;
+                    const newTargetId = targetHeader.dataset.groupId;
+                    if (newTargetId !== dragOverGroupInsertId || insertBefore !== dragGroupInsertBefore) {
+                        clearGroupInsertState();
+                        dragOverGroupInsertId = newTargetId;
+                        dragGroupInsertBefore = insertBefore;
+                        targetHeader.classList.add(insertBefore ? 'drag-insert-above' : 'drag-insert-below');
+                    }
+                    return;
+                }
+            }
+
+            clearGroupInsertState();
         }
     }
 
@@ -10614,32 +10857,70 @@ function setupDragAndDrop() {
             if (card) card.classList.remove('dragging');
             document.body.classList.remove('drag-in-progress');
         }
+        if (draggingGroupId) {
+            const header = container.querySelector(`.profile-group-header[data-group-id="${CSS.escape(draggingGroupId)}"]`);
+            if (header) header.classList.remove('dragging');
+            document.body.classList.remove('drag-in-progress');
+        }
         draggingProfileId = null;
+        draggingGroupId = null;
         pointerStart = null;
         clearDragOverState();
+        clearProfileInsertState();
+        clearGroupInsertState();
     }
 
     async function onPointerUp() {
         const profileId = draggingProfileId;
         const targetGroupId = dragOverGroupId;
+        const targetProfileId = dragOverProfileId;
+        const insertBeforeProfile = dragInsertBefore;
+        const groupId = draggingGroupId;
+        const targetGroupInsertId = dragOverGroupInsertId;
+        const groupInsertBefore = dragGroupInsertBefore;
         cancelDrag();
-        if (!profileId || !targetGroupId) return;
-        const newGroupPath = targetGroupId === 'ungrouped'
-            ? null
-            : (groups.find(g => g.id === targetGroupId)?.path ?? null);
-        await moveProfileDragDrop(profileId, newGroupPath);
+
+        if (profileId) {
+            if (targetProfileId) {
+                // Within-group profile reorder
+                await reorderProfilesInGroup(profileId, targetProfileId, insertBeforeProfile);
+            } else if (targetGroupId) {
+                // Cross-group move (existing behaviour)
+                const newGroupPath = targetGroupId === 'ungrouped'
+                    ? null
+                    : (groups.find(g => g.id === targetGroupId)?.path ?? null);
+                await moveProfileDragDrop(profileId, newGroupPath);
+            }
+        } else if (groupId && targetGroupInsertId) {
+            // Within-group group reorder
+            await reorderGroupsSiblings(groupId, targetGroupInsertId, groupInsertBefore);
+        }
     }
 
     container.addEventListener('pointerdown', e => {
         if (!dragReorderEnabled) return;
         if (e.button !== 0) return; // Primary button only
+
+        // Profile card drag
         const card = e.target.closest('.profile-card:not(.favourite-card)');
-        if (!card) return;
-        if (e.target.closest('button')) return; // Don't intercept button clicks
-        pointerStart = { profileId: card.dataset.id, x: e.clientX, y: e.clientY };
-        document.addEventListener('pointermove', onPointerMove);
-        document.addEventListener('pointerup', onPointerUp);
-        document.addEventListener('pointercancel', cancelDrag);
+        if (card && !e.target.closest('button')) {
+            pointerStart = { type: 'profile', profileId: card.dataset.id, x: e.clientX, y: e.clientY };
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+            document.addEventListener('pointercancel', cancelDrag);
+            return;
+        }
+
+        // Group header drag
+        const header = e.target.closest('.profile-group-header');
+        if (header && header.dataset.groupId &&
+            header.dataset.groupId !== '__favourites__' &&
+            !e.target.closest('button')) {
+            pointerStart = { type: 'group', groupId: header.dataset.groupId, x: e.clientX, y: e.clientY };
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+            document.addEventListener('pointercancel', cancelDrag);
+        }
     });
 }
 
@@ -10673,12 +10954,19 @@ async function saveGroup() {
             });
             showToast('Group updated successfully!');
         } else {
-            // Create new group
+            // Create new group; when drag reorder is enabled, append at the bottom of its siblings
+            let displayOrder = 0;
+            if (dragReorderEnabled) {
+                const siblings = groups.filter(g => (g.parent_id ?? null) === (parentId ?? null));
+                const maxOrder = siblings.reduce((m, g) => Math.max(m, g.display_order ?? 0), 0);
+                displayOrder = siblings.length > 0 ? maxOrder + 1 : 0;
+            }
             await invoke('create_group', {
                 input: {
                     name: groupName,
                     parent_id: parentId,
-                    icon: null
+                    icon: null,
+                    display_order: displayOrder
                 }
             });
             showToast('Group created successfully!');

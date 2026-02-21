@@ -200,6 +200,7 @@ pub struct ProfileWithMetadata {
     // Metadata fields
     pub icon: Option<String>,
     pub is_favorite: bool,
+    pub display_order: i32,
     // Tags (tag names, not IDs, for easier frontend use)
     pub tags: Vec<String>,
 }
@@ -1131,10 +1132,11 @@ impl Database {
         // First, get all profiles with their metadata in one query
         let mut stmt = conn.prepare(
             "SELECT p.id, p.name, p.description, p.host, p.port, p.username, p.auth_method,
-                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0)
+                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0),
+                    COALESCE(m.display_order, 0)
              FROM profiles p
              LEFT JOIN profile_metadata m ON p.id = m.profile_id
-             ORDER BY p.name"
+             ORDER BY COALESCE(m.display_order, 0), p.name"
         )?;
 
         let profiles_with_metadata = stmt
@@ -1159,6 +1161,7 @@ impl Database {
                         profile,
                         icon: row.get(9)?,
                         is_favorite: row.get::<_, i32>(10)? != 0,
+                        display_order: row.get(11)?,
                         tags: Vec::new(), // Will populate below
                     }
                 ))
@@ -1192,9 +1195,9 @@ impl Database {
             }
         }
 
-        // Convert back to Vec and sort by name
+        // Convert back to Vec and sort by display_order then name
         let mut profiles: Vec<ProfileWithMetadata> = profiles_map.into_values().collect();
-        profiles.sort_by(|a, b| a.profile.name.cmp(&b.profile.name));
+        profiles.sort_by(|a, b| a.display_order.cmp(&b.display_order).then(a.profile.name.cmp(&b.profile.name)));
 
         Ok(profiles)
     }
@@ -2237,6 +2240,8 @@ struct CreateProfileInput {
     key_path: Option<String>,
     password: Option<String>,
     group_path: Option<String>, // v0.7.0+: Semantic path to group
+    #[serde(default)]
+    display_order: Option<i32>,
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -2252,6 +2257,7 @@ impl std::fmt::Debug for CreateProfileInput {
             .field("key_path", &self.key_path)
             .field("password", &"[REDACTED]")
             .field("group_path", &self.group_path)
+            .field("display_order", &self.display_order)
             .finish()
     }
 }
@@ -2305,6 +2311,15 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
     // Default: icon='server', is_favorite=false, display_order=0
     db.upsert_profile_metadata_db(&id, Some("server".to_string()), false)
         .map_err(|e| format!("Failed to create profile metadata: {}", e))?;
+
+    // Set display_order if provided (used when drag reorder is enabled)
+    if let Some(order) = profile.display_order {
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE profile_metadata SET display_order = ?1 WHERE profile_id = ?2",
+            (order, &id),
+        ).map_err(|e| format!("Failed to set display_order: {}", e))?;
+    }
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
@@ -2432,6 +2447,8 @@ struct CreateGroupInput {
     name: String,
     parent_id: Option<String>,
     icon: Option<String>,
+    #[serde(default)]
+    display_order: Option<i32>,
 }
 
 #[tauri::command]
@@ -2467,7 +2484,7 @@ fn create_group(db: State<Database>, input: CreateGroupInput) -> Result<String, 
         path,
         icon: input.icon,
         is_favorite: false,
-        display_order: 0,
+        display_order: input.display_order.unwrap_or(0),
         created_at: now.clone(),
         updated_at: now,
     };
@@ -2790,6 +2807,42 @@ fn move_profile(db: State<Database>, input: MoveProfileInput) -> Result<(), Stri
 
     db.move_profile_to_group(&input.profile_id, input.new_group_path.as_deref())
         .map_err(|e| format!("Failed to move profile: {}", e))
+}
+
+#[derive(Deserialize)]
+struct ProfileOrder {
+    profile_id: String,
+    display_order: i32,
+}
+
+#[tauri::command]
+fn reorder_profiles(db: State<Database>, orders: Vec<ProfileOrder>) -> Result<(), String> {
+    let conn = db.conn.lock().expect("Database lock poisoned");
+    for order in &orders {
+        conn.execute(
+            "UPDATE profile_metadata SET display_order = ?1 WHERE profile_id = ?2",
+            (&order.display_order, &order.profile_id),
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct GroupOrder {
+    group_id: String,
+    display_order: i32,
+}
+
+#[tauri::command]
+fn reorder_groups(db: State<Database>, orders: Vec<GroupOrder>) -> Result<(), String> {
+    let conn = db.conn.lock().expect("Database lock poisoned");
+    for order in &orders {
+        conn.execute(
+            "UPDATE groups SET display_order = ?1 WHERE id = ?2",
+            (&order.display_order, &order.group_id),
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -5393,6 +5446,8 @@ pub fn run() {
             delete_group,
             move_group,
             move_profile,
+            reorder_profiles,
+            reorder_groups,
             get_group_tree,
             export_profiles,
             import_profiles,
