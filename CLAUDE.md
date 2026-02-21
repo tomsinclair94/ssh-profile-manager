@@ -24,7 +24,15 @@ bun run build    # Production build
 ## Current Status
 
 **Latest Release:** v0.7.1 (2026-02-20) ✅
-**Next:** See TODO.md for planned features and roadmap
+**In Development:** v0.8.0 on branch `v0.8.0-dev`
+
+**v0.8.0 Progress (In Development):**
+- ✅ macOS "open in new tab" silent failure — now surfaces actionable error toast
+- ✅ Phase 1: Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items, 4 new tests)
+- 🔲 Phase 2: Padlock button + `drag_reorder_enabled` settings toggle
+- 🔲 Phase 3: Drag profile between groups (instant move + 5s undo toast)
+- 🔲 Phase 4: Custom sort order (drag-to-reorder within group, reset to A-Z)
+- 🔲 Phase 5: Testing & release
 
 **v0.7.1 Fixes (Released - 2026-02-20):**
 - ✅ Parent Group dropdown no longer flickers and disappears when opened
@@ -189,6 +197,7 @@ create_group(name: String, parent_id: Option<String>)
 update_group(id: String, name: String)
 delete_group(id: String, mode: String) // "cascade" or "move"
 move_group(id: String, new_parent_id: Option<String>)
+move_profile(profile_id: String, new_group_path: Option<String>) // None = ungrouped
 export_group(group_id: String, include_passwords: bool, encryption_password: Option<String>)
 import_group(data: String, target_parent_id: Option<String>, encryption_password: Option<String>)
 get_profiles_by_group_path(group_path: String)
