@@ -4843,7 +4843,7 @@ fn launch_macos_default_terminal(
              activate\n\
              if (count of windows) > 0 then\n\
                  tell application \"System Events\" to keystroke \"t\" using command down\n\
-                 delay 0.1\n\
+                 delay 0.3\n\
                  do script \"{}\" in front window\n\
              else\n\
                  do script \"{}\"\n\
@@ -4861,11 +4861,26 @@ fn launch_macos_default_terminal(
         )
     };
 
-    Command::new("osascript")
+    let output = Command::new("osascript")
         .arg("-e")
         .arg(applescript)
-        .spawn()
+        .output()
         .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Check for macOS Accessibility/TCC permission errors (System Events blocked)
+        if use_tabs && (stderr.contains("Not authorized") || stderr.contains("-1743")) {
+            return Err(
+                "Could not open new tab — macOS may have blocked Terminal automation. \
+                 Go to System Settings → Privacy & Security → Accessibility \
+                 and toggle SSH Profile Manager off and on to restore access."
+                    .to_string(),
+            );
+        }
+        let error_detail = stderr.trim().lines().next().unwrap_or("unknown error");
+        return Err(format!("Failed to launch terminal: {}", error_detail));
+    }
 
     Ok(())
 }
