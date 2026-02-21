@@ -692,6 +692,8 @@ let newTagNameInput;
 let newTagColorInput;
 let createTagBtn;
 let tagListContainer;
+// Move Modal Elements
+let moveModal;
 // Encryption/Decryption Password Modal Elements
 let encryptionPasswordModal;
 let encryptionPasswordInput;
@@ -892,7 +894,8 @@ function setupKeyboardShortcutListeners() {
                        !groupModal.classList.contains('hidden') ||
                        !tagManagerModal.classList.contains('hidden') ||
                        !encryptionPasswordModal.classList.contains('hidden') ||
-                       !decryptionPasswordModal.classList.contains('hidden');
+                       !decryptionPasswordModal.classList.contains('hidden') ||
+                       !moveModal.classList.contains('hidden');
 
         // Handle modal shortcuts (always active in modals)
         if (inModal) {
@@ -1466,20 +1469,21 @@ async function handleModalShortcuts(e) {
             }
 
             case 'move': {
-                const items = [
+                const allMoveItems = [
                     document.getElementById('move-destination'),
                     document.getElementById('move-save-btn'),
                     document.getElementById('move-close-btn')
                 ].filter(Boolean);
-                if (items.length > 0) {
-                    const currentIndex = items.indexOf(document.activeElement);
+                const moveItems = allMoveItems.filter(item => !item.disabled);
+                if (moveItems.length > 0) {
+                    const currentIndex = moveItems.indexOf(document.activeElement);
                     let nextIndex;
                     if (e.shiftKey) {
-                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                        nextIndex = currentIndex <= 0 ? moveItems.length - 1 : currentIndex - 1;
                     } else {
-                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                        nextIndex = currentIndex >= moveItems.length - 1 ? 0 : currentIndex + 1;
                     }
-                    items[nextIndex].focus();
+                    moveItems[nextIndex].focus();
                 }
                 return;
             }
@@ -5477,6 +5481,7 @@ function setupEventListeners() {
     }
 
     // Move modal buttons
+    moveModal = document.getElementById('move-modal');
     document.getElementById('move-close-btn').addEventListener('click', () => closeMoveModal());
     document.getElementById('move-save-btn').addEventListener('click', () => saveMoveModal());
 
@@ -9839,6 +9844,8 @@ let moveDestinationDropdownVisible = false;
 let focusedMoveDropdownIndex = -1;
 let filteredMoveOptions = [];
 let moveDropdownScrollTimeout = null;
+let moveDestinationSelected = false; // true once user has picked a destination
+let moveCurrentLocationId = null; // group ID at open time (null = ungrouped / top level)
 
 function populateProfileGroupSelect() {
     // This function is now called to initialize the searchable dropdown
@@ -10036,23 +10043,34 @@ function openMoveProfileModal(profileId) {
 
     moveModalMode = 'profile';
     moveModalTargetId = profileId;
+    moveDestinationSelected = false;
 
     document.getElementById('move-modal-title').textContent = 'Move Profile';
     document.getElementById('move-modal-desc').textContent = `Move "${profile.name}" to a different group.`;
 
-    // Pre-fill current group
+    const currentEl = document.getElementById('move-modal-current');
+    currentEl.innerHTML = '';
+    const folderIcon = createIcon('folder', 14, 'group-path-icon');
+    currentEl.appendChild(folderIcon);
+    const locationSpan = document.createElement('span');
+    if (profile.group_path) {
+        locationSpan.textContent = formatGroupPathDisplay(profile.group_path);
+        const currentGroup = groups.find(g => g.path === profile.group_path);
+        moveCurrentLocationId = currentGroup ? currentGroup.id : null;
+    } else {
+        locationSpan.textContent = 'Ungrouped';
+        moveCurrentLocationId = null;
+    }
+    currentEl.appendChild(locationSpan);
+
+    document.getElementById('move-save-btn').disabled = true;
+
     const destInput = document.getElementById('move-destination');
     const destIdInput = document.getElementById('move-destination-id');
-    if (profile.group_path) {
-        destInput.value = formatGroupPathDisplay(profile.group_path);
-        const currentGroup = groups.find(g => g.path === profile.group_path);
-        destIdInput.value = currentGroup ? currentGroup.id : '';
-    } else {
-        destInput.value = '';
-        destIdInput.value = '';
-    }
+    destInput.value = '';
+    destIdInput.value = '';
 
-    document.getElementById('move-modal').classList.remove('hidden');
+    moveModal.classList.remove('hidden');
     pushModal('move');
     destInput.focus();
 }
@@ -10063,23 +10081,34 @@ function openMoveGroupModal(groupId) {
 
     moveModalMode = 'group';
     moveModalTargetId = groupId;
+    moveDestinationSelected = false;
 
     document.getElementById('move-modal-title').textContent = 'Move Group';
     document.getElementById('move-modal-desc').textContent = `Move "${group.name}" to a different parent group.`;
 
-    // Pre-fill current parent
-    const destInput = document.getElementById('move-destination');
-    const destIdInput = document.getElementById('move-destination-id');
+    const currentEl = document.getElementById('move-modal-current');
+    currentEl.innerHTML = '';
+    const folderIcon = createIcon('folder', 14, 'group-path-icon');
+    currentEl.appendChild(folderIcon);
+    const locationSpan = document.createElement('span');
     if (group.parent_id) {
         const parentGroup = groups.find(g => g.id === group.parent_id);
-        destInput.value = parentGroup ? formatGroupPathDisplay(parentGroup.path) : '';
-        destIdInput.value = group.parent_id;
+        locationSpan.textContent = parentGroup ? formatGroupPathDisplay(parentGroup.path) : 'Top Level';
+        moveCurrentLocationId = group.parent_id;
     } else {
-        destInput.value = '';
-        destIdInput.value = '';
+        locationSpan.textContent = 'Top Level';
+        moveCurrentLocationId = null;
     }
+    currentEl.appendChild(locationSpan);
 
-    document.getElementById('move-modal').classList.remove('hidden');
+    document.getElementById('move-save-btn').disabled = true;
+
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    destInput.value = '';
+    destIdInput.value = '';
+
+    moveModal.classList.remove('hidden');
     pushModal('move');
     destInput.focus();
 }
@@ -10147,18 +10176,18 @@ function showMoveDestinationDropdown(filterText = '') {
     moveDropdownScrollTimeout = setTimeout(() => {
         moveDropdownScrollTimeout = null;
         if (destDropdown.classList.contains('hidden')) return;
-        const scrollContainer = destDropdown.closest('.modal-content');
+        const scrollContainer = destDropdown.closest('.move-modal-body') || destDropdown.closest('.modal-content');
         if (!scrollContainer) return;
         const dropdownRect = destDropdown.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
         const desiredPadding = 20;
         const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
         if (dropdownOverflow > -desiredPadding) {
-            const computedStyle = window.getComputedStyle(scrollContainer);
-            const currentPadding = parseInt(computedStyle.paddingBottom) || 0;
+            const currentPadding = parseInt(window.getComputedStyle(scrollContainer).paddingBottom) || 0;
             const paddingNeeded = currentPadding + Math.abs(dropdownOverflow) + desiredPadding;
+            const originalPaddingBottom = scrollContainer.style.paddingBottom;
             scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
-            scrollContainer.dataset.originalPaddingBottom = computedStyle.paddingBottom;
+            scrollContainer.dataset.originalPaddingBottom = originalPaddingBottom;
             setTimeout(() => {
                 scrollContainer.scrollBy({ top: Math.abs(dropdownOverflow) + desiredPadding, behavior: 'smooth' });
             }, 10);
@@ -10176,7 +10205,7 @@ function hideMoveDestinationDropdown() {
         destDropdown.classList.add('hidden');
         moveDestinationDropdownVisible = false;
         focusedMoveDropdownIndex = -1;
-        const scrollContainer = destDropdown.closest('.modal-content');
+        const scrollContainer = destDropdown.closest('.move-modal-body') || destDropdown.closest('.modal-content');
         if (scrollContainer && scrollContainer.dataset.originalPaddingBottom !== undefined) {
             scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottom || '';
             delete scrollContainer.dataset.originalPaddingBottom;
@@ -10188,28 +10217,43 @@ function selectMoveDestination(group) {
     const destInput = document.getElementById('move-destination');
     const destIdInput = document.getElementById('move-destination-id');
     if (!group) return;
+
+    const isSameLocation = (group.id === '' && moveCurrentLocationId === null) ||
+                           (group.id !== '' && group.id === moveCurrentLocationId);
+
     if (group.id === '') {
-        destInput.value = '';
+        destInput.value = moveModalMode === 'profile' ? 'Ungrouped' : 'Top Level';
         destIdInput.value = '';
     } else {
         destInput.value = formatGroupPathDisplay(group.path);
         destIdInput.value = group.id;
     }
+
+    moveDestinationSelected = !isSameLocation;
+    document.getElementById('move-save-btn').disabled = isSameLocation;
     hideMoveDestinationDropdown();
 }
 
 function closeMoveModal() {
     hideMoveDestinationDropdown();
-    document.getElementById('move-modal').classList.add('hidden');
+    moveModal.classList.add('hidden');
     popModal('move');
     moveModalMode = null;
     moveModalTargetId = null;
+    moveDestinationSelected = false;
+    moveCurrentLocationId = null;
+    document.getElementById('move-save-btn').disabled = false;
     document.getElementById('move-destination').value = '';
     document.getElementById('move-destination-id').value = '';
 }
 
 async function saveMoveModal() {
     if (!moveModalTargetId || !moveModalMode) return;
+
+    if (!moveDestinationSelected) {
+        showToast('Please select a destination.', TOAST_DURATION_SHORT, 'error');
+        return;
+    }
 
     const destId = document.getElementById('move-destination-id').value || null;
 

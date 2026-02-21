@@ -1230,6 +1230,7 @@ button.keyboard-selected {
 #profile-modal .modal-content,
 #settings-modal .modal-content,
 #group-modal .modal-content,
+#move-modal .modal-content,
 #tag-manager-modal .modal-content {
     display: flex;
     flex-direction: column;
@@ -1241,6 +1242,32 @@ button.keyboard-selected {
 #group-modal .modal-content {
     max-height: fit-content;
     overflow-y: auto;
+}
+
+/* Move modal should be smaller and fit its content */
+#move-modal .modal-content {
+    max-width: 480px;
+    max-height: fit-content;
+    overflow-y: auto;
+}
+
+.move-modal-body {
+    padding: 24px;
+    overflow-y: hidden;
+    overflow-x: hidden;
+    flex: 0 1 auto;
+}
+
+.move-modal-desc {
+    margin-bottom: 20px;
+}
+
+.move-modal-current {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    opacity: 0.65;
 }
 
 .confirm-modal-content {
