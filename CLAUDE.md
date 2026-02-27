@@ -27,12 +27,13 @@ bun run build    # Production build
 **Next Release:** TBD
 
 **v0.8.0 Features (Released - 2026-02-27):**
-- ✅ macOS "open in new tab" silent failure — now surfaces actionable error toast
-- ✅ Phase 1: Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items, 4 new tests)
-- ✅ Phase 2: Padlock button (session-only) — toolbar lock button toggles drag reordering; resets to locked on app relaunch; no settings persistence
-- ✅ Phase 3: Drag profile between groups — pointer-events drag API, drop onto group headers or directly to a position within a group, 5s undo toast, Favourites excluded as drop target
-- ✅ Phase 4: Custom sort order — drag-to-reorder profiles/groups within parent, combined cross-group drag+position in one gesture, group "Reset to A-Z" menu, Settings "Reset Sorting Order", 3 new tests
-- ✅ Phase 5: Testing & release — 142 tests, macOS manual GUI tests (144/144 passed), 0 CRITICAL/HIGH after review
+- ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
+- ✅ Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items)
+- ✅ Padlock button (session-only) — toolbar toggle for drag reordering; resets to locked on app relaunch
+- ✅ Drag profile between groups — drop onto group headers or directly to a position within a group; 5s undo toast
+- ✅ Custom sort order — drag-to-reorder profiles/groups; cross-group drag+position; "Reset to A-Z"; global reset
+- ✅ Expand Card Actions setting — optional 6-button layout per profile card
+- ✅ 142 automated tests; macOS manual GUI tests (144/144 passed); 0 CRITICAL/HIGH after review
 
 **v0.7.1 Fixes (Released - 2026-02-20):**
 - ✅ Parent Group dropdown no longer flickers and disappears when opened
@@ -49,8 +50,8 @@ bun run build    # Production build
 - ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
 - ✅ Settings renamed: Backup/Restore (instead of Export/Import)
 - ✅ Enhanced UI polish: tooltips, animations, responsive layouts
-- ✅ Encryption for exports (Phase 6 - all sub-phases 6A-6E complete)
-- ✅ Testing & documentation (Phase 8 - all sub-phases 8A-8F complete)
+- ✅ Encrypted exports with AES-256-GCM and PBKDF2 key derivation
+- ✅ 135 automated tests; comprehensive manual GUI and migration testing
 
 ## Branch Naming Conventions
 
@@ -84,7 +85,7 @@ bun run build    # Production build
 4. `dist/index.html` (line ~22 + ~393: `vX.X.X` and `X.X.X`)
 5. `README.md` (line ~14 + ~16: badge versions)
 6. `dist/main.js` (line ~56: `CURRENT_APP_VERSION = 'X.X.X'`)
-7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry — placeholder highlights are fine at this stage; finalize during release documentation in Phase 8F)
+7. `dist/main.js` (line ~59-72: Add new `VERSION_CHANGELOG` entry — placeholder highlights are fine at this stage; finalize during the documentation step before release)
 
 **Step 2: Enable Developer Tools:**
 `src-tauri/tauri.conf.json` (line ~19: `"devtools": true`)
@@ -154,9 +155,8 @@ After completing ANY phase or sub-phase, update ALL relevant documentation:
 
 **Required Updates:**
 1. **TODO.md** - Update phase progress tracker with completion status
-2. **Version-specific plan** (e.g., `plans/v0.7.0-hierarchical-groups-and-enhanced-organization.md`) - Update overall progress percentage and phase status
-3. **Phase-specific plan** (e.g., `plans/v0.7.0-phase-6-encryption.md`) - Mark sub-phase as complete with detailed notes
-4. **CLAUDE.md** - Update command signatures if APIs changed (e.g., new parameters)
+2. **Version-specific plan** (e.g., `plans/v0.8.0-feature-name.md`) - Update overall progress and phase status
+3. **CLAUDE.md** - Update command signatures if APIs changed (e.g., new parameters)
 
 ## Dependabot Dependency Updates
 
@@ -417,7 +417,7 @@ CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 
 **Rust:** tauri, rusqlite, serde/serde_json, uuid (fast-rng), keyring, dirs, shellexpand, chrono, rfd, portable-pty, windows-acl (Windows)
 **Node:** @tauri-apps/cli, @tauri-apps/api
-**Frontend:** xterm.js 5.3.0, xterm-addon-fit 0.8.0 (CDN)
+**Frontend:** xterm.js 5.3.0, xterm-addon-fit 0.8.0 (vendored locally)
 
 **Known Warnings (Linux-only, does not affect macOS/Windows):**
 - `glib` 0.18.5: RUSTSEC-2024-0429 (unsoundness in Iterator impl) - via Tauri GTK3 bindings
@@ -506,7 +506,7 @@ fn test_feature_success() {
 - **Fast:** In-memory databases, no I/O, no network (~41s for 142 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
-- **Comprehensive:** 113 unit tests + 22 integration tests covering all backend logic
+- **Comprehensive:** Unit tests + 22 integration tests covering all backend logic
 
 ### Pre-Release Testing Checklist
 
@@ -564,7 +564,7 @@ Before creating a release PR:
 
 **Purpose:** Validate database and frontend migrations when upgrading between versions.
 
-**When to Run:** After all automated and GUI tests pass, before creating release PR (Phase 8E).
+**When to Run:** After all automated and GUI tests pass, before creating release PR (step 12 in Release Process).
 
 **Approach:** Unlike GUI testing (same features across versions), migration testing is **version-specific**. Each upgrade has different schema changes, data transformations, and new features.
 
@@ -605,7 +605,7 @@ Before creating a release PR:
 
 Specialized agents for code quality, security, and development tasks:
 
-**Testing & QA (Phase 8):**
+**Testing & QA:**
 - `voltagent-qa-sec:test-automator` - Design and implement automated test frameworks
 - `voltagent-qa-sec:code-reviewer` - Code quality, design patterns, best practices
 - `voltagent-infra:security-engineer` - Security audit, vulnerability assessment
