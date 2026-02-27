@@ -5,6 +5,26 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-02-27
+
+### Added
+- **Move Profile** — new modal to move a profile to any group, or to ungrouped, without deleting and recreating it
+- **Move Group** — new modal to move any group (including top-level groups) to a new parent, with full cascade path updates
+- **Drag profile between groups** — drag a profile card onto a group header to move it instantly; a 5-second undo toast lets you reverse the action
+- **Custom sort order** — drag profiles and groups into a custom order within their parent; order persists across app restarts
+- **Cross-group drag + position** — drag a profile from one group and drop it at a specific position within another group in a single gesture
+- **Padlock button** — toolbar toggle for drag reordering; session-only (always starts locked on app launch, resets on quit)
+- **"Reset to A-Z"** — group context menu option to restore alphabetical order for a single group's profiles and child groups
+- **"Reset Sorting Order"** — Settings button to reset all profiles and groups back to alphabetical order globally
+- **Expand Card Actions** — optional Appearance setting to display all six profile actions (Connect, Edit, Move, Duplicate, Export, Delete) as individual buttons on each profile card; automatically reverts to the Actions menu in compact view
+
+### Fixed
+- **macOS:** "Open in new tab" now surfaces an actionable error message when macOS blocks Terminal automation (Accessibility permission), instead of silently failing — includes instructions for resolving the permission issue
+- Profiles can now be dragged to the Ungrouped section even when no ungrouped profiles currently exist
+- Text in profile titles, group names, and info values no longer becomes selected unexpectedly during drag operations
+- Settings modal Tab key now correctly cycles within the modal on macOS (fix for WKWebView treating overflow scroll containers as Tab stops)
+- Settings sections now display a visible divider between all section boundaries
+
 ## [0.7.1] - 2026-02-20
 
 ### Fixed

@@ -1,20 +1,8 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.8.0 (in development)
+## Current Version: TBD
 
-**Branch:** `v0.8.0-dev`
-**Type:** Feature Release
-**Focus:** Profile & Group Moving + Custom Sort Order
-
-**Progress:**
-- ✅ macOS "open in new tab" silent failure — actionable error toast
-- ✅ Phase 1: Move Profile & Move Group (modal + backend, 4 new tests)
-- ✅ Phase 2: Padlock button (session-only toggle, no settings persistence)
-- ✅ Phase 3: Drag profile between groups (drop onto header or directly to position within group, 5s undo toast)
-- ✅ Phase 4: Custom sort order (drag-to-reorder within group, cross-group drag+position, group header reorder, reset to A-Z, 3 new tests)
-- 🔲 Phase 5: Testing & release
-
-**Previous Release:** v0.7.1 (2026-02-20) ✅
+**Previous Release:** v0.8.0 (2026-02-27) ✅
 
 ---
 
@@ -30,7 +18,7 @@
 ## Roadmap
 
 ```
-v0.7.0 ✅ → v0.7.1 ✅ → v0.8.0 🔧 → ... → v1.0.0
+v0.7.0 ✅ → v0.7.1 ✅ → v0.8.0 ✅ → ... → v1.0.0
 ```
 
 ---
@@ -99,6 +87,16 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 ---
 
 ## Archive
+
+### v0.8.0 - Released 2026-02-27 ✅
+**Focus:** Profile & Group Moving + Custom Sort Order
+- Move Profile & Move Group modals — reorganise without deleting and recreating
+- Drag profiles between groups — instant move with 5-second undo toast
+- Custom sort order — drag to reorder profiles and groups; persists across restarts
+- Padlock button — session-only toggle for drag reordering
+- Expand Card Actions — optional 6-button layout per profile card
+- macOS: "open in new tab" silent failure now surfaces actionable error toast
+- 142 automated tests (16 profile + 11 group + 22 integration + others)
 
 ### v0.7.1 - Released 2026-02-20 ✅
 **Focus:** Bug fixes

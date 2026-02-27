@@ -38,6 +38,8 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 **Profile Management**
 - ✅ Create, edit, delete, and duplicate profiles
 - 📂 Organise with hierarchical groups and sub-groups (up to 3 levels deep)
+- 🔀 Move profiles and groups — reorganise without deleting and recreating
+- ↕️ Custom sort order — drag to reorder profiles and groups; persists across restarts
 - ⭐ Favourites — star profiles for instant access from the top of the list
 - 🎨 Profile icons — choose from 40+ icons for visual recognition
 - 🏷️ Tags — colour-coded labels with `tag:name` search filtering
@@ -189,7 +191,7 @@ ssh-profile-manager/
 ├── src-tauri/         # Rust backend
 │   ├── src/
 │   │   ├── lib.rs     # Main backend code
-│   │   └── tests/     # Test modules (135 tests)
+│   │   └── tests/     # Test modules (142 tests)
 │   ├── icons/         # App icons
 │   └── Cargo.toml     # Rust dependencies
 ├── plans/             # Development plans and test artefacts

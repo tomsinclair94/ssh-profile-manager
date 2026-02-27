@@ -57,12 +57,18 @@ const CURRENT_APP_VERSION = '0.8.0';
 
 const VERSION_CHANGELOG = {
     '0.8.0': {
-        title: 'Coming Soon',
-        subtitle: 'Coming Soon',
+        title: 'Profile Moving & Custom Sort Order',
+        subtitle: 'Profile Moving & Custom Sort Order',
         highlights: [
-            'New features coming in v0.8.0'
+            { header: 'Key Features & Improvements' },
+            'Move Profile & Move Group — reorganise without deleting and recreating',
+            'Drag between groups — instantly move profiles with 5-second undo',
+            'Custom sort order — drag to reorder profiles and groups; padlock button to enable',
+            'Expand Card Actions — 6 individual action buttons per profile card',
+            { header: 'Bug Fixes' },
+            'macOS: "Open in new tab" now shows an actionable error if Terminal automation is blocked'
         ],
-        releaseDate: '2026-TBD',
+        releaseDate: '2026-02-27',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.8.0'
     },
     '0.7.1': {
@@ -3105,15 +3111,28 @@ function populateVersionSplash(version) {
         descriptionElement.textContent = `Released on ${changelog.releaseDate}`;
     }
 
-    // Populate highlights list
-    const highlightsList = document.getElementById('version-splash-highlights');
-    if (highlightsList) {
-        highlightsList.innerHTML = ''; // Clear existing items
+    // Populate highlights list — supports plain strings and {header: '...'} section dividers
+    const highlightsSection = document.getElementById('version-splash-highlights-section');
+    if (highlightsSection) {
+        highlightsSection.innerHTML = ''; // Clear existing content
+
+        let currentUl = document.createElement('ul');
+        currentUl.className = 'version-splash-highlights';
+        highlightsSection.appendChild(currentUl);
 
         changelog.highlights.forEach(highlight => {
-            const li = document.createElement('li');
-            li.textContent = highlight;
-            highlightsList.appendChild(li);
+            if (highlight && typeof highlight === 'object' && highlight.header) {
+                const h4 = document.createElement('h4');
+                h4.textContent = highlight.header;
+                highlightsSection.appendChild(h4);
+                currentUl = document.createElement('ul');
+                currentUl.className = 'version-splash-highlights';
+                highlightsSection.appendChild(currentUl);
+            } else {
+                const li = document.createElement('li');
+                li.textContent = highlight;
+                currentUl.appendChild(li);
+            }
         });
     }
 

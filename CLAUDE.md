@@ -23,16 +23,16 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.7.1 (2026-02-20) ✅
-**In Development:** v0.8.0 on branch `v0.8.0-dev`
+**Latest Release:** v0.8.0 (2026-02-27) ✅
+**Next Release:** TBD
 
-**v0.8.0 Progress (In Development):**
+**v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" silent failure — now surfaces actionable error toast
 - ✅ Phase 1: Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items, 4 new tests)
 - ✅ Phase 2: Padlock button (session-only) — toolbar lock button toggles drag reordering; resets to locked on app relaunch; no settings persistence
 - ✅ Phase 3: Drag profile between groups — pointer-events drag API, drop onto group headers or directly to a position within a group, 5s undo toast, Favourites excluded as drop target
 - ✅ Phase 4: Custom sort order — drag-to-reorder profiles/groups within parent, combined cross-group drag+position in one gesture, group "Reset to A-Z" menu, Settings "Reset Sorting Order", 3 new tests
-- 🔲 Phase 5: Testing & release
+- ✅ Phase 5: Testing & release — 142 tests, macOS manual GUI tests (144/144 passed), 0 CRITICAL/HIGH after review
 
 **v0.7.1 Fixes (Released - 2026-02-20):**
 - ✅ Parent Group dropdown no longer flickers and disappears when opened
@@ -474,7 +474,7 @@ cargo test --lib -- --nocapture
 cargo llvm-cov --lib --open
 ```
 
-**Expected result:** `139 passed; 0 failed` in ~41 seconds
+**Expected result:** `142 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
