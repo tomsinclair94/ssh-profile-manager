@@ -2822,8 +2822,9 @@ fn move_profile(db: State<Database>, input: MoveProfileInput) -> Result<(), Stri
         .map_err(|e| format!("Failed to get profile: {}", e))?
         .ok_or_else(|| "Profile not found".to_string())?;
 
-    // If moving to a group, validate the group exists
+    // If moving to a group, validate the path format and that the group exists
     if let Some(ref path) = input.new_group_path {
+        validate_group(path)?;
         db.get_group_by_path(path)
             .map_err(|e| format!("Failed to get group: {}", e))?
             .ok_or_else(|| "Group not found".to_string())?;
@@ -5024,8 +5025,7 @@ fn launch_macos_default_terminal(
                     .to_string(),
             );
         }
-        let error_detail = stderr.trim().lines().next().unwrap_or("unknown error");
-        return Err(format!("Failed to launch terminal: {}", error_detail));
+        return Err("Failed to launch terminal — please check your terminal settings.".to_string());
     }
 
     Ok(())
