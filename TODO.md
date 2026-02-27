@@ -1,10 +1,8 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.7.1
+## Current Version: TBD
 
-**Released:** 2026-02-20 ✅
-**Type:** Patch Release
-**Focus:** Bug fixes — dropdown flickering, group modal size, splash screen on reload, compact view layout
+**Previous Release:** v0.8.0 (2026-02-27) ✅
 
 ---
 
@@ -20,10 +18,8 @@
 ## Roadmap
 
 ```
-v0.7.0 ✅ → v0.7.1 ✅ → vNext (feature TBD) → ... → v1.0.0
+v0.7.0 ✅ → v0.7.1 ✅ → v0.8.0 ✅ → ... → v1.0.0
 ```
-
-The next release version will be determined when work begins. Features below are planned but their release order may change based on priorities.
 
 ---
 
@@ -91,6 +87,16 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 ---
 
 ## Archive
+
+### v0.8.0 - Released 2026-02-27 ✅
+**Focus:** Profile & Group Moving + Custom Sort Order
+- Move Profile & Move Group modals — reorganise without deleting and recreating
+- Drag profiles between groups — instant move with 5-second undo toast
+- Custom sort order — drag to reorder profiles and groups; persists across restarts
+- Padlock button — session-only toggle for drag reordering
+- Expand Card Actions — optional 6-button layout per profile card
+- macOS: "open in new tab" silent failure now surfaces actionable error toast
+- 142 automated tests (16 profile + 11 group + 22 integration + others)
 
 ### v0.7.1 - Released 2026-02-20 ✅
 **Focus:** Bug fixes

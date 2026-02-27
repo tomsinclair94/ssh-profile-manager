@@ -11,9 +11,9 @@
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.1-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue?style=flat)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 
-[![Download Latest Release](https://img.shields.io/badge/Download-v0.7.1-brightgreen?style=for-the-badge&logo=github)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
+[![Download Latest Release](https://img.shields.io/badge/Download-v0.8.0-brightgreen?style=for-the-badge&logo=github)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
 <sub>**macOS 14.0+ | Windows 10+ | Native Performance**</sub>
 
@@ -38,6 +38,8 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 **Profile Management**
 - ✅ Create, edit, delete, and duplicate profiles
 - 📂 Organise with hierarchical groups and sub-groups (up to 3 levels deep)
+- 🔀 Move profiles and groups — reorganise without deleting and recreating
+- ↕️ Custom sort order — drag to reorder profiles and groups; persists across restarts
 - ⭐ Favourites — star profiles for instant access from the top of the list
 - 🎨 Profile icons — choose from 40+ icons for visual recognition
 - 🏷️ Tags — colour-coded labels with `tag:name` search filtering
@@ -189,7 +191,7 @@ ssh-profile-manager/
 ├── src-tauri/         # Rust backend
 │   ├── src/
 │   │   ├── lib.rs     # Main backend code
-│   │   └── tests/     # Test modules (135 tests)
+│   │   └── tests/     # Test modules (142 tests)
 │   ├── icons/         # App icons
 │   └── Cargo.toml     # Rust dependencies
 ├── plans/             # Development plans and test artefacts

@@ -23,8 +23,16 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.7.1 (2026-02-20) ✅
-**Next:** See TODO.md for planned features and roadmap
+**Latest Release:** v0.8.0 (2026-02-27) ✅
+**Next Release:** TBD
+
+**v0.8.0 Features (Released - 2026-02-27):**
+- ✅ macOS "open in new tab" silent failure — now surfaces actionable error toast
+- ✅ Phase 1: Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items, 4 new tests)
+- ✅ Phase 2: Padlock button (session-only) — toolbar lock button toggles drag reordering; resets to locked on app relaunch; no settings persistence
+- ✅ Phase 3: Drag profile between groups — pointer-events drag API, drop onto group headers or directly to a position within a group, 5s undo toast, Favourites excluded as drop target
+- ✅ Phase 4: Custom sort order — drag-to-reorder profiles/groups within parent, combined cross-group drag+position in one gesture, group "Reset to A-Z" menu, Settings "Reset Sorting Order", 3 new tests
+- ✅ Phase 5: Testing & release — 142 tests, macOS manual GUI tests (144/144 passed), 0 CRITICAL/HIGH after review
 
 **v0.7.1 Fixes (Released - 2026-02-20):**
 - ✅ Parent Group dropdown no longer flickers and disappears when opened
@@ -99,7 +107,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 135 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 142 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
@@ -123,7 +131,8 @@ git commit -m "Bump version to X.X.X for dev branch"
 
 **Merge to Main:**
 1. PR `vX.X.X-dev` → `main` with auto-merge enabled
-   - Create PR: `gh pr create --title "..." --body "..."`
+   - Create PR: `gh pr create --title "..." --body "..." --label "LABEL"`
+   - Labels: `bug` (patch/bug-fix release), `enhancement` (feature release), `documentation` (docs-only)
    - Enable auto-merge: `gh pr merge <PR_NUMBER> --auto --squash`
 2. Squash merge with title: `Release vX.X.X - Description`
 3. Auto-tag workflow creates git tag with CHANGELOG content
@@ -188,6 +197,9 @@ create_group(name: String, parent_id: Option<String>)
 update_group(id: String, name: String)
 delete_group(id: String, mode: String) // "cascade" or "move"
 move_group(id: String, new_parent_id: Option<String>)
+move_profile(profile_id: String, new_group_path: Option<String>) // None = ungrouped
+reorder_profiles(orders: Vec<{profile_id: String, display_order: i32}>) // v0.8.0+
+reorder_groups(orders: Vec<{group_id: String, display_order: i32}>)     // v0.8.0+
 export_group(group_id: String, include_passwords: bool, encryption_password: Option<String>)
 import_group(data: String, target_parent_id: Option<String>, encryption_password: Option<String>)
 get_profiles_by_group_path(group_path: String)
@@ -425,15 +437,15 @@ src-tauri/src/tests/
 ├── helpers.rs        # Shared test utilities
 ├── encryption.rs     # 38 tests - AES-256-GCM encryption
 ├── validation.rs     # 27 tests - Input validation
-├── profiles.rs       # 11 tests - Profile CRUD
-├── groups.rs         #  9 tests - Hierarchical groups
+├── profiles.rs       # 16 tests - Profile CRUD + move + reorder
+├── groups.rs         # 11 tests - Hierarchical groups + move + reorder
 ├── tags.rs           #  9 tests - Tag system
 ├── connections.rs    #  5 tests - Recent connections
 ├── settings.rs       #  3 tests - User settings
 ├── migrations.rs     #  5 tests - Schema migrations
 └── integration.rs    # 22 tests - Multi-step workflows
 
-Total: 135 tests (all must pass before release)
+Total: 142 tests (all must pass before release)
 ```
 
 **Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
@@ -462,7 +474,7 @@ cargo test --lib -- --nocapture
 cargo llvm-cov --lib --open
 ```
 
-**Expected result:** `129 passed; 0 failed` in ~41 seconds
+**Expected result:** `142 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
@@ -491,7 +503,7 @@ fn test_feature_success() {
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~41s for 135 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 142 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Comprehensive:** 113 unit tests + 22 integration tests covering all backend logic
@@ -501,7 +513,7 @@ fn test_feature_success() {
 Before creating a release PR:
 
 **Automated Tests:**
-- [ ] Run `cargo test --lib` → All 135 tests pass
+- [ ] Run `cargo test --lib` → All 142 tests pass
 - [ ] New features have corresponding automated tests
 - [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation

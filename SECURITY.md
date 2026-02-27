@@ -6,8 +6,8 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.7.x   | :white_check_mark: |
-| < 0.7.0 | :x:                |
+| 0.8.x   | :white_check_mark: |
+| < 0.8.0 | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -72,6 +72,7 @@ Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-mana
 ## Security Review History
 
 This project undergoes regular security reviews:
+- **v0.8.0:** Feature release — code review (0 CRITICAL, 0 HIGH after fixes) + security review (0 CRITICAL, 0 HIGH, 1 MEDIUM, 3 LOW — all resolved)
 - **v0.7.1:** Patch release — no security-specific findings; 4 UI/UX bug fixes only
 - **v0.7.0:** Comprehensive security review (1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW findings — 20 resolved, 12 deferred to v1.0.0)
 - **v0.6.4:** Security hardening sprint (16+ fixes — temp file security, SSH host key verification, session management, CDN elimination)

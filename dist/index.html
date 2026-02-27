@@ -19,7 +19,7 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <a href="#" class="version version-link" id="main-version-link">v0.7.1</a>
+                    <a href="#" class="version version-link" id="main-version-link">v0.8.0</a>
                 </div>
             </div>
             <div class="header-buttons">
@@ -62,6 +62,8 @@
                     Profiles
                     <span id="profile-count-badge" class="badge profile-count-badge">0/0</span>
                 </div>
+                <button id="drag-lock-btn" class="btn btn-secondary drag-lock-btn" title="Drag reordering is locked — click to enable">
+                </button>
             </div>
 
             <!-- Filter Popup -->
@@ -343,9 +345,40 @@
             </div>
         </div>
 
+        <!-- Move Profile / Group Modal -->
+        <div id="move-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2 id="move-modal-title">Move Profile</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-primary" id="move-save-btn">Move</button>
+                        <button type="button" class="btn btn-secondary" id="move-close-btn">Cancel</button>
+                    </div>
+                </div>
+                <div class="move-modal-body">
+                    <p id="move-modal-desc" class="move-modal-desc"></p>
+                    <div class="form-group">
+                        <label>Current Group</label>
+                        <div id="move-modal-current" class="move-modal-current"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="move-destination">Destination Group</label>
+                        <div class="searchable-dropdown-wrapper">
+                            <input type="text" id="move-destination" placeholder="Type to search or select..." autocomplete="off">
+                            <div id="move-destination-dropdown" class="searchable-dropdown hidden"></div>
+                        </div>
+                        <input type="hidden" id="move-destination-id">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notification -->
         <div id="toast" class="toast hidden">
             <div id="toast-message"></div>
+            <button id="toast-undo-btn" class="toast-undo-btn hidden">Undo</button>
         </div>
 
         <!-- Settings Modal -->
@@ -360,7 +393,7 @@
                         <button type="button" class="btn btn-secondary" id="settings-close-btn">Close</button>
                     </div>
                 </div>
-                <div class="settings-content">
+                <div class="settings-content" tabindex="-1">
                     <!-- Theme Settings -->
                     <div class="settings-section">
                         <h3>Appearance</h3>
@@ -372,21 +405,28 @@
                                 <option value="light">Light Mode</option>
                             </select>
                         </div>
-                        <p class="settings-help">Choose your preferred colour theme. System mode automatically matches your operating system's theme.</p>
+                        <p class="settings-help">Choose your preferred colour theme.<br><em>System mode automatically matches your operating system's theme.</em></p>
+                        <div class="form-group settings-no-gap settings-top-gap">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="expanded-card-actions-check">
+                                <span>Expand card actions <span class="default-value">(Default: Off)</span></span>
+                            </label>
+                        </div>
+                        <p class="settings-help">Show Edit, Move, Duplicate, Export and Delete as individual buttons on each profile card, rather than grouping them in the Actions menu.<br><em>Reverts to the Actions menu automatically in compact view.</em></p>
                     </div>
 
                     <!-- Keyboard Shortcuts -->
                     <div class="settings-section">
                         <h3>Keyboard Shortcuts</h3>
-                        <div class="form-group settings-no-gap">
+                        <div class="form-group settings-no-gap settings-inline">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="keyboard-shortcuts-check" checked>
                                 <span>Enable keyboard shortcuts</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <button type="button" id="shortcuts-help-btn" class="btn btn-secondary">View All Shortcuts</button>
                         </div>
-                        <button type="button" id="shortcuts-help-btn" class="btn btn-secondary settings-gap">View All Shortcuts</button>
-                        <p class="settings-help">Use keyboard shortcuts for quick navigation and actions. Press ? to see all available shortcuts.</p>
+                        <p class="settings-help">Use keyboard shortcuts for quick navigation and actions.<br><em>Press ? to see all available shortcuts.</em></p>
                     </div>
 
                     <!-- Recent Connections -->
@@ -396,7 +436,7 @@
                             <label for="recent-connections-limit">Number of recent connections to show (0 to disable) <span class="default-value">(Default: 5)</span></label>
                             <input type="number" id="recent-connections-limit" min="0" max="20" value="5">
                         </div>
-                        <p class="settings-help">Display your most recent connections for quick reconnect. Set to 0 to hide the recent connections bar.</p>
+                        <p class="settings-help">Display your most recent connections for quick reconnect.<br><em>Set to 0 to hide the recent connections bar.</em></p>
                     </div>
 
                     <!-- Terminal Settings -->
@@ -407,6 +447,7 @@
                             <select id="terminal-select">
                                 <!-- Options will be populated by JavaScript based on OS -->
                             </select>
+                            <span class="settings-help-text">Choose which terminal application to use when connecting to SSH profiles.</span>
                         </div>
                         <div class="form-group hidden settings-gap" id="custom-terminal-group">
                             <label for="custom-terminal-path">Custom Terminal Path</label>
@@ -415,21 +456,22 @@
                                 <button type="button" class="btn btn-secondary btn-browse" id="browse-terminal-btn">Browse</button>
                             </div>
                         </div>
-                        <div class="form-group settings-no-gap">
+                        <div class="form-group settings-no-gap settings-top-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="use-tabs-in-terminal-check" checked>
                                 <span>Open profiles in new tabs (when supported)</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).</span>
                         </div>
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="minimize-on-launch-check" checked>
-                                <span>Minimize app when launching profile</span>
+                                <span>Minimise app when launching profile</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When minimise is enabled, the app will minimise after launching a connection.</span>
                         </div>
-                        <p class="settings-help">Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal). When minimize is enabled, the app will minimize after launching a connection.</p>
                     </div>
 
                     <!-- Import/Export Settings -->
@@ -441,6 +483,7 @@
                                 <span>Include Passwords in Exports</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When enabled, saved passwords are included in exported profile files.<br><em>Disable this to share profiles without exposing credentials.</em></span>
                         </div>
                         <div class="form-group settings-no-gap">
                             <label class="checkbox-label">
@@ -449,6 +492,10 @@
                                 <span class="default-value">(Default: Off)</span>
                             </label>
                             <span class="settings-help-text">When enabled, all profile exports must be encrypted (recommended for organisations with security policies)</span>
+                        </div>
+                        <div class="form-group settings-top-gap">
+                            <button id="reset-sort-order-btn" class="btn btn-danger">Reset Sorting Order</button>
+                            <span class="settings-help-text">Resets the sort order for all profiles and groups back to A-Z alphabetical.</span>
                         </div>
                         <div class="settings-actions">
                             <button id="export-profiles-btn" class="btn btn-primary">Export All Profiles</button>
@@ -478,6 +525,7 @@
                                 <span>Include Profiles</span>
                                 <span class="default-value">(Default: On)</span>
                             </label>
+                            <span class="settings-help-text">When enabled, all profiles will be included in the backup.<br><em>When "Include Passwords in Export" is also checked, backups are automatically encrypted with a password you provide.</em></span>
                         </div>
                         <div class="settings-actions">
                             <button id="backup-settings-btn" class="btn btn-primary">Backup Settings</button>
@@ -485,19 +533,17 @@
                             <button id="reset-settings-btn" class="btn btn-danger">Reset Settings</button>
                             <input type="file" id="restore-settings-input" accept=".json" class="hidden">
                         </div>
-                        <p class="settings-help">Backup, restore, or reset settings to defaults. When "Include Profiles" is enabled, all profiles will be included in the backup.<br><strong>Security Note:</strong> When "Include Profiles" is enabled and "Include Passwords in Export" is checked in Profile Management, backups are automatically encrypted with a password you provide.</p>
+                        <p class="settings-help">Backup, restore, or reset settings to defaults.</p>
                     </div>
 
                     <!-- Updates Section -->
                     <div class="settings-section">
                         <h3>Updates</h3>
-                        <div class="form-group settings-no-gap">
+                        <div class="form-group settings-no-gap settings-inline">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="auto-update-check" checked>
                                 <span>Check for updates on launch</span>
                             </label>
-                        </div>
-                        <div class="settings-actions">
                             <button id="check-updates-btn" class="btn btn-secondary">Check for Updates</button>
                         </div>
                         <p class="settings-help">Automatically check for new versions when the app starts, or check manually.</p>
@@ -513,7 +559,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="#" class="about-value version-link" id="settings-version-link">0.7.1</a>
+                                <a href="#" class="about-value version-link" id="settings-version-link">0.8.0</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
@@ -656,7 +702,6 @@
                 </div>
                 <div class="version-splash-body">
                     <div id="version-splash-highlights-section">
-                        <h4>Key Features & Improvements</h4>
                         <ul id="version-splash-highlights" class="version-splash-highlights">
                             <!-- Highlights will be populated dynamically -->
                         </ul>

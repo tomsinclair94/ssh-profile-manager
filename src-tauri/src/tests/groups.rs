@@ -1,4 +1,5 @@
 use super::helpers::*;
+use crate::{GroupOrder};
 
 #[test]
 fn test_create_group_success() {
@@ -225,4 +226,85 @@ fn test_rename_group_cascade_updates_sub_group_profiles() {
     // Sub-group profile path must be "Development/DevOps" (not "Development/DevelopmentOps")
     let child_profile_check = db.get_profile_by_id(&child_profile.id).unwrap().unwrap();
     assert_eq!(child_profile_check.group_path, Some("Development/DevOps".to_string()));
+}
+
+#[test]
+fn test_move_group_to_top_level() {
+    // Moving a sub-group to the top level updates its path and cascades to descendants
+    let db = create_test_db();
+
+    let parent = make_test_group("Work", None, "Work");
+    db.create_group(&parent).unwrap();
+
+    let child = make_test_group("Production", Some(parent.id.clone()), "Work/Production");
+    db.create_group(&child).unwrap();
+
+    let profile = make_test_profile("AppServer", Some("Work/Production"));
+    db.create_profile(&profile).unwrap();
+
+    // Simulate move_group: update the child group's path and parent_id
+    let old_path = child.path.clone();
+    let new_path = "Production".to_string();
+    let mut moved = child.clone();
+    moved.parent_id = None;
+    moved.path = new_path.clone();
+    moved.updated_at = chrono::Utc::now().to_rfc3339();
+    db.update_group(&moved).unwrap();
+
+    // Cascade: update profiles that were in Work/Production
+    let conn = db.conn.lock().unwrap();
+    let escaped_path = old_path.replace('%', "\\%").replace('_', "\\_");
+    let like_pattern = format!("{}/%", escaped_path);
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE groups
+         SET path = ?2 || SUBSTR(path, LENGTH(?1) + 1),
+             updated_at = ?3
+         WHERE path LIKE ?4 ESCAPE '\\'",
+        (&old_path, &new_path, &now, &like_pattern),
+    ).unwrap();
+    conn.execute(
+        "UPDATE profiles
+         SET group_path = ?2 || SUBSTR(group_path, LENGTH(?1) + 1)
+         WHERE group_path = ?1 OR group_path LIKE ?3 ESCAPE '\\'",
+        (&old_path, &new_path, &like_pattern),
+    ).unwrap();
+    drop(conn);
+
+    let moved_check = db.get_group_by_id(&child.id).unwrap().unwrap();
+    assert_eq!(moved_check.path, "Production");
+    assert_eq!(moved_check.parent_id, None);
+
+    let profile_check = db.get_profile_by_id(&profile.id).unwrap().unwrap();
+    assert_eq!(profile_check.group_path, Some("Production".to_string()));
+}
+
+#[test]
+fn test_reorder_groups() {
+    // Verify that updating display_order for sibling groups persists correctly
+    let db = create_test_db();
+    let g1 = make_test_group("Alpha", None, "Alpha");
+    let g2 = make_test_group("Beta", None, "Beta");
+    let g3 = make_test_group("Gamma", None, "Gamma");
+
+    db.create_group(&g1).unwrap();
+    db.create_group(&g2).unwrap();
+    db.create_group(&g3).unwrap();
+
+    // Assign reverse alphabetical order: Gamma=0, Beta=1, Alpha=2
+    let orders = vec![
+        GroupOrder { group_id: g3.id.clone(), display_order: 0 },
+        GroupOrder { group_id: g2.id.clone(), display_order: 1 },
+        GroupOrder { group_id: g1.id.clone(), display_order: 2 },
+    ];
+    db.reorder_groups_db(&orders).unwrap();
+
+    // Verify display_order values are persisted correctly
+    let groups = db.get_all_groups().unwrap();
+    let gamma = groups.iter().find(|g| g.id == g3.id).unwrap();
+    let beta = groups.iter().find(|g| g.id == g2.id).unwrap();
+    let alpha = groups.iter().find(|g| g.id == g1.id).unwrap();
+    assert_eq!(gamma.display_order, 0);
+    assert_eq!(beta.display_order, 1);
+    assert_eq!(alpha.display_order, 2);
 }

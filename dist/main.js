@@ -53,9 +53,24 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.7.1';
+const CURRENT_APP_VERSION = '0.8.0';
 
 const VERSION_CHANGELOG = {
+    '0.8.0': {
+        title: 'Profile Moving & Custom Sort Order',
+        subtitle: 'Profile Moving & Custom Sort Order',
+        highlights: [
+            { header: 'Key Features & Improvements' },
+            'Move Profile & Move Group — reorganise without deleting and recreating',
+            'Drag between groups — instantly move profiles with 5-second undo',
+            'Custom sort order — drag to reorder profiles and groups; padlock button to enable',
+            'Expand Card Actions — 6 individual action buttons per profile card',
+            { header: 'Bug Fixes' },
+            'macOS: "Open in new tab" now shows an actionable error if Terminal automation is blocked'
+        ],
+        releaseDate: '2026-02-27',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.8.0'
+    },
     '0.7.1': {
         title: 'Bug Fixes & UI Polish',
         subtitle: 'Bug Fixes & UI Polish',
@@ -145,7 +160,14 @@ const PROFILE_ICONS = {
         { type: 'path', attrs: { d: 'm7.5 4.27 9 5.15' } }
     ],
     'shield': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-    'lock': 'M19 11H5c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2zM7 11V7c0-2.76 2.24-5 5-5s5 2.24 5 5v4',
+    'lock': [
+        { type: 'rect', attrs: { x: 3, y: 11, width: 18, height: 11, rx: 2, ry: 2 } },
+        { type: 'path', attrs: { d: 'M7 11V7a5 5 0 0 1 10 0v4' } }
+    ],
+    'lock-open': [
+        { type: 'rect', attrs: { x: 3, y: 11, width: 18, height: 11, rx: 2, ry: 2 } },
+        { type: 'path', attrs: { d: 'M7 11V7a5 5 0 0 1 9.9-1' } }
+    ],
     'key': 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4',
     'folder': 'M22 19c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h5l2 3h9c1.1 0 2 .9 2 2v11z',
     'file': 'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM14 2v6h6',
@@ -295,6 +317,15 @@ let originalSettingsValues = {}; // Track original settings values for change de
 let filteredGroups = new Set(); // Groups to hide (empty = show all)
 let lastImportTime = 0; // Track last settings import time for rate limiting
 let keyboardShortcutsEnabled = true; // Enable/disable keyboard shortcuts
+let expandedCardActionsEnabled = false; // Show all card actions as individual buttons
+let dragReorderEnabled = false; // Allow drag & drop reordering of profiles and groups
+let draggingProfileId = null;     // Profile currently being dragged
+let dragOverGroupId = null;       // data-group-id of current drag-over target (cross-group move)
+let dragOverProfileId = null;     // Target profile card for within-group reorder
+let dragInsertBefore = true;      // Insert above (true) or below (false) target profile
+let draggingGroupId = null;       // Group header currently being dragged
+let dragOverGroupInsertId = null; // Target group header for within-group group reorder
+let dragGroupInsertBefore = true; // Insert above (true) or below (false) target group header
 let selectedProfileId = null; // Currently selected profile for keyboard navigation
 let selectedGroupName = null; // Currently selected group header for keyboard navigation
 let selectedRecentConnectionId = null; // Currently selected recent connection for keyboard navigation
@@ -683,6 +714,8 @@ let newTagNameInput;
 let newTagColorInput;
 let createTagBtn;
 let tagListContainer;
+// Move Modal Elements
+let moveModal;
 // Encryption/Decryption Password Modal Elements
 let encryptionPasswordModal;
 let encryptionPasswordInput;
@@ -776,6 +809,55 @@ function saveKeyboardShortcutsPreference() {
                 groupBtn.title = 'Create a new group to organise profiles';
             }
         }
+    }
+}
+
+// Expanded Card Actions
+function loadExpandedCardActions() {
+    const stored = localStorage.getItem('expandedCardActionsEnabled');
+    expandedCardActionsEnabled = stored === 'true';
+}
+
+function loadExpandedCardActionsCheckbox() {
+    const check = document.getElementById('expanded-card-actions-check');
+    if (check) check.checked = expandedCardActionsEnabled;
+}
+
+function saveExpandedCardActionsPreference() {
+    const check = document.getElementById('expanded-card-actions-check');
+    if (check) {
+        expandedCardActionsEnabled = check.checked;
+        localStorage.setItem('expandedCardActionsEnabled', expandedCardActionsEnabled);
+        renderProfiles(); // Re-render cards to apply new layout
+    }
+}
+
+// Drag Reorder
+function loadDragReorderEnabled() {
+    // Session-only: resets to locked on every app launch, persists within the session
+    const stored = sessionStorage.getItem('dragReorderEnabled');
+    dragReorderEnabled = stored === 'true';
+    applyDragLockState();
+}
+
+function applyDragLockState() {
+    const lockBtn = document.getElementById('drag-lock-btn');
+    if (!lockBtn) return;
+    lockBtn.innerHTML = '';
+    if (dragReorderEnabled) {
+        lockBtn.appendChild(createIcon('lock-open', 20));
+        lockBtn.title = 'Drag reordering is enabled — click to lock';
+        lockBtn.classList.remove('drag-lock-btn--locked');
+    } else {
+        lockBtn.appendChild(createIcon('lock', 20));
+        lockBtn.title = 'Drag reordering is locked — click to enable';
+        lockBtn.classList.add('drag-lock-btn--locked');
+    }
+
+    // Toggle drag-enabled class (controls grab cursor via CSS)
+    const profilesList = document.getElementById('profiles-list');
+    if (profilesList) {
+        profilesList.classList.toggle('drag-enabled', dragReorderEnabled);
     }
 }
 
@@ -883,7 +965,8 @@ function setupKeyboardShortcutListeners() {
                        !groupModal.classList.contains('hidden') ||
                        !tagManagerModal.classList.contains('hidden') ||
                        !encryptionPasswordModal.classList.contains('hidden') ||
-                       !decryptionPasswordModal.classList.contains('hidden');
+                       !decryptionPasswordModal.classList.contains('hidden') ||
+                       !moveModal.classList.contains('hidden');
 
         // Handle modal shortcuts (always active in modals)
         if (inModal) {
@@ -1149,6 +1232,10 @@ function getSettingsModalTabbableItems() {
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) items.push(themeSelect);
 
+    // Expanded card actions
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    if (expandedCardActionsCheck) items.push(expandedCardActionsCheck);
+
     // Keyboard shortcuts
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
     if (keyboardShortcutsCheck) items.push(keyboardShortcutsCheck);
@@ -1184,6 +1271,8 @@ function getSettingsModalTabbableItems() {
     if (includePasswordsCheck) items.push(includePasswordsCheck);
     const requireEncryptionCheck = document.getElementById('require-encryption-check');
     if (requireEncryptionCheck) items.push(requireEncryptionCheck);
+    const resetSortOrderBtn = document.getElementById('reset-sort-order-btn');
+    if (resetSortOrderBtn) items.push(resetSortOrderBtn);
 
     // Profile management buttons
     const exportProfilesBtn = document.getElementById('export-profiles-btn');
@@ -1456,6 +1545,26 @@ async function handleModalShortcuts(e) {
                 return;
             }
 
+            case 'move': {
+                const allMoveItems = [
+                    document.getElementById('move-destination'),
+                    document.getElementById('move-save-btn'),
+                    document.getElementById('move-close-btn')
+                ].filter(Boolean);
+                const moveItems = allMoveItems.filter(item => !item.disabled);
+                if (moveItems.length > 0) {
+                    const currentIndex = moveItems.indexOf(document.activeElement);
+                    let nextIndex;
+                    if (e.shiftKey) {
+                        nextIndex = currentIndex <= 0 ? moveItems.length - 1 : currentIndex - 1;
+                    } else {
+                        nextIndex = currentIndex >= moveItems.length - 1 ? 0 : currentIndex + 1;
+                    }
+                    moveItems[nextIndex].focus();
+                }
+                return;
+            }
+
             case 'terminal':
                 // Terminal modal handles Tab internally via xterm.js
                 // Don't prevent default, let xterm process it
@@ -1509,6 +1618,10 @@ async function handleModalShortcuts(e) {
                 closeTagManager();
                 return;
 
+            case 'move':
+                closeMoveModal();
+                return;
+
             case 'encryptionPassword':
                 closeEncryptionPasswordModal(undefined); // undefined = user cancelled
                 return;
@@ -1549,6 +1662,11 @@ async function handleModalShortcuts(e) {
                 if (saveBtn && !saveBtn.disabled) {
                     saveGroup();
                 }
+                return;
+            }
+
+            case 'move': {
+                saveMoveModal();
                 return;
             }
         }
@@ -1663,7 +1781,13 @@ function getAllTabbableItems() {
         items.push({ type: 'button', element: filterBtn, id: 'filter-btn' });
     }
 
-    // 7. All top-level group headers only (no subgroups)
+    // 7. Drag lock button
+    const dragLockBtn = document.getElementById('drag-lock-btn');
+    if (dragLockBtn) {
+        items.push({ type: 'button', element: dragLockBtn, id: 'drag-lock-btn' });
+    }
+
+    // 9. All top-level group headers only (no subgroups)
     const groupHeaders = document.querySelectorAll('.profile-group-header');
     groupHeaders.forEach(header => {
         const groupContent = header.closest('.profile-group-content');
@@ -1677,7 +1801,7 @@ function getAllTabbableItems() {
         }
     });
 
-    // 8-10. Recent Connections section (conditional based on settings and state)
+    // 10-12. Recent Connections section (conditional based on settings and state)
     const recentLimit = getRecentConnectionsLimit();
 
     // Only include Recent Connections in Tab cycle if enabled (limit > 0)
@@ -1719,32 +1843,13 @@ function cycleNavigationSection(visibleRecentConnections, visibleProfiles, rever
     let currentIndex = -1;
     const activeElement = document.activeElement;
 
-    // Check if any focusable element is currently focused
-    const newProfileBtn = document.getElementById('new-profile-btn');
-    const addGroupBtn = document.getElementById('add-group-btn');
-    const settingsBtn = document.getElementById('settings-btn');
-    const searchInput = document.getElementById('search-input');
-    const filterBtn = document.getElementById('filter-btn');
-    const expandCollapseBtn = document.getElementById('expand-collapse-btn');
-    const toggleBtn = document.getElementById('toggle-recent-btn');
-    const clearBtn = document.getElementById('clear-recent-btn');
+    // Check if a button or input in the items list is currently focused
+    const focusedIndex = items.findIndex(item =>
+        (item.type === 'button' || item.type === 'input') && item.element === activeElement
+    );
 
-    if (activeElement === newProfileBtn) {
-        currentIndex = items.findIndex(item => item.id === 'new-profile-btn');
-    } else if (activeElement === addGroupBtn) {
-        currentIndex = items.findIndex(item => item.id === 'add-group-btn');
-    } else if (activeElement === settingsBtn) {
-        currentIndex = items.findIndex(item => item.id === 'settings-btn');
-    } else if (activeElement === searchInput) {
-        currentIndex = items.findIndex(item => item.id === 'search-input');
-    } else if (activeElement === filterBtn) {
-        currentIndex = items.findIndex(item => item.id === 'filter-btn');
-    } else if (activeElement === expandCollapseBtn) {
-        currentIndex = items.findIndex(item => item.id === 'expand-collapse-btn');
-    } else if (activeElement === toggleBtn) {
-        currentIndex = items.findIndex(item => item.id === 'toggle-recent-btn');
-    } else if (activeElement === clearBtn) {
-        currentIndex = items.findIndex(item => item.id === 'clear-recent-btn');
+    if (focusedIndex !== -1) {
+        currentIndex = focusedIndex;
     } else if (selectedRecentConnectionId) {
         currentIndex = items.findIndex(item => item.type === 'recent');
     } else if (selectedGroupName) {
@@ -2611,6 +2716,8 @@ async function init() {
     loadFilterState();
     loadCollapsedState();
     loadFavouritesCollapsedState();
+    loadExpandedCardActions(); // Load before renderProfiles() is called
+    loadDragReorderEnabled(); // Load before renderProfiles() is called
 
     await loadTags(); // Load tags BEFORE profiles (needed for tag badge colors)
     await loadProfiles();
@@ -2631,6 +2738,8 @@ async function init() {
     await loadWindowState();
     await setupWindowListeners();
     setupEventListeners();
+    setupDragAndDrop();
+    setupSelectionContainment();
     setupKeyboardShortcutListeners();
     setupModifierKeyTracking();
 
@@ -2705,6 +2814,18 @@ function setupScrollbarObserver() {
 
     // Also update on window resize
     window.addEventListener('resize', updateScrollbarWidth);
+
+    // Re-render cards when crossing the compact view boundary (800px) so the
+    // expanded card actions setting reverts to Connect/Actions in compact view.
+    let wasCompact = window.innerWidth < 800;
+    const debouncedCompactCheck = debounce(() => {
+        const isCompact = window.innerWidth < 800;
+        if (isCompact !== wasCompact) {
+            wasCompact = isCompact;
+            renderProfiles();
+        }
+    }, 100);
+    window.addEventListener('resize', debouncedCompactCheck);
 }
 
 // Load profiles from backend
@@ -2990,15 +3111,28 @@ function populateVersionSplash(version) {
         descriptionElement.textContent = `Released on ${changelog.releaseDate}`;
     }
 
-    // Populate highlights list
-    const highlightsList = document.getElementById('version-splash-highlights');
-    if (highlightsList) {
-        highlightsList.innerHTML = ''; // Clear existing items
+    // Populate highlights list — supports plain strings and {header: '...'} section dividers
+    const highlightsSection = document.getElementById('version-splash-highlights-section');
+    if (highlightsSection) {
+        highlightsSection.innerHTML = ''; // Clear existing content
+
+        let currentUl = document.createElement('ul');
+        currentUl.className = 'version-splash-highlights';
+        highlightsSection.appendChild(currentUl);
 
         changelog.highlights.forEach(highlight => {
-            const li = document.createElement('li');
-            li.textContent = highlight;
-            highlightsList.appendChild(li);
+            if (highlight && typeof highlight === 'object' && highlight.header) {
+                const h4 = document.createElement('h4');
+                h4.textContent = highlight.header;
+                highlightsSection.appendChild(h4);
+                currentUl = document.createElement('ul');
+                currentUl.className = 'version-splash-highlights';
+                highlightsSection.appendChild(currentUl);
+            } else {
+                const li = document.createElement('li');
+                li.textContent = highlight;
+                currentUl.appendChild(li);
+            }
         });
     }
 
@@ -3756,6 +3890,7 @@ function renderProfiles(filter = '') {
         const bIsUngrouped = b.name.toLowerCase() === 'ungrouped';
         if (aIsUngrouped) return 1;  // a goes to bottom
         if (bIsUngrouped) return -1; // b goes to bottom
+        if ((a.display_order ?? 0) !== (b.display_order ?? 0)) return (a.display_order ?? 0) - (b.display_order ?? 0);
         return a.name.localeCompare(b.name);
     });
 
@@ -3763,10 +3898,8 @@ function renderProfiles(filter = '') {
         html += renderGroupNode(group, profilesByGroupPath, 0, filter);
     });
 
-    // Render ungrouped profiles
-    if (profilesByGroupPath[null] && profilesByGroupPath[null].length > 0) {
-        html += renderUngroupedProfiles(profilesByGroupPath[null]);
-    }
+    // Render ungrouped profiles (always rendered — acts as drop zone during drag when empty)
+    html += renderUngroupedProfiles(profilesByGroupPath[null] ?? []);
 
     profilesList.innerHTML = html;
     attachProfileEventListeners();
@@ -3855,13 +3988,21 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
             <div class="profile-group-content ${isCollapsed || isEmpty ? 'collapsed' : ''}">
     `;
 
-    // Render profiles in this group
-    groupProfiles.forEach(profile => {
+    // Render profiles in this group (sorted by display_order then name)
+    groupProfiles.slice().sort((a, b) =>
+        (a.display_order ?? 0) !== (b.display_order ?? 0)
+            ? (a.display_order ?? 0) - (b.display_order ?? 0)
+            : a.name.localeCompare(b.name)
+    ).forEach(profile => {
         html += renderProfileCard(profile, depth);
     });
 
-    // Render child groups
-    childGroups.sort((a, b) => a.name.localeCompare(b.name)).forEach(childGroup => {
+    // Render child groups (sorted by display_order then name)
+    childGroups.slice().sort((a, b) =>
+        (a.display_order ?? 0) !== (b.display_order ?? 0)
+            ? (a.display_order ?? 0) - (b.display_order ?? 0)
+            : a.name.localeCompare(b.name)
+    ).forEach(childGroup => {
         html += renderGroupNode(childGroup, profilesByGroupPath, depth + 1, filter);
     });
 
@@ -3875,6 +4016,18 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
 
 // Render ungrouped profiles
 function renderUngroupedProfiles(ungroupedProfiles) {
+    // When empty: render a hidden drop zone that becomes visible during drag
+    if (ungroupedProfiles.length === 0) {
+        return `
+        <div class="profile-group profile-group--ungrouped-empty">
+            <div class="profile-group-header profile-group-header-ungrouped" data-group-id="ungrouped">
+                <span class="group-name">Ungrouped</span>
+                <span class="ungrouped-drop-hint">Drop here to ungroup</span>
+            </div>
+        </div>
+    `;
+    }
+
     const isCollapsed = collapsedGroups.has('ungrouped');
     const chevron = isCollapsed ? '▶' : '▼';
 
@@ -3915,6 +4068,24 @@ function renderProfileCard(profile, depth) {
     const starTitle = profile.is_favorite ? 'Remove from Favourites' : 'Add to Favourites';
     const starSvg = createIcon(starIconName, 18, `favorite-star-toggle ${starClass}`);
 
+    const actionsHtml = expandedCardActionsEnabled && window.innerWidth >= 800
+        ? `<div class="profile-card-actions profile-card-actions-expanded">
+               <div class="expanded-actions-row">
+                   <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
+                   <button class="btn btn-primary btn-small edit-btn" data-id="${profile.id}" title="Edit profile">Edit</button>
+                   <button class="btn btn-secondary btn-small move-btn" data-id="${profile.id}" title="Move profile to another group">Move</button>
+               </div>
+               <div class="expanded-actions-row">
+                   <button class="btn btn-secondary btn-small duplicate-btn" data-id="${profile.id}" title="Duplicate profile">Duplicate</button>
+                   <button class="btn btn-secondary btn-small export-btn" data-id="${profile.id}" title="Export profile">Export</button>
+                   <button class="btn btn-danger btn-small delete-btn" data-id="${profile.id}" title="Delete profile">Delete</button>
+               </div>
+           </div>`
+        : `<div class="profile-card-actions">
+               <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
+               <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
+           </div>`;
+
     return `
         <div class="profile-card ${depthClass}" data-id="${profile.id}">
             <div class="profile-card-header">
@@ -3937,10 +4108,7 @@ function renderProfileCard(profile, depth) {
                 </div>
             </div>
             ${renderTagBadges(profile.tags)}
-            <div class="profile-card-actions">
-                <button class="btn btn-success btn-small connect-btn" data-id="${profile.id}" title="Connect to this SSH profile">Connect</button>
-                <button class="btn btn-primary btn-small actions-btn" data-id="${profile.id}" title="Show profile actions">Actions</button>
-            </div>
+            ${actionsHtml}
         </div>
     `;
 }
@@ -4023,6 +4191,9 @@ function attachProfileEventListeners() {
         // Toggle on click (but not on menu button)
         header.addEventListener('click', (e) => {
             if (e.target.classList.contains('group-menu-btn')) return; // Skip if clicking menu button
+
+            // Skip if the user just made a text selection (e.g. selecting the group name)
+            if (window.getSelection()?.toString()) return;
 
             // Skip if group is empty (no chevron to expand)
             if (header.classList.contains('group-empty')) return;
@@ -4164,7 +4335,9 @@ function showGroupMenu(groupId, event) {
 
     menu.innerHTML = `
         <button class="group-menu-item group-menu-edit" data-action="edit">Edit Group</button>
+        <button class="group-menu-item" data-action="move">Move Group</button>
         <button class="group-menu-item" data-action="add-subgroup">Add Subgroup</button>
+        <button class="group-menu-item" data-action="reset-order">Reset to A-Z</button>
         <button class="group-menu-item" data-action="export">Export Group</button>
         <button class="group-menu-item group-menu-delete" data-action="delete">Delete Group</button>
     `;
@@ -4213,6 +4386,10 @@ function showGroupMenu(groupId, event) {
 
             if (action === 'edit') {
                 await editGroup(groupId);
+            } else if (action === 'move') {
+                openMoveGroupModal(groupId);
+            } else if (action === 'reset-order') {
+                await resetGroupOrder(groupId);
             } else if (action === 'add-subgroup') {
                 openGroupModal(null, groupId); // Create new group with this as parent
             } else if (action === 'export') {
@@ -4292,6 +4469,7 @@ function showProfileActionMenu(profileId, buttonElement) {
 
     menu.innerHTML = `
         <button class="profile-menu-item profile-menu-edit" data-action="edit">Edit Profile</button>
+        <button class="profile-menu-item" data-action="move">Move Profile</button>
         <button class="profile-menu-item" data-action="duplicate">Duplicate Profile</button>
         <button class="profile-menu-item" data-action="export">Export Profile</button>
         <button class="profile-menu-item profile-menu-delete" data-action="delete">Delete Profile</button>
@@ -4344,6 +4522,8 @@ function showProfileActionMenu(profileId, buttonElement) {
 
             if (action === 'edit') {
                 editProfile(profileId);
+            } else if (action === 'move') {
+                openMoveProfileModal(profileId);
             } else if (action === 'duplicate') {
                 duplicateProfile(profileId);
             } else if (action === 'export') {
@@ -4623,6 +4803,14 @@ function toggleExpandCollapseAll() {
 function setupEventListeners() {
     debug.log('Setting up event listeners...');
 
+    // Focus trap safety net — catches focus escaping the Settings modal (e.g. WKWebView native Tab)
+    document.addEventListener('focusin', (e) => {
+        if (getTopmostModal() !== 'settings') return;
+        if (settingsModal.contains(e.target)) return;
+        const items = getSettingsModalTabbableItems();
+        if (items.length > 0) items[0].focus();
+    });
+
     searchInput.addEventListener('input', (e) => {
         renderProfiles(e.target.value);
         // Show/hide clear button based on input value
@@ -4662,6 +4850,21 @@ function setupEventListeners() {
         } else if (target.classList.contains('actions-btn')) {
             e.stopPropagation();
             showProfileActionMenu(target.dataset.id, target);
+        } else if (target.classList.contains('edit-btn')) {
+            e.stopPropagation();
+            editProfile(target.dataset.id);
+        } else if (target.classList.contains('move-btn')) {
+            e.stopPropagation();
+            openMoveProfileModal(target.dataset.id);
+        } else if (target.classList.contains('duplicate-btn')) {
+            e.stopPropagation();
+            duplicateProfile(target.dataset.id);
+        } else if (target.classList.contains('export-btn')) {
+            e.stopPropagation();
+            await exportSingleProfile(target.dataset.id);
+        } else if (target.classList.contains('delete-btn')) {
+            e.stopPropagation();
+            await confirmDeleteProfile(target.dataset.id);
         } else if (target.classList.contains('tag-badge')) {
             e.stopPropagation();
             addTagToSearch(target.dataset.tagName);
@@ -5141,6 +5344,24 @@ function setupEventListeners() {
         });
     }
 
+    // Expanded card actions
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    if (expandedCardActionsCheck) {
+        expandedCardActionsCheck.addEventListener('change', () => {
+            debouncedCheckSettingsChanged();
+        });
+    }
+
+    // Padlock button (drag reorder toggle)
+    const dragLockBtn = document.getElementById('drag-lock-btn');
+    if (dragLockBtn) {
+        dragLockBtn.addEventListener('click', () => {
+            dragReorderEnabled = !dragReorderEnabled;
+            sessionStorage.setItem('dragReorderEnabled', dragReorderEnabled);
+            applyDragLockState();
+        });
+    }
+
     const shortcutsHelpBtn = document.getElementById('shortcuts-help-btn');
     if (shortcutsHelpBtn) {
         shortcutsHelpBtn.addEventListener('click', () => {
@@ -5294,6 +5515,13 @@ function setupEventListeners() {
         await deleteAllProfiles();
     });
 
+    const resetSortOrderBtn = document.getElementById('reset-sort-order-btn');
+    if (resetSortOrderBtn) {
+        resetSortOrderBtn.addEventListener('click', async () => {
+            await resetAllSortOrders();
+        });
+    }
+
     const deleteAllTagsBtn = document.getElementById('delete-all-tags-btn');
     deleteAllTagsBtn.addEventListener('click', async () => {
         await deleteAllTags();
@@ -5432,6 +5660,41 @@ function setupEventListeners() {
             checkGroupFormChanged();
         });
     }
+
+    // Move modal buttons
+    moveModal = document.getElementById('move-modal');
+    document.getElementById('move-close-btn').addEventListener('click', () => closeMoveModal());
+    document.getElementById('move-save-btn').addEventListener('click', () => saveMoveModal());
+
+    // Move destination dropdown input
+    const moveDestInput = document.getElementById('move-destination');
+    moveDestInput.addEventListener('input', (e) => showMoveDestinationDropdown(e.target.value));
+    moveDestInput.addEventListener('focus', () => showMoveDestinationDropdown(moveDestInput.value));
+    moveDestInput.addEventListener('blur', () => {
+        setTimeout(() => hideMoveDestinationDropdown(), 150);
+    });
+    moveDestInput.addEventListener('keydown', (e) => {
+        if (!moveDestinationDropdownVisible) return;
+        const items = document.querySelectorAll('#move-destination-dropdown .searchable-dropdown-item');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            focusedMoveDropdownIndex = Math.min(focusedMoveDropdownIndex + 1, items.length - 1);
+            items.forEach((item, i) => item.classList.toggle('focused', i === focusedMoveDropdownIndex));
+            if (items[focusedMoveDropdownIndex]) items[focusedMoveDropdownIndex].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            focusedMoveDropdownIndex = Math.max(focusedMoveDropdownIndex - 1, 0);
+            items.forEach((item, i) => item.classList.toggle('focused', i === focusedMoveDropdownIndex));
+            if (items[focusedMoveDropdownIndex]) items[focusedMoveDropdownIndex].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (focusedMoveDropdownIndex >= 0 && filteredMoveOptions[focusedMoveDropdownIndex]) {
+                selectMoveDestination(filteredMoveOptions[focusedMoveDropdownIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            hideMoveDestinationDropdown();
+        }
+    });
 
     // Filter button and popup
     filterBtn.addEventListener('click', (e) => {
@@ -5869,6 +6132,9 @@ async function showGroupConflictDialog(groupName, parentName) {
 
 // Toast notification
 function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
+    // Hide undo button on regular toasts
+    document.getElementById('toast-undo-btn')?.classList.add('hidden');
+
     // Cancel any pending auto-hide from the previous toast
     if (toastTimeoutId) {
         clearTimeout(toastTimeoutId);
@@ -5909,6 +6175,37 @@ function showToast(message, duration = TOAST_DURATION_SHORT, type = 'success') {
     }
 }
 
+// Undo toast — shows a toast with an Undo button for reversible actions
+function showUndoToast(message, undoFn, duration = 5000) {
+    // Cancel any pending toast timeout
+    if (toastTimeoutId) { clearTimeout(toastTimeoutId); toastTimeoutId = null; }
+
+    toastMessage.textContent = message;
+    toastElement.classList.remove('hidden', 'toast-error', 'toast-success', 'toast-loading');
+    toastElement.classList.add('toast-success');
+
+    // Show and wire undo button (clone to remove old listeners)
+    const oldBtn = document.getElementById('toast-undo-btn');
+    if (oldBtn) {
+        const undoBtn = oldBtn.cloneNode(true);
+        oldBtn.replaceWith(undoBtn);
+        undoBtn.classList.remove('hidden');
+        undoBtn.addEventListener('click', async () => {
+            clearTimeout(toastTimeoutId);
+            toastTimeoutId = null;
+            undoBtn.classList.add('hidden');
+            toastElement.classList.add('hidden');
+            await undoFn();
+        });
+    }
+
+    toastTimeoutId = setTimeout(() => {
+        toastElement.classList.add('hidden');
+        document.getElementById('toast-undo-btn')?.classList.add('hidden');
+        toastTimeoutId = null;
+    }, duration);
+}
+
 // Update form based on selected auth method
 function updateAuthMethodVisibility() {
     const method = authMethodSelect.value;
@@ -5922,6 +6219,7 @@ function updateAuthMethodVisibility() {
 function getCurrentSettingsValues() {
     const recentConnectionsLimitInput = document.getElementById('recent-connections-limit');
     const keyboardShortcutsCheck = document.getElementById('keyboard-shortcuts-check');
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
     const useTabsInTerminalCheck = document.getElementById('use-tabs-in-terminal-check');
     const minimizeOnLaunchCheck = document.getElementById('minimize-on-launch-check');
     return {
@@ -5934,6 +6232,7 @@ function getCurrentSettingsValues() {
         requireEncryption: requireEncryptionCheck.checked,
         recentConnectionsLimit: recentConnectionsLimitInput ? recentConnectionsLimitInput.value : '5',
         keyboardShortcutsEnabled: keyboardShortcutsCheck ? keyboardShortcutsCheck.checked : true,
+        expandedCardActionsEnabled: expandedCardActionsCheck ? expandedCardActionsCheck.checked : false,
         useTabsInTerminal: useTabsInTerminalCheck ? useTabsInTerminalCheck.checked : true,
         minimizeOnLaunch: minimizeOnLaunchCheck ? minimizeOnLaunchCheck.checked : true
     };
@@ -5979,6 +6278,7 @@ function openSettings() {
     // Load current settings values into form
     loadRecentConnectionsLimit();
     loadKeyboardShortcutsCheckbox();
+    loadExpandedCardActionsCheckbox();
     loadIncludePasswordsPreference();
     loadRequireEncryptionPreference();
     loadUseTabsInTerminalPreference();
@@ -6077,6 +6377,14 @@ function revertSettingsUI() {
             : true;
     }
 
+    // Validate expanded card actions - boolean with safe default
+    const expandedCardActionsCheck = document.getElementById('expanded-card-actions-check');
+    if (expandedCardActionsCheck) {
+        expandedCardActionsCheck.checked = typeof originalSettingsValues.expandedCardActionsEnabled === 'boolean'
+            ? originalSettingsValues.expandedCardActionsEnabled
+            : false;
+    }
+
     updateTerminalVisibility();
 }
 
@@ -6111,6 +6419,9 @@ function saveSettings() {
 
     // Save keyboard shortcuts preference
     saveKeyboardShortcutsPreference();
+
+    // Save expanded card actions preference
+    saveExpandedCardActionsPreference();
 
     // Reload recent connections with new limit
     loadRecentConnections();
@@ -6812,7 +7123,7 @@ function populateTerminalOptions() {
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
         if (helpText) {
-            helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).';
+            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).<br>When minimise is enabled, the app will minimise after launching a connection.</em>';
         }
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
@@ -6824,7 +7135,7 @@ function populateTerminalOptions() {
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
         if (helpText) {
-            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles. When enabled, profiles open as tabs in existing terminal windows.<br><strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.';
+            helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows. <strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.</em>';
         }
     } else {
         // Unknown OS - show minimal options
@@ -8241,6 +8552,7 @@ async function backupSettings() {
         const terminalPreference = localStorage.getItem('terminalPreference') || 'default';
         const useTabsInTerminal = localStorage.getItem('useTabsInTerminal') !== 'false'; // Default to true
         const minimizeOnLaunch = localStorage.getItem('minimizeOnLaunch') !== 'false'; // Default to true
+        const expandedCardActions = localStorage.getItem('expandedCardActionsEnabled') === 'true';
 
         // Only include filtered/collapsed groups if profiles are included
         let filteredGroups = null;
@@ -8281,6 +8593,7 @@ async function backupSettings() {
             collapsedGroups,
             includePasswordsInExports,
             requireEncryptionForAllExports,
+            expandedCardActionsEnabled: expandedCardActions,
             terminalPreference: terminalPreference,
             useTabsInTerminal: useTabsInTerminal,
             minimizeOnLaunch: minimizeOnLaunch,
@@ -8596,6 +8909,14 @@ async function restoreSettings(file) {
             localStorage.setItem('recentConnectionsLimit', limit.toString());
         }
 
+        // Validate and restore expanded card actions (must be boolean, default false)
+        const restoredExpandedCardActions = typeof result.settings.expanded_card_actions_enabled === 'boolean'
+            ? result.settings.expanded_card_actions_enabled
+            : false;
+        localStorage.setItem('expandedCardActionsEnabled', restoredExpandedCardActions.toString());
+        expandedCardActionsEnabled = restoredExpandedCardActions;
+
+
         // Validate and restore filtered/collapsed groups
         // Must be arrays, with reasonable length limits (max 1000 items to prevent DoS)
         if (result.settings.filtered_groups) {
@@ -8719,6 +9040,8 @@ async function resetSettings() {
         localStorage.setItem('terminalPreference', 'default');
         localStorage.setItem('customTerminalPath', '');
         localStorage.setItem('recentConnectionsLimit', '5');
+        localStorage.setItem('expandedCardActionsEnabled', 'false');
+        expandedCardActionsEnabled = false;
 
         // Reset window to default size
         await resetWindowState();
@@ -9298,6 +9621,14 @@ async function saveProfile() {
             await invoke('update_profile', { profile: profileData });
             savedProfileId = editingProfileId;
         } else {
+            // When drag reorder is enabled, append new profile at the bottom of its group
+            if (dragReorderEnabled) {
+                const sameGroupProfiles = profiles.filter(p =>
+                    (p.group_path ?? null) === (selectedGroupPath ?? null)
+                );
+                const maxOrder = sameGroupProfiles.reduce((m, p) => Math.max(m, p.display_order ?? 0), 0);
+                profileData.display_order = sameGroupProfiles.length > 0 ? maxOrder + 1 : 0;
+            }
             debug.log('Creating profile:', profileData);
             savedProfileId = await invoke('create_profile', { profile: profileData });
         }
@@ -9755,6 +10086,16 @@ let filteredParentGroupOptions = [];
 let currentExcludeGroupId = null; // For preventing circular references when editing groups
 let parentGroupScrollTimeout = null; // Handle for pending auto-scroll timeout
 
+// Move modal state
+let moveModalMode = null; // 'profile' or 'group'
+let moveModalTargetId = null;
+let moveDestinationDropdownVisible = false;
+let focusedMoveDropdownIndex = -1;
+let filteredMoveOptions = [];
+let moveDropdownScrollTimeout = null;
+let moveDestinationSelected = false; // true once user has picked a destination
+let moveCurrentLocationId = null; // group ID at open time (null = ungrouped / top level)
+
 function populateProfileGroupSelect() {
     // This function is now called to initialize the searchable dropdown
     // Actual population happens in showProfileGroupDropdown()
@@ -9943,6 +10284,777 @@ async function closeGroupModal() {
     groupForm.reset();
 }
 
+// ========== Move Profile / Group Modal ==========
+
+function openMoveProfileModal(profileId) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+
+    moveModalMode = 'profile';
+    moveModalTargetId = profileId;
+    moveDestinationSelected = false;
+
+    document.getElementById('move-modal-title').textContent = 'Move Profile';
+    document.getElementById('move-modal-desc').textContent = `Move "${profile.name}" to a different group.`;
+
+    const currentEl = document.getElementById('move-modal-current');
+    currentEl.innerHTML = '';
+    const folderIcon = createIcon('folder', 14, 'group-path-icon');
+    currentEl.appendChild(folderIcon);
+    const locationSpan = document.createElement('span');
+    if (profile.group_path) {
+        locationSpan.textContent = formatGroupPathDisplay(profile.group_path);
+        const currentGroup = groups.find(g => g.path === profile.group_path);
+        moveCurrentLocationId = currentGroup ? currentGroup.id : null;
+    } else {
+        locationSpan.textContent = 'Ungrouped';
+        moveCurrentLocationId = null;
+    }
+    currentEl.appendChild(locationSpan);
+
+    document.getElementById('move-save-btn').disabled = true;
+
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    destInput.value = '';
+    destIdInput.value = '';
+
+    moveModal.classList.remove('hidden');
+    pushModal('move');
+    destInput.focus();
+}
+
+function openMoveGroupModal(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    moveModalMode = 'group';
+    moveModalTargetId = groupId;
+    moveDestinationSelected = false;
+
+    document.getElementById('move-modal-title').textContent = 'Move Group';
+    document.getElementById('move-modal-desc').textContent = `Move "${group.name}" to a different parent group.`;
+
+    const currentEl = document.getElementById('move-modal-current');
+    currentEl.innerHTML = '';
+    const folderIcon = createIcon('folder', 14, 'group-path-icon');
+    currentEl.appendChild(folderIcon);
+    const locationSpan = document.createElement('span');
+    if (group.parent_id) {
+        const parentGroup = groups.find(g => g.id === group.parent_id);
+        locationSpan.textContent = parentGroup ? formatGroupPathDisplay(parentGroup.path) : 'Top Level';
+        moveCurrentLocationId = group.parent_id;
+    } else {
+        locationSpan.textContent = 'Top Level';
+        moveCurrentLocationId = null;
+    }
+    currentEl.appendChild(locationSpan);
+
+    document.getElementById('move-save-btn').disabled = true;
+
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    destInput.value = '';
+    destIdInput.value = '';
+
+    moveModal.classList.remove('hidden');
+    pushModal('move');
+    destInput.focus();
+}
+
+function showMoveDestinationDropdown(filterText = '') {
+    const destInput = document.getElementById('move-destination');
+    const destDropdown = document.getElementById('move-destination-dropdown');
+    if (!destInput || !destDropdown) return;
+
+    const normalizedFilter = filterText.replace(/\s*\/\s*/g, '/').toLowerCase();
+    const sortedGroups = [...groups].sort((a, b) => a.path.localeCompare(b.path));
+
+    if (moveModalMode === 'profile') {
+        // Profile: show all groups + "Ungrouped"
+        filteredMoveOptions = sortedGroups.filter(g =>
+            g.path.toLowerCase().includes(normalizedFilter)
+        );
+        filteredMoveOptions.unshift({ id: '', name: 'Ungrouped', path: 'Ungrouped' });
+    } else {
+        // Group: exclude self and all descendants (backend validates depth limit)
+        const targetGroup = groups.find(g => g.id === moveModalTargetId);
+        const excludePrefix = targetGroup ? targetGroup.path : null;
+        filteredMoveOptions = sortedGroups.filter(g => {
+            if (!excludePrefix) return true;
+            if (g.id === moveModalTargetId) return false;
+            if (g.path.startsWith(excludePrefix + '/')) return false;
+            return g.path.toLowerCase().includes(normalizedFilter);
+        });
+        filteredMoveOptions.unshift({ id: '', name: '-- Top Level --', path: '-- Top Level --' });
+    }
+
+    const currentDestId = document.getElementById('move-destination-id').value;
+    let html = '';
+    if (filteredMoveOptions.length === 0 || (moveModalMode === 'group' && filteredMoveOptions.length === 1)) {
+        html = '<div class="searchable-dropdown-empty">No groups found</div>';
+    } else {
+        filteredMoveOptions.forEach((g, index) => {
+            const isSelected = g.id === currentDestId;
+            const displayText = g.id === '' ? g.path : formatGroupPathDisplay(g.path);
+            html += `
+                <div class="searchable-dropdown-item ${isSelected ? 'selected' : ''}"
+                     data-group-id="${escapeHtml(g.id)}"
+                     data-index="${index}">
+                    ${escapeHtml(displayText)}
+                </div>
+            `;
+        });
+    }
+
+    destDropdown.innerHTML = html;
+    destDropdown.classList.remove('hidden');
+    moveDestinationDropdownVisible = true;
+    focusedMoveDropdownIndex = -1;
+
+    destDropdown.querySelectorAll('.searchable-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const groupId = e.currentTarget.dataset.groupId;
+            const g = filteredMoveOptions.find(opt => opt.id === groupId);
+            selectMoveDestination(g);
+        });
+    });
+
+    // Auto-scroll modal to show dropdown
+    if (moveDropdownScrollTimeout !== null) clearTimeout(moveDropdownScrollTimeout);
+    moveDropdownScrollTimeout = setTimeout(() => {
+        moveDropdownScrollTimeout = null;
+        if (destDropdown.classList.contains('hidden')) return;
+        const scrollContainer = destDropdown.closest('.move-modal-body') || destDropdown.closest('.modal-content');
+        if (!scrollContainer) return;
+        const dropdownRect = destDropdown.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const desiredPadding = 20;
+        const dropdownOverflow = dropdownRect.bottom - containerRect.bottom;
+        if (dropdownOverflow > -desiredPadding) {
+            const currentPadding = parseInt(window.getComputedStyle(scrollContainer).paddingBottom) || 0;
+            const paddingNeeded = currentPadding + Math.abs(dropdownOverflow) + desiredPadding;
+            const originalPaddingBottom = scrollContainer.style.paddingBottom;
+            scrollContainer.style.paddingBottom = `${paddingNeeded}px`;
+            scrollContainer.dataset.originalPaddingBottom = originalPaddingBottom;
+            setTimeout(() => {
+                scrollContainer.scrollBy({ top: Math.abs(dropdownOverflow) + desiredPadding, behavior: 'smooth' });
+            }, 10);
+        }
+    }, 50);
+}
+
+function hideMoveDestinationDropdown() {
+    if (moveDropdownScrollTimeout !== null) {
+        clearTimeout(moveDropdownScrollTimeout);
+        moveDropdownScrollTimeout = null;
+    }
+    const destDropdown = document.getElementById('move-destination-dropdown');
+    if (destDropdown) {
+        destDropdown.classList.add('hidden');
+        moveDestinationDropdownVisible = false;
+        focusedMoveDropdownIndex = -1;
+        const scrollContainer = destDropdown.closest('.move-modal-body') || destDropdown.closest('.modal-content');
+        if (scrollContainer && scrollContainer.dataset.originalPaddingBottom !== undefined) {
+            scrollContainer.style.paddingBottom = scrollContainer.dataset.originalPaddingBottom || '';
+            delete scrollContainer.dataset.originalPaddingBottom;
+        }
+    }
+}
+
+function selectMoveDestination(group) {
+    const destInput = document.getElementById('move-destination');
+    const destIdInput = document.getElementById('move-destination-id');
+    if (!group) return;
+
+    const isSameLocation = (group.id === '' && moveCurrentLocationId === null) ||
+                           (group.id !== '' && group.id === moveCurrentLocationId);
+
+    if (group.id === '') {
+        destInput.value = moveModalMode === 'profile' ? 'Ungrouped' : 'Top Level';
+        destIdInput.value = '';
+    } else {
+        destInput.value = formatGroupPathDisplay(group.path);
+        destIdInput.value = group.id;
+    }
+
+    moveDestinationSelected = !isSameLocation;
+    document.getElementById('move-save-btn').disabled = isSameLocation;
+    hideMoveDestinationDropdown();
+}
+
+function closeMoveModal() {
+    hideMoveDestinationDropdown();
+    moveModal.classList.add('hidden');
+    popModal('move');
+    moveModalMode = null;
+    moveModalTargetId = null;
+    moveDestinationSelected = false;
+    moveCurrentLocationId = null;
+    document.getElementById('move-save-btn').disabled = false;
+    document.getElementById('move-destination').value = '';
+    document.getElementById('move-destination-id').value = '';
+}
+
+async function saveMoveModal() {
+    if (!moveModalTargetId || !moveModalMode) return;
+
+    if (!moveDestinationSelected) {
+        showToast('Please select a destination.', TOAST_DURATION_SHORT, 'error');
+        return;
+    }
+
+    const destId = document.getElementById('move-destination-id').value || null;
+
+    if (moveModalMode === 'profile') {
+        const profile = profiles.find(p => p.id === moveModalTargetId);
+        const destGroup = destId ? groups.find(g => g.id === destId) : null;
+        const newGroupPath = destGroup ? destGroup.path : null;
+
+        try {
+            await invoke('move_profile', { input: { profileId: moveModalTargetId, newGroupPath } });
+            closeMoveModal();
+            await loadProfiles();
+            const destLabel = newGroupPath ? `"${formatGroupPathDisplay(newGroupPath)}"` : 'Ungrouped';
+            showToast(`Moved "${profile ? profile.name : ''}" to ${destLabel}`, TOAST_DURATION_SHORT);
+        } catch (error) {
+            showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+        }
+    } else {
+        const group = groups.find(g => g.id === moveModalTargetId);
+        const newParentId = destId || null;
+
+        try {
+            await invoke('move_group', { input: { id: moveModalTargetId, newParentId } });
+            closeMoveModal();
+            await loadGroups();
+            await loadProfiles();
+            const destGroup = newParentId ? groups.find(g => g.id === newParentId) : null;
+            const destLabel = destGroup ? `"${formatGroupPathDisplay(destGroup.path)}"` : 'top level';
+            showToast(`Moved "${group ? group.name : ''}" to ${destLabel}`, TOAST_DURATION_SHORT);
+        } catch (error) {
+            showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
+        }
+    }
+}
+
+// Move a profile via drag-and-drop, with a 5-second undo toast
+async function moveProfileDragDrop(profileId, newGroupPath) {
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) return;
+    const oldGroupPath = profile.group_path ?? null;
+    if (oldGroupPath === newGroupPath) return; // no-op: same group
+
+    try {
+        await invoke('move_profile', { input: { profileId, newGroupPath } });
+        await loadProfiles();
+        const destLabel = newGroupPath ? `"${formatGroupPathDisplay(newGroupPath)}"` : 'Ungrouped';
+        showUndoToast(`Moved "${profile.name}" to ${destLabel}`, async () => {
+            try {
+                await invoke('move_profile', { input: { profileId, newGroupPath: oldGroupPath } });
+                await loadProfiles();
+                showToast(`Moved "${profile.name}" back`, TOAST_DURATION_SHORT);
+            } catch (err) {
+                showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+            }
+        });
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Move a profile to a different group and insert it at an exact position in one gesture
+async function moveProfileToPosition(profileId, targetProfileId, insertBefore) {
+    const profile = profiles.find(p => p.id === profileId);
+    const targetProfile = profiles.find(p => p.id === targetProfileId);
+    if (!profile || !targetProfile) return;
+
+    const oldGroupPath = profile.group_path ?? null;
+    const newGroupPath = targetProfile.group_path ?? null;
+
+    // Capture original display orders for both groups before the move (needed for undo)
+    const originalSourceOrders = profiles
+        .filter(p => (p.group_path ?? null) === oldGroupPath)
+        .map(p => ({ profileId: p.id, displayOrder: p.display_order ?? 0 }));
+    const originalDestOrders = profiles
+        .filter(p => (p.group_path ?? null) === newGroupPath)
+        .map(p => ({ profileId: p.id, displayOrder: p.display_order ?? 0 }));
+
+    // Build the desired order for the target group with the moved profile inserted
+    let targetGroupProfiles = profiles
+        .filter(p => (p.group_path ?? null) === newGroupPath && p.id !== profileId)
+        .slice()
+        .sort((a, b) =>
+            (a.display_order ?? 0) !== (b.display_order ?? 0)
+                ? (a.display_order ?? 0) - (b.display_order ?? 0)
+                : a.name.localeCompare(b.name)
+        );
+
+    const targetIndex = targetGroupProfiles.findIndex(p => p.id === targetProfileId);
+    if (targetIndex === -1) return;
+    targetGroupProfiles.splice(insertBefore ? targetIndex : targetIndex + 1, 0, profile);
+    const orders = targetGroupProfiles.map((p, i) => ({ profileId: p.id, displayOrder: i }));
+
+    try {
+        await invoke('move_profile', { input: { profileId, newGroupPath } });
+        await invoke('reorder_profiles', { orders });
+        await loadProfiles();
+        const destLabel = newGroupPath ? `"${formatGroupPathDisplay(newGroupPath)}"` : 'Ungrouped';
+        showUndoToast(`Moved "${profile.name}" to ${destLabel}`, async () => {
+            try {
+                await invoke('move_profile', { input: { profileId, newGroupPath: oldGroupPath } });
+                // Restore original display orders for both groups
+                const allUndoOrders = [...originalSourceOrders, ...originalDestOrders];
+                if (allUndoOrders.length > 0) {
+                    await invoke('reorder_profiles', { orders: allUndoOrders });
+                }
+                await loadProfiles();
+                showToast(`Moved "${profile.name}" back`, TOAST_DURATION_SHORT);
+            } catch (err) {
+                showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+            }
+        });
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reorder profiles within their group by assigning sequential display_order values
+async function reorderProfilesInGroup(draggedProfileId, targetProfileId, insertBefore) {
+    const draggedProfile = profiles.find(p => p.id === draggedProfileId);
+    if (!draggedProfile) return;
+
+    const groupPath = draggedProfile.group_path ?? null;
+
+    // Get all profiles in this group, sorted by current display_order then name
+    let groupProfiles = profiles
+        .filter(p => (p.group_path ?? null) === groupPath)
+        .slice()
+        .sort((a, b) =>
+            (a.display_order ?? 0) !== (b.display_order ?? 0)
+                ? (a.display_order ?? 0) - (b.display_order ?? 0)
+                : a.name.localeCompare(b.name)
+        );
+
+    // Remove dragged profile from current position, insert at new position
+    groupProfiles = groupProfiles.filter(p => p.id !== draggedProfileId);
+    const targetIndex = groupProfiles.findIndex(p => p.id === targetProfileId);
+    if (targetIndex === -1) return;
+    const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+    groupProfiles.splice(insertIndex, 0, draggedProfile);
+
+    // Assign sequential display_order (0, 1, 2, ...)
+    const orders = groupProfiles.map((p, i) => ({ profileId: p.id, displayOrder: i }));
+
+    try {
+        await invoke('reorder_profiles', { orders });
+        await loadProfiles();
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reset all profiles and groups display_order to 0 (reverts to A-Z alphabetical sort everywhere)
+async function resetAllSortOrders() {
+    const confirmMessage = buildConfirmMessage({
+        lines: [],
+        warnings: ['This will reset the custom sort order for all profiles and groups everywhere.'],
+        question: 'Are you sure you want to reset all sort orders to A-Z?'
+    });
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Reset Sorting Order',
+        okText: 'Reset',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
+    });
+    if (!confirmed) return;
+
+    const profileOrders = profiles.map(p => ({ profileId: p.id, displayOrder: 0 }));
+    const groupOrders = groups.map(g => ({ groupId: g.id, displayOrder: 0 }));
+
+    try {
+        if (profileOrders.length > 0) await invoke('reorder_profiles', { orders: profileOrders });
+        if (groupOrders.length > 0) await invoke('reorder_groups', { orders: groupOrders });
+        await loadGroups();
+        await loadProfiles();
+        showToast('All sort orders reset to A-Z');
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reset sort order to A-Z for a specific group (its direct profiles and immediate child groups)
+async function resetGroupOrder(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Reset display_order to 0 for all profiles directly in this group
+    const groupProfiles = profiles.filter(p => (p.group_path ?? null) === group.path);
+    const profileOrders = groupProfiles.map(p => ({ profileId: p.id, displayOrder: 0 }));
+
+    // Reset display_order to 0 for all immediate child groups
+    const childGroups = groups.filter(g => g.parent_id === groupId);
+    const groupOrders = childGroups.map(g => ({ groupId: g.id, displayOrder: 0 }));
+
+    try {
+        if (profileOrders.length > 0) await invoke('reorder_profiles', { orders: profileOrders });
+        if (groupOrders.length > 0) await invoke('reorder_groups', { orders: groupOrders });
+        await loadGroups();
+        await loadProfiles();
+        showToast(`Sort order reset to A-Z for "${group.name}"`);
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Reorder sibling groups by assigning sequential display_order values
+async function reorderGroupsSiblings(draggedGroupId, targetGroupId, insertBefore) {
+    const draggedGroup = groups.find(g => g.id === draggedGroupId);
+    if (!draggedGroup) return;
+
+    const parentId = draggedGroup.parent_id ?? null;
+
+    // Get all siblings (same parent), excluding Ungrouped (always at bottom)
+    let siblings = groups
+        .filter(g => (g.parent_id ?? null) === parentId && g.name.toLowerCase() !== 'ungrouped')
+        .slice()
+        .sort((a, b) =>
+            (a.display_order ?? 0) !== (b.display_order ?? 0)
+                ? (a.display_order ?? 0) - (b.display_order ?? 0)
+                : a.name.localeCompare(b.name)
+        );
+
+    // Remove dragged group from current position, insert at new position
+    siblings = siblings.filter(g => g.id !== draggedGroupId);
+    const targetIndex = siblings.findIndex(g => g.id === targetGroupId);
+    if (targetIndex === -1) return;
+    const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+    siblings.splice(insertIndex, 0, draggedGroup);
+
+    // Assign sequential display_order (0, 1, 2, ...)
+    const orders = siblings.map((g, i) => ({ groupId: g.id, displayOrder: i }));
+
+    try {
+        await invoke('reorder_groups', { orders });
+        await loadGroups();
+        await loadProfiles();
+    } catch (err) {
+        showToast(cleanErrorMessage(err), TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Clear drag-over highlight state from current group header (cross-group move)
+function clearDragOverState() {
+    if (dragOverGroupId) {
+        document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(dragOverGroupId)}"]`)
+            ?.classList.remove('drag-over');
+        dragOverGroupId = null;
+    }
+}
+
+// Clear within-group profile insertion indicator
+function clearProfileInsertState() {
+    if (dragOverProfileId) {
+        const card = document.querySelector(`.profile-card[data-id="${CSS.escape(dragOverProfileId)}"]`);
+        if (card) card.classList.remove('drag-insert-above', 'drag-insert-below');
+        dragOverProfileId = null;
+    }
+}
+
+// Clear within-group group insertion indicator
+function clearGroupInsertState() {
+    if (dragOverGroupInsertId) {
+        const header = document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(dragOverGroupInsertId)}"]`);
+        if (header) header.classList.remove('drag-insert-above', 'drag-insert-below');
+        dragOverGroupInsertId = null;
+    }
+}
+
+// Returns the valid drop target group ID under the drag cursor, or null.
+// Checks the group header directly (works for all sections including Ungrouped),
+// then falls back to the outer .profile-group div (named groups only — they carry
+// data-group-id on the wrapper, so dropping on a profile card inside the group works).
+function getDragTargetGroupId(target) {
+    const header = target.closest('.profile-group-header');
+    if (header && header.dataset.groupId && header.dataset.groupId !== '__favourites__') {
+        return header.dataset.groupId;
+    }
+    const profileGroup = target.closest('.profile-group[data-group-id]');
+    if (profileGroup && profileGroup.dataset.groupId !== '__favourites__') {
+        return profileGroup.dataset.groupId;
+    }
+    return null;
+}
+
+// Contain text selection to the field it started in.
+// e.target at mousedown can be a raw text node or tiny inline element, so we walk up
+// to the nearest named selectable field. The rAF on mouseup fires after WKWebView has
+// finalised the selection, then clears it if it escaped the origin field.
+// Inputs/textareas are never caught by SELECTABLE_FIELDS so they behave normally.
+const SELECTABLE_FIELDS = '.group-name, .profile-card-title, .profile-info-value';
+
+function setupSelectionContainment() {
+    let selectionOrigin = null;
+
+    function getOrigin(target) {
+        // Inputs/textareas manage their own selection — don't intercept.
+        if (target.matches?.('input, textarea, [contenteditable]')) return null;
+        // Only selectable fields are valid origins; anything else returns null so
+        // the cleanup handler will clear any accidental selection.
+        return (target.closest && target.closest(SELECTABLE_FIELDS)) || null;
+    }
+
+    document.addEventListener('mousedown', (e) => { selectionOrigin = getOrigin(e.target); });
+    document.addEventListener('pointerdown', (e) => { selectionOrigin = getOrigin(e.target); });
+
+    // Real-time containment: clear selection when the cursor leaves the origin element,
+    // with a small tolerance margin so slight overshoot at the end of a text string
+    // doesn't immediately kill the selection.
+    const SELECTION_TOLERANCE_PX = 8;
+    document.addEventListener('mousemove', (e) => {
+        if (!selectionOrigin || !e.buttons) return;
+        if (!selectionOrigin.contains(e.target)) {
+            const rect = selectionOrigin.getBoundingClientRect();
+            const outside =
+                e.clientX < rect.left   - SELECTION_TOLERANCE_PX ||
+                e.clientX > rect.right  + SELECTION_TOLERANCE_PX ||
+                e.clientY < rect.top    - SELECTION_TOLERANCE_PX ||
+                e.clientY > rect.bottom + SELECTION_TOLERANCE_PX;
+            if (outside) window.getSelection()?.removeAllRanges();
+        }
+    });
+
+    // mouseup and pointerup both fire in WKWebView — guard against double execution.
+    let cleanupPending = false;
+
+    function onSelectEnd() {
+        if (cleanupPending) return;
+        cleanupPending = true;
+        const origin = selectionOrigin;
+        selectionOrigin = null;
+        // Fallback cleanup in case mousemove missed anything (e.g. fast movement).
+        requestAnimationFrame(() => {
+            cleanupPending = false;
+            // Inputs manage their own selection — don't interfere.
+            if (document.activeElement?.matches('input, textarea, [contenteditable]')) return;
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            // No valid origin means click was outside a selectable field — clear everything.
+            if (!origin) { sel.removeAllRanges(); return; }
+            const range = sel.getRangeAt(0);
+            if (!origin.contains(range.startContainer) ||
+                !origin.contains(range.endContainer)) {
+                sel.removeAllRanges();
+            }
+        });
+    }
+
+    document.addEventListener('mouseup', onSelectEnd);
+    document.addEventListener('pointerup', onSelectEnd);
+
+    // Block Cmd/Ctrl+A (select all) everywhere except inside inputs and textareas.
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+            const active = document.activeElement;
+            if (!active || !active.matches('input, textarea, [contenteditable]')) {
+                e.preventDefault();
+            }
+        }
+    });
+}
+
+// Setup drag-and-drop: drag profile cards and group headers to reorder,
+// or drag profiles between groups. Uses pointer events for WKWebView compatibility.
+function setupDragAndDrop() {
+    const container = document.getElementById('profiles-list');
+    if (!container) return;
+
+    const DRAG_THRESHOLD = 5; // px of movement before drag activates
+    let pointerStart = null;  // { type: 'profile'|'group', profileId?, groupId?, x, y }
+
+    function onPointerMove(e) {
+        if (!pointerStart) return;
+        const dist = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+
+        if (pointerStart.type === 'profile') {
+            // ── Profile drag ──────────────────────────────────────────────
+            if (!draggingProfileId && dist > DRAG_THRESHOLD) {
+                draggingProfileId = pointerStart.profileId;
+                const sourceProfile = profiles.find(p => p.id === draggingProfileId);
+                const sourceGroupPath = sourceProfile?.group_path ?? null;
+                pointerStart.sourceGroupPath = sourceGroupPath;
+                pointerStart.sourceGroupId = sourceGroupPath
+                    ? (groups.find(g => g.path === sourceGroupPath)?.id ?? null)
+                    : 'ungrouped';
+                document.body.classList.add('drag-in-progress');
+                const card = container.querySelector(`.profile-card[data-id="${CSS.escape(draggingProfileId)}"]`);
+                if (card) card.classList.add('dragging');
+            }
+
+            if (!draggingProfileId) return;
+
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+
+            // Check: cursor over any profile card → show insertion indicator
+            // Works for both same-group reorder and cross-group move-to-position
+            const targetCard = el ? el.closest('.profile-card:not(.favourite-card)') : null;
+            if (targetCard && targetCard.dataset.id !== draggingProfileId) {
+                const targetProfile = profiles.find(p => p.id === targetCard.dataset.id);
+                const draggedProfile = profiles.find(p => p.id === draggingProfileId);
+                if (targetProfile && draggedProfile) {
+                    clearDragOverState();
+                    clearGroupInsertState();
+                    const rect = targetCard.getBoundingClientRect();
+                    const insertBefore = e.clientY < rect.top + rect.height / 2;
+                    const newTargetId = targetCard.dataset.id;
+                    if (newTargetId !== dragOverProfileId || insertBefore !== dragInsertBefore) {
+                        clearProfileInsertState();
+                        dragOverProfileId = newTargetId;
+                        dragInsertBefore = insertBefore;
+                        targetCard.classList.add(insertBefore ? 'drag-insert-above' : 'drag-insert-below');
+                    }
+                    return;
+                }
+            }
+
+            // Fallback: cross-group move (highlight target group header)
+            clearProfileInsertState();
+            const rawGroupId = el ? getDragTargetGroupId(el) : null;
+            const groupId = rawGroupId === pointerStart.sourceGroupId ? null : rawGroupId;
+            if (groupId !== dragOverGroupId) {
+                clearDragOverState();
+                if (groupId) {
+                    dragOverGroupId = groupId;
+                    document.querySelector(`.profile-group-header[data-group-id="${CSS.escape(groupId)}"]`)
+                        ?.classList.add('drag-over');
+                }
+            }
+
+        } else if (pointerStart.type === 'group') {
+            // ── Group drag ────────────────────────────────────────────────
+            if (!draggingGroupId && dist > DRAG_THRESHOLD) {
+                draggingGroupId = pointerStart.groupId;
+                document.body.classList.add('drag-in-progress');
+                const header = container.querySelector(`.profile-group-header[data-group-id="${CSS.escape(draggingGroupId)}"]`);
+                if (header) header.classList.add('dragging');
+            }
+
+            if (!draggingGroupId) return;
+
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            const targetHeader = el ? el.closest('.profile-group-header') : null;
+
+            if (targetHeader && targetHeader.dataset.groupId &&
+                targetHeader.dataset.groupId !== draggingGroupId &&
+                targetHeader.dataset.groupId !== '__favourites__') {
+                const targetGroup = groups.find(g => g.id === targetHeader.dataset.groupId);
+                const draggedGroup = groups.find(g => g.id === draggingGroupId);
+
+                // Only reorder among siblings (same parent_id)
+                if (targetGroup && draggedGroup &&
+                    (targetGroup.parent_id ?? null) === (draggedGroup.parent_id ?? null) &&
+                    targetGroup.name.toLowerCase() !== 'ungrouped') {
+                    const rect = targetHeader.getBoundingClientRect();
+                    const insertBefore = e.clientY < rect.top + rect.height / 2;
+                    const newTargetId = targetHeader.dataset.groupId;
+                    if (newTargetId !== dragOverGroupInsertId || insertBefore !== dragGroupInsertBefore) {
+                        clearGroupInsertState();
+                        dragOverGroupInsertId = newTargetId;
+                        dragGroupInsertBefore = insertBefore;
+                        targetHeader.classList.add(insertBefore ? 'drag-insert-above' : 'drag-insert-below');
+                    }
+                    return;
+                }
+            }
+
+            clearGroupInsertState();
+        }
+    }
+
+    function cancelDrag() {
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+        document.removeEventListener('pointercancel', cancelDrag);
+        if (draggingProfileId) {
+            const card = container.querySelector(`.profile-card[data-id="${CSS.escape(draggingProfileId)}"]`);
+            if (card) card.classList.remove('dragging');
+            document.body.classList.remove('drag-in-progress');
+        }
+        if (draggingGroupId) {
+            const header = container.querySelector(`.profile-group-header[data-group-id="${CSS.escape(draggingGroupId)}"]`);
+            if (header) header.classList.remove('dragging');
+            document.body.classList.remove('drag-in-progress');
+        }
+        draggingProfileId = null;
+        draggingGroupId = null;
+        pointerStart = null;
+        clearDragOverState();
+        clearProfileInsertState();
+        clearGroupInsertState();
+    }
+
+    async function onPointerUp() {
+        const profileId = draggingProfileId;
+        const targetGroupId = dragOverGroupId;
+        const targetProfileId = dragOverProfileId;
+        const insertBeforeProfile = dragInsertBefore;
+        const groupId = draggingGroupId;
+        const targetGroupInsertId = dragOverGroupInsertId;
+        const groupInsertBefore = dragGroupInsertBefore;
+        cancelDrag();
+
+        if (profileId) {
+            if (targetProfileId) {
+                const draggedProfile = profiles.find(p => p.id === profileId);
+                const targetProfile = profiles.find(p => p.id === targetProfileId);
+                const sameGroup = (draggedProfile?.group_path ?? null) === (targetProfile?.group_path ?? null);
+                if (sameGroup) {
+                    // Within-group reorder
+                    await reorderProfilesInGroup(profileId, targetProfileId, insertBeforeProfile);
+                } else {
+                    // Cross-group move with exact position
+                    await moveProfileToPosition(profileId, targetProfileId, insertBeforeProfile);
+                }
+            } else if (targetGroupId) {
+                // Cross-group move onto header → append to bottom
+                const newGroupPath = targetGroupId === 'ungrouped'
+                    ? null
+                    : (groups.find(g => g.id === targetGroupId)?.path ?? null);
+                await moveProfileDragDrop(profileId, newGroupPath);
+            }
+        } else if (groupId && targetGroupInsertId) {
+            // Within-group group reorder
+            await reorderGroupsSiblings(groupId, targetGroupInsertId, groupInsertBefore);
+        }
+    }
+
+    container.addEventListener('pointerdown', e => {
+        if (!dragReorderEnabled) return;
+        if (e.button !== 0) return; // Primary button only
+
+        // Profile card drag
+        const card = e.target.closest('.profile-card:not(.favourite-card)');
+        if (card && !e.target.closest('button')) {
+            pointerStart = { type: 'profile', profileId: card.dataset.id, x: e.clientX, y: e.clientY };
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+            document.addEventListener('pointercancel', cancelDrag);
+            return;
+        }
+
+        // Group header drag
+        const header = e.target.closest('.profile-group-header');
+        if (header && header.dataset.groupId &&
+            header.dataset.groupId !== '__favourites__' &&
+            !e.target.closest('button')) {
+            pointerStart = { type: 'group', groupId: header.dataset.groupId, x: e.clientX, y: e.clientY };
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+            document.addEventListener('pointercancel', cancelDrag);
+        }
+    });
+}
+
 // Save group (create or update)
 async function saveGroup() {
     const groupName = groupNameInput.value.trim();
@@ -9973,12 +11085,19 @@ async function saveGroup() {
             });
             showToast('Group updated successfully!');
         } else {
-            // Create new group
+            // Create new group; when drag reorder is enabled, append at the bottom of its siblings
+            let displayOrder = 0;
+            if (dragReorderEnabled) {
+                const siblings = groups.filter(g => (g.parent_id ?? null) === (parentId ?? null));
+                const maxOrder = siblings.reduce((m, g) => Math.max(m, g.display_order ?? 0), 0);
+                displayOrder = siblings.length > 0 ? maxOrder + 1 : 0;
+            }
             await invoke('create_group', {
                 input: {
                     name: groupName,
                     parent_id: parentId,
-                    icon: null
+                    icon: null,
+                    display_order: displayOrder
                 }
             });
             showToast('Group created successfully!');
@@ -10027,13 +11146,6 @@ async function connectToProfile(id) {
         console.error('Failed to connect:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
-}
-
-// Utility: Escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // Utility: Clean up error messages to be more user-friendly

@@ -200,6 +200,7 @@ pub struct ProfileWithMetadata {
     // Metadata fields
     pub icon: Option<String>,
     pub is_favorite: bool,
+    pub display_order: i32,
     // Tags (tag names, not IDs, for easier frontend use)
     pub tags: Vec<String>,
 }
@@ -1131,10 +1132,11 @@ impl Database {
         // First, get all profiles with their metadata in one query
         let mut stmt = conn.prepare(
             "SELECT p.id, p.name, p.description, p.host, p.port, p.username, p.auth_method,
-                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0)
+                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0),
+                    COALESCE(m.display_order, 0)
              FROM profiles p
              LEFT JOIN profile_metadata m ON p.id = m.profile_id
-             ORDER BY p.name"
+             ORDER BY COALESCE(m.display_order, 0), p.name"
         )?;
 
         let profiles_with_metadata = stmt
@@ -1159,6 +1161,7 @@ impl Database {
                         profile,
                         icon: row.get(9)?,
                         is_favorite: row.get::<_, i32>(10)? != 0,
+                        display_order: row.get(11)?,
                         tags: Vec::new(), // Will populate below
                     }
                 ))
@@ -1192,9 +1195,9 @@ impl Database {
             }
         }
 
-        // Convert back to Vec and sort by name
+        // Convert back to Vec and sort by display_order then name
         let mut profiles: Vec<ProfileWithMetadata> = profiles_map.into_values().collect();
-        profiles.sort_by(|a, b| a.profile.name.cmp(&b.profile.name));
+        profiles.sort_by(|a, b| a.display_order.cmp(&b.display_order).then(a.profile.name.cmp(&b.profile.name)));
 
         Ok(profiles)
     }
@@ -1296,6 +1299,65 @@ impl Database {
         })?;
 
         groups.next().transpose()
+    }
+
+    fn get_group_by_path(&self, path: &str) -> SqlResult<Option<Group>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, parent_id, path, icon, is_favorite, display_order, created_at, updated_at
+             FROM groups WHERE path = ?1"
+        )?;
+
+        let mut groups = stmt.query_map([path], |row| {
+            Ok(Group {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                parent_id: row.get(2)?,
+                path: row.get(3)?,
+                icon: row.get(4)?,
+                is_favorite: row.get::<_, i32>(5)? != 0,
+                display_order: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+
+        groups.next().transpose()
+    }
+
+    fn move_profile_to_group(&self, profile_id: &str, new_group_path: Option<&str>) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE profiles SET group_path = ?1 WHERE id = ?2",
+            rusqlite::params![new_group_path, profile_id],
+        )?;
+        Ok(())
+    }
+
+    fn reorder_profiles_db(&self, orders: &[ProfileOrder]) -> SqlResult<()> {
+        let mut conn = self.conn.lock().expect("Database lock poisoned");
+        let tx = conn.transaction()?;
+        for order in orders {
+            tx.execute(
+                "UPDATE profile_metadata SET display_order = ?1 WHERE profile_id = ?2",
+                (&order.display_order, &order.profile_id),
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn reorder_groups_db(&self, orders: &[GroupOrder]) -> SqlResult<()> {
+        let mut conn = self.conn.lock().expect("Database lock poisoned");
+        let tx = conn.transaction()?;
+        for order in orders {
+            tx.execute(
+                "UPDATE groups SET display_order = ?1 WHERE id = ?2",
+                (&order.display_order, &order.group_id),
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     fn create_group(&self, group: &Group) -> SqlResult<()> {
@@ -1900,6 +1962,8 @@ struct SettingsData {
     include_passwords_in_exports: bool,
     #[serde(default)]
     require_encryption_for_all_exports: bool,
+    #[serde(default)]
+    expanded_card_actions_enabled: bool,
 }
 
 fn default_include_passwords() -> bool {
@@ -2200,6 +2264,8 @@ struct CreateProfileInput {
     key_path: Option<String>,
     password: Option<String>,
     group_path: Option<String>, // v0.7.0+: Semantic path to group
+    #[serde(default)]
+    display_order: Option<i32>,
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -2215,6 +2281,7 @@ impl std::fmt::Debug for CreateProfileInput {
             .field("key_path", &self.key_path)
             .field("password", &"[REDACTED]")
             .field("group_path", &self.group_path)
+            .field("display_order", &self.display_order)
             .finish()
     }
 }
@@ -2268,6 +2335,15 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
     // Default: icon='server', is_favorite=false, display_order=0
     db.upsert_profile_metadata_db(&id, Some("server".to_string()), false)
         .map_err(|e| format!("Failed to create profile metadata: {}", e))?;
+
+    // Set display_order if provided (used when drag reorder is enabled)
+    if let Some(order) = profile.display_order {
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE profile_metadata SET display_order = ?1 WHERE profile_id = ?2",
+            (order, &id),
+        ).map_err(|e| format!("Failed to set display_order: {}", e))?;
+    }
 
     // Store password in keychain if provided
     if profile.auth_method == "password" {
@@ -2395,6 +2471,8 @@ struct CreateGroupInput {
     name: String,
     parent_id: Option<String>,
     icon: Option<String>,
+    #[serde(default)]
+    display_order: Option<i32>,
 }
 
 #[tauri::command]
@@ -2430,7 +2508,7 @@ fn create_group(db: State<Database>, input: CreateGroupInput) -> Result<String, 
         path,
         icon: input.icon,
         is_favorite: false,
-        display_order: 0,
+        display_order: input.display_order.unwrap_or(0),
         created_at: now.clone(),
         updated_at: now,
     };
@@ -2622,6 +2700,7 @@ fn delete_group(db: State<Database>, input: DeleteGroupInput) -> Result<(), Stri
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MoveGroupInput {
     id: String,
     new_parent_id: Option<String>,
@@ -2727,6 +2806,72 @@ fn move_group(db: State<Database>, input: MoveGroupInput) -> Result<(), String> 
     ).map_err(|e| format!("Failed to cascade update profile paths: {}", e))?;
 
     Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveProfileInput {
+    profile_id: String,
+    new_group_path: Option<String>,
+}
+
+#[tauri::command]
+fn move_profile(db: State<Database>, input: MoveProfileInput) -> Result<(), String> {
+    // Validate profile exists
+    db.get_profile_by_id(&input.profile_id)
+        .map_err(|e| format!("Failed to get profile: {}", e))?
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    // If moving to a group, validate the path format and that the group exists
+    if let Some(ref path) = input.new_group_path {
+        validate_group(path)?;
+        db.get_group_by_path(path)
+            .map_err(|e| format!("Failed to get group: {}", e))?
+            .ok_or_else(|| "Group not found".to_string())?;
+    }
+
+    db.move_profile_to_group(&input.profile_id, input.new_group_path.as_deref())
+        .map_err(|e| format!("Failed to move profile: {}", e))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileOrder {
+    profile_id: String,
+    display_order: i32,
+}
+
+#[tauri::command]
+fn reorder_profiles(db: State<Database>, orders: Vec<ProfileOrder>) -> Result<(), String> {
+    if orders.len() > 500 {
+        return Err("Too many items to reorder at once (max 500)".to_string());
+    }
+    for order in &orders {
+        if order.display_order < 0 {
+            return Err(format!("display_order must be non-negative, got {}", order.display_order));
+        }
+    }
+    db.reorder_profiles_db(&orders).map_err(|e| e.to_string())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GroupOrder {
+    group_id: String,
+    display_order: i32,
+}
+
+#[tauri::command]
+fn reorder_groups(db: State<Database>, orders: Vec<GroupOrder>) -> Result<(), String> {
+    if orders.len() > 500 {
+        return Err("Too many items to reorder at once (max 500)".to_string());
+    }
+    for order in &orders {
+        if order.display_order < 0 {
+            return Err(format!("display_order must be non-negative, got {}", order.display_order));
+        }
+    }
+    db.reorder_groups_db(&orders).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -3579,6 +3724,7 @@ fn export_settings(
     collapsed_groups: Option<Vec<String>>,
     include_passwords_in_exports: bool,
     require_encryption_for_all_exports: bool,
+    expanded_card_actions_enabled: bool,
     terminal_preference: String,
     use_tabs_in_terminal: Option<bool>,
     minimize_on_launch: Option<bool>,
@@ -3607,6 +3753,7 @@ fn export_settings(
         collapsed_groups,
         include_passwords_in_exports,
         require_encryption_for_all_exports,
+        expanded_card_actions_enabled,
     };
 
     let settings_os_specific = SettingsOsSpecific {
@@ -4843,7 +4990,7 @@ fn launch_macos_default_terminal(
              activate\n\
              if (count of windows) > 0 then\n\
                  tell application \"System Events\" to keystroke \"t\" using command down\n\
-                 delay 0.1\n\
+                 delay 0.3\n\
                  do script \"{}\" in front window\n\
              else\n\
                  do script \"{}\"\n\
@@ -4861,11 +5008,25 @@ fn launch_macos_default_terminal(
         )
     };
 
-    Command::new("osascript")
+    let output = Command::new("osascript")
         .arg("-e")
         .arg(applescript)
-        .spawn()
+        .output()
         .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Check for macOS Accessibility/TCC permission errors (System Events blocked)
+        if use_tabs && (stderr.contains("Not authorized") || stderr.contains("-1743")) {
+            return Err(
+                "Could not open new tab — macOS may have blocked Terminal automation. \
+                 Go to System Settings → Privacy & Security → Accessibility \
+                 and toggle SSH Profile Manager off and on to restore access."
+                    .to_string(),
+            );
+        }
+        return Err("Failed to launch terminal — please check your terminal settings.".to_string());
+    }
 
     Ok(())
 }
@@ -5310,6 +5471,9 @@ pub fn run() {
             update_group,
             delete_group,
             move_group,
+            move_profile,
+            reorder_profiles,
+            reorder_groups,
             get_group_tree,
             export_profiles,
             import_profiles,
