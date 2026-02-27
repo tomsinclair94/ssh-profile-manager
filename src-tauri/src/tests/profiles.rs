@@ -1,4 +1,5 @@
 use super::helpers::*;
+use crate::{ProfileOrder};
 
 #[test]
 fn test_create_profile_success() {
@@ -202,12 +203,12 @@ fn test_reorder_profiles() {
     db.upsert_profile_metadata_db(&p3.id, Some("server".to_string()), false).unwrap();
 
     // Assign reverse alphabetical order: Gamma=0, Beta=1, Alpha=2
-    {
-        let conn = db.conn.lock().unwrap();
-        conn.execute("UPDATE profile_metadata SET display_order = 0 WHERE profile_id = ?1", [&p3.id]).unwrap();
-        conn.execute("UPDATE profile_metadata SET display_order = 1 WHERE profile_id = ?1", [&p2.id]).unwrap();
-        conn.execute("UPDATE profile_metadata SET display_order = 2 WHERE profile_id = ?1", [&p1.id]).unwrap();
-    }
+    let orders = vec![
+        ProfileOrder { profile_id: p3.id.clone(), display_order: 0 },
+        ProfileOrder { profile_id: p2.id.clone(), display_order: 1 },
+        ProfileOrder { profile_id: p1.id.clone(), display_order: 2 },
+    ];
+    db.reorder_profiles_db(&orders).unwrap();
 
     // Verify sorted result: Gamma (0) first, then Beta (1), then Alpha (2)
     let profiles = db.get_all_profiles_with_metadata().unwrap();

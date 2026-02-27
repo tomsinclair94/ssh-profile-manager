@@ -1,4 +1,5 @@
 use super::helpers::*;
+use crate::{GroupOrder};
 
 #[test]
 fn test_create_group_success() {
@@ -291,12 +292,12 @@ fn test_reorder_groups() {
     db.create_group(&g3).unwrap();
 
     // Assign reverse alphabetical order: Gamma=0, Beta=1, Alpha=2
-    {
-        let conn = db.conn.lock().unwrap();
-        conn.execute("UPDATE groups SET display_order = 0 WHERE id = ?1", [&g3.id]).unwrap();
-        conn.execute("UPDATE groups SET display_order = 1 WHERE id = ?1", [&g2.id]).unwrap();
-        conn.execute("UPDATE groups SET display_order = 2 WHERE id = ?1", [&g1.id]).unwrap();
-    }
+    let orders = vec![
+        GroupOrder { group_id: g3.id.clone(), display_order: 0 },
+        GroupOrder { group_id: g2.id.clone(), display_order: 1 },
+        GroupOrder { group_id: g1.id.clone(), display_order: 2 },
+    ];
+    db.reorder_groups_db(&orders).unwrap();
 
     // Verify display_order values are persisted correctly
     let groups = db.get_all_groups().unwrap();

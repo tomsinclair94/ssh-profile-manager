@@ -1334,6 +1334,32 @@ impl Database {
         Ok(())
     }
 
+    fn reorder_profiles_db(&self, orders: &[ProfileOrder]) -> SqlResult<()> {
+        let mut conn = self.conn.lock().expect("Database lock poisoned");
+        let tx = conn.transaction()?;
+        for order in orders {
+            tx.execute(
+                "UPDATE profile_metadata SET display_order = ?1 WHERE profile_id = ?2",
+                (&order.display_order, &order.profile_id),
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn reorder_groups_db(&self, orders: &[GroupOrder]) -> SqlResult<()> {
+        let mut conn = self.conn.lock().expect("Database lock poisoned");
+        let tx = conn.transaction()?;
+        for order in orders {
+            tx.execute(
+                "UPDATE groups SET display_order = ?1 WHERE id = ?2",
+                (&order.display_order, &order.group_id),
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     fn create_group(&self, group: &Group) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
@@ -2815,14 +2841,15 @@ struct ProfileOrder {
 
 #[tauri::command]
 fn reorder_profiles(db: State<Database>, orders: Vec<ProfileOrder>) -> Result<(), String> {
-    let conn = db.conn.lock().expect("Database lock poisoned");
-    for order in &orders {
-        conn.execute(
-            "UPDATE profile_metadata SET display_order = ?1 WHERE profile_id = ?2",
-            (&order.display_order, &order.profile_id),
-        ).map_err(|e| e.to_string())?;
+    if orders.len() > 500 {
+        return Err("Too many items to reorder at once (max 500)".to_string());
     }
-    Ok(())
+    for order in &orders {
+        if order.display_order < 0 {
+            return Err(format!("display_order must be non-negative, got {}", order.display_order));
+        }
+    }
+    db.reorder_profiles_db(&orders).map_err(|e| e.to_string())
 }
 
 #[derive(Deserialize)]
@@ -2833,14 +2860,15 @@ struct GroupOrder {
 
 #[tauri::command]
 fn reorder_groups(db: State<Database>, orders: Vec<GroupOrder>) -> Result<(), String> {
-    let conn = db.conn.lock().expect("Database lock poisoned");
-    for order in &orders {
-        conn.execute(
-            "UPDATE groups SET display_order = ?1 WHERE id = ?2",
-            (&order.display_order, &order.group_id),
-        ).map_err(|e| e.to_string())?;
+    if orders.len() > 500 {
+        return Err("Too many items to reorder at once (max 500)".to_string());
     }
-    Ok(())
+    for order in &orders {
+        if order.display_order < 0 {
+            return Err(format!("display_order must be non-negative, got {}", order.display_order));
+        }
+    }
+    db.reorder_groups_db(&orders).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

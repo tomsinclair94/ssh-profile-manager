@@ -10553,6 +10553,14 @@ async function moveProfileToPosition(profileId, targetProfileId, insertBefore) {
     const oldGroupPath = profile.group_path ?? null;
     const newGroupPath = targetProfile.group_path ?? null;
 
+    // Capture original display orders for both groups before the move (needed for undo)
+    const originalSourceOrders = profiles
+        .filter(p => (p.group_path ?? null) === oldGroupPath)
+        .map(p => ({ profile_id: p.id, display_order: p.display_order ?? 0 }));
+    const originalDestOrders = profiles
+        .filter(p => (p.group_path ?? null) === newGroupPath)
+        .map(p => ({ profile_id: p.id, display_order: p.display_order ?? 0 }));
+
     // Build the desired order for the target group with the moved profile inserted
     let targetGroupProfiles = profiles
         .filter(p => (p.group_path ?? null) === newGroupPath && p.id !== profileId)
@@ -10576,6 +10584,11 @@ async function moveProfileToPosition(profileId, targetProfileId, insertBefore) {
         showUndoToast(`Moved "${profile.name}" to ${destLabel}`, async () => {
             try {
                 await invoke('move_profile', { input: { profileId, newGroupPath: oldGroupPath } });
+                // Restore original display orders for both groups
+                const allUndoOrders = [...originalSourceOrders, ...originalDestOrders];
+                if (allUndoOrders.length > 0) {
+                    await invoke('reorder_profiles', { orders: allUndoOrders });
+                }
                 await loadProfiles();
                 showToast(`Moved "${profile.name}" back`, TOAST_DURATION_SHORT);
             } catch (err) {
