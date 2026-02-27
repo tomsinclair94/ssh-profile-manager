@@ -10556,10 +10556,10 @@ async function moveProfileToPosition(profileId, targetProfileId, insertBefore) {
     // Capture original display orders for both groups before the move (needed for undo)
     const originalSourceOrders = profiles
         .filter(p => (p.group_path ?? null) === oldGroupPath)
-        .map(p => ({ profile_id: p.id, display_order: p.display_order ?? 0 }));
+        .map(p => ({ profileId: p.id, displayOrder: p.display_order ?? 0 }));
     const originalDestOrders = profiles
         .filter(p => (p.group_path ?? null) === newGroupPath)
-        .map(p => ({ profile_id: p.id, display_order: p.display_order ?? 0 }));
+        .map(p => ({ profileId: p.id, displayOrder: p.display_order ?? 0 }));
 
     // Build the desired order for the target group with the moved profile inserted
     let targetGroupProfiles = profiles
@@ -10574,7 +10574,7 @@ async function moveProfileToPosition(profileId, targetProfileId, insertBefore) {
     const targetIndex = targetGroupProfiles.findIndex(p => p.id === targetProfileId);
     if (targetIndex === -1) return;
     targetGroupProfiles.splice(insertBefore ? targetIndex : targetIndex + 1, 0, profile);
-    const orders = targetGroupProfiles.map((p, i) => ({ profile_id: p.id, display_order: i }));
+    const orders = targetGroupProfiles.map((p, i) => ({ profileId: p.id, displayOrder: i }));
 
     try {
         await invoke('move_profile', { input: { profileId, newGroupPath } });
@@ -10625,7 +10625,7 @@ async function reorderProfilesInGroup(draggedProfileId, targetProfileId, insertB
     groupProfiles.splice(insertIndex, 0, draggedProfile);
 
     // Assign sequential display_order (0, 1, 2, ...)
-    const orders = groupProfiles.map((p, i) => ({ profile_id: p.id, display_order: i }));
+    const orders = groupProfiles.map((p, i) => ({ profileId: p.id, displayOrder: i }));
 
     try {
         await invoke('reorder_profiles', { orders });
@@ -10650,8 +10650,8 @@ async function resetAllSortOrders() {
     });
     if (!confirmed) return;
 
-    const profileOrders = profiles.map(p => ({ profile_id: p.id, display_order: 0 }));
-    const groupOrders = groups.map(g => ({ group_id: g.id, display_order: 0 }));
+    const profileOrders = profiles.map(p => ({ profileId: p.id, displayOrder: 0 }));
+    const groupOrders = groups.map(g => ({ groupId: g.id, displayOrder: 0 }));
 
     try {
         if (profileOrders.length > 0) await invoke('reorder_profiles', { orders: profileOrders });
@@ -10671,11 +10671,11 @@ async function resetGroupOrder(groupId) {
 
     // Reset display_order to 0 for all profiles directly in this group
     const groupProfiles = profiles.filter(p => (p.group_path ?? null) === group.path);
-    const profileOrders = groupProfiles.map(p => ({ profile_id: p.id, display_order: 0 }));
+    const profileOrders = groupProfiles.map(p => ({ profileId: p.id, displayOrder: 0 }));
 
     // Reset display_order to 0 for all immediate child groups
     const childGroups = groups.filter(g => g.parent_id === groupId);
-    const groupOrders = childGroups.map(g => ({ group_id: g.id, display_order: 0 }));
+    const groupOrders = childGroups.map(g => ({ groupId: g.id, displayOrder: 0 }));
 
     try {
         if (profileOrders.length > 0) await invoke('reorder_profiles', { orders: profileOrders });
@@ -10713,7 +10713,7 @@ async function reorderGroupsSiblings(draggedGroupId, targetGroupId, insertBefore
     siblings.splice(insertIndex, 0, draggedGroup);
 
     // Assign sequential display_order (0, 1, 2, ...)
-    const orders = siblings.map((g, i) => ({ group_id: g.id, display_order: i }));
+    const orders = siblings.map((g, i) => ({ groupId: g.id, displayOrder: i }));
 
     try {
         await invoke('reorder_groups', { orders });
@@ -11127,13 +11127,6 @@ async function connectToProfile(id) {
         console.error('Failed to connect:', error);
         showToast(cleanErrorMessage(error), TOAST_DURATION_LONG, 'error');
     }
-}
-
-// Utility: Escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // Utility: Clean up error messages to be more user-friendly

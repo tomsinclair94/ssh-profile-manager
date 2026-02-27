@@ -2834,6 +2834,7 @@ fn move_profile(db: State<Database>, input: MoveProfileInput) -> Result<(), Stri
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ProfileOrder {
     profile_id: String,
     display_order: i32,
@@ -2853,6 +2854,7 @@ fn reorder_profiles(db: State<Database>, orders: Vec<ProfileOrder>) -> Result<()
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct GroupOrder {
     group_id: String,
     display_order: i32,
