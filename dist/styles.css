@@ -48,6 +48,14 @@ input, textarea, [contenteditable],
     user-select: text;
 }
 
+/* Suppress text selection on all elements while a drag is in progress */
+body.drag-in-progress .group-name,
+body.drag-in-progress .profile-card-title,
+body.drag-in-progress .profile-info-value {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 .app-container {
     height: 100vh;
     display: flex;
@@ -2010,11 +2018,14 @@ form {
     margin-left: 0; /* Minimal spacing to match inline labels */
 }
 
-/* About Section */
-.settings-about {
+/* Divider between settings sections */
+.settings-section + .settings-section {
     border-top: 1px solid var(--border-color);
     padding-top: 24px;
-    margin-top: 8px;
+}
+
+/* About Section */
+.settings-about {
     margin-bottom: 0; /* Remove default margin */
     padding-bottom: 0; /* No extra padding - settings-content already has 24px */
 }
@@ -2588,6 +2599,27 @@ body.drag-in-progress .profile-group-content {
     background: var(--primary-color, #3b82f6);
     border-radius: 2px;
     z-index: 10;
+}
+
+/* Ungrouped empty drop zone — hidden by default, revealed during drag */
+.profile-group--ungrouped-empty {
+    display: none;
+}
+
+body.drag-in-progress .profile-group--ungrouped-empty {
+    display: block;
+}
+
+body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
+    border-style: dashed;
+    opacity: 0.7;
+}
+
+.ungrouped-drop-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+    font-style: italic;
 }
 
 

@@ -3879,10 +3879,8 @@ function renderProfiles(filter = '') {
         html += renderGroupNode(group, profilesByGroupPath, 0, filter);
     });
 
-    // Render ungrouped profiles
-    if (profilesByGroupPath[null] && profilesByGroupPath[null].length > 0) {
-        html += renderUngroupedProfiles(profilesByGroupPath[null]);
-    }
+    // Render ungrouped profiles (always rendered — acts as drop zone during drag when empty)
+    html += renderUngroupedProfiles(profilesByGroupPath[null] ?? []);
 
     profilesList.innerHTML = html;
     attachProfileEventListeners();
@@ -3999,6 +3997,18 @@ function renderGroupNode(group, profilesByGroupPath, depth, filter = '') {
 
 // Render ungrouped profiles
 function renderUngroupedProfiles(ungroupedProfiles) {
+    // When empty: render a hidden drop zone that becomes visible during drag
+    if (ungroupedProfiles.length === 0) {
+        return `
+        <div class="profile-group profile-group--ungrouped-empty">
+            <div class="profile-group-header profile-group-header-ungrouped" data-group-id="ungrouped">
+                <span class="group-name">Ungrouped</span>
+                <span class="ungrouped-drop-hint">Drop here to ungroup</span>
+            </div>
+        </div>
+    `;
+    }
+
     const isCollapsed = collapsedGroups.has('ungrouped');
     const chevron = isCollapsed ? '▶' : '▼';
 
@@ -4773,6 +4783,14 @@ function toggleExpandCollapseAll() {
 // Setup event listeners
 function setupEventListeners() {
     debug.log('Setting up event listeners...');
+
+    // Focus trap safety net — catches focus escaping the Settings modal (e.g. WKWebView native Tab)
+    document.addEventListener('focusin', (e) => {
+        if (getTopmostModal() !== 'settings') return;
+        if (settingsModal.contains(e.target)) return;
+        const items = getSettingsModalTabbableItems();
+        if (items.length > 0) items[0].focus();
+    });
 
     searchInput.addEventListener('input', (e) => {
         renderProfiles(e.target.value);
@@ -10615,7 +10633,7 @@ async function resetAllSortOrders() {
         title: 'Reset Sorting Order',
         okText: 'Reset',
         cancelText: 'Cancel',
-        okClass: 'btn-secondary'
+        okClass: 'btn-danger'
     });
     if (!confirmed) return;
 
