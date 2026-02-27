@@ -1,8 +1,8 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: TBD
+## Next Version: TBD
 
-**Previous Release:** v0.8.0 (2026-02-27) ✅
+**Latest Release:** v0.8.0 (2026-02-27) ✅
 
 ---
 
@@ -73,8 +73,8 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 ### Low Priority
 - Cloud sync
 - SSH config import
-- Custom icon upload (v0.7.0 includes predefined icons)
-- Tag hierarchy (v0.7.0 includes flat tags)
+- Custom icon upload
+- Tag hierarchy
 
 ---
 
