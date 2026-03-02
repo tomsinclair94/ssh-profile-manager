@@ -1,8 +1,20 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Next Version: TBD
+## Current Version: v0.9.0 — In Development
 
 **Latest Release:** v0.8.0 (2026-02-27) ✅
+**Branch:** `v0.9.0-dev`
+**Focus:** SSH Password Auth & Central Passwords
+
+### Phase Progress
+- [x] Phase 1: SSH_ASKPASS Infrastructure — passwords now passed automatically via SSH_ASKPASS mechanism ✅
+- [ ] Phase 2: Central Passwords Backend
+- [ ] Phase 3: Export/Import for Central Passwords
+- [ ] Phase 4: Central Passwords Manager UI
+- [ ] Phase 5: Profile Modal Updates
+- [ ] Phase 6: Tests
+
+See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.
 
 ---
 

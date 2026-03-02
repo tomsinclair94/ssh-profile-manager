@@ -7128,7 +7128,7 @@ function populateTerminalOptions() {
     if (os === 'macos') {
         terminalSelect.innerHTML = `
             <option value="default">Default (Terminal.app)</option>
-            <option value="custom">Custom Terminal</option>
+            <option value="custom">Custom Terminal (unsupported)</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
         if (helpText) {
@@ -7140,7 +7140,7 @@ function populateTerminalOptions() {
             <option value="cmd">Command Prompt</option>
             <option value="powershell">PowerShell</option>
             <option value="windows_terminal">Windows Terminal</option>
-            <option value="custom">Custom Terminal</option>
+            <option value="custom">Custom Terminal (unsupported)</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
         if (helpText) {

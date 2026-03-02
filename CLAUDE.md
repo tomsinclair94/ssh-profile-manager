@@ -24,7 +24,7 @@ bun run build    # Production build
 ## Current Status
 
 **Latest Release:** v0.8.0 (2026-02-27) ✅
-**Next Release:** TBD
+**In Development:** v0.9.0 — SSH Password Auth & Central Passwords (branch: `v0.9.0-dev`)
 
 **v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
@@ -339,13 +339,14 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Help modal accessible with `?` key
 - Platform-aware (Cmd on macOS, Ctrl on Windows/Linux)
 
-**Password Authentication Limitations:**
-- Passwords stored securely in system keychain for reference and export purposes
-- **IMPORTANT:** Stored passwords are NOT automatically passed to SSH during connection
-- Users must manually enter passwords when prompted by SSH in the terminal
-- Automatic password passing would require additional tools (e.g., `sshpass`) which introduce security risks
-- For automated connections, SSH key authentication is strongly recommended
-- Future versions may implement SSH agent integration for improved password handling
+**Password Authentication (v0.9.0+):**
+- Passwords stored securely in system keychain
+- Passed automatically to SSH via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force` — no manual entry required
+- `connect_ssh` creates a temp password file (`0600`) + askpass script (`0700`); both securely deleted after 10s
+- Injection strategy varies by terminal: inline env vars (macOS default, cmd, PowerShell), script prepend (macOS custom, Windows custom), temp `.bat` + `cmd /c` (Windows Terminal, Windows default wt path)
+- If no password stored, a clear error toast is shown directing the user to edit the profile
+- Central Passwords (shared credentials for multiple profiles) — v0.9.0 Phase 2+
+- SSH key authentication remains recommended for automated/scripted connections
 
 ## Database Schema
 ```sql

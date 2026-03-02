@@ -4877,11 +4877,98 @@ fn escape_bash_double_quote(s: &str) -> String {
      .replace('`', "\\`")
 }
 
+// Holds the paths of temporary askpass files created for password-auth connections
+struct AskpassSetup {
+    askpass_script_path: std::path::PathBuf,
+    pwd_file_path: std::path::PathBuf,
+}
+
+// Creates a temporary password file and askpass script for SSH_ASKPASS mechanism.
+// The password file is written with restricted permissions (0600 on Unix).
+// The askpass script simply cats the password file to stdout when invoked by SSH.
+fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
+    use std::fs;
+
+    let temp_dir = std::env::temp_dir();
+    let uuid = Uuid::new_v4();
+
+    // Write password to temp file with restricted permissions
+    let pwd_file_path = temp_dir.join(format!("spm-pwd-{}", uuid));
+    fs::write(&pwd_file_path, password)
+        .map_err(|e| format!("Failed to create temporary password file: {}", e))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&pwd_file_path)
+            .map_err(|e| format!("Failed to get password file permissions: {}", e))?
+            .permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(&pwd_file_path, perms)
+            .map_err(|e| format!("Failed to set password file permissions: {}", e))?;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        // Restrict file to current user only via icacls
+        let path_str = pwd_file_path.to_string_lossy().to_string();
+        let username = std::env::var("USERNAME").unwrap_or_default();
+        // Remove inherited permissions, then grant current user full control only
+        let _ = Command::new("icacls")
+            .args([&path_str, "/inheritance:r", "/grant:r", &format!("{}:F", username)])
+            .output();
+    }
+
+    // Write platform-specific askpass script
+    #[cfg(unix)]
+    let askpass_script_path = {
+        let script_path = temp_dir.join(format!("spm-askpass-{}.sh", uuid));
+        let pwd_path_escaped = shell_escape(&pwd_file_path.to_string_lossy());
+        let script_content = format!("#!/bin/sh\ncat {}\n", pwd_path_escaped);
+        fs::write(&script_path, &script_content)
+            .map_err(|e| format!("Failed to create askpass script: {}", e))?;
+
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script_path)
+            .map_err(|e| format!("Failed to get askpass script permissions: {}", e))?
+            .permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&script_path, perms)
+            .map_err(|e| format!("Failed to set askpass script permissions: {}", e))?;
+
+        script_path
+    };
+
+    #[cfg(windows)]
+    let askpass_script_path = {
+        let script_path = temp_dir.join(format!("spm-askpass-{}.bat", uuid));
+        let pwd_path_str = pwd_file_path.to_string_lossy().to_string();
+        let script_content = format!("@echo off\r\ntype \"{}\"\r\n", pwd_path_str);
+        fs::write(&script_path, &script_content)
+            .map_err(|e| format!("Failed to create askpass script: {}", e))?;
+        script_path
+    };
+
+    Ok(AskpassSetup { askpass_script_path, pwd_file_path })
+}
+
+// Spawns a background thread to securely delete askpass temp files after a delay.
+// The 10s delay ensures SSH has had time to invoke the script and read the password.
+fn schedule_askpass_cleanup(setup: AskpassSetup) {
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        delete_file_with_overwrite(&setup.pwd_file_path);
+        delete_file_with_overwrite(&setup.askpass_script_path);
+    });
+}
+
 #[cfg(target_os = "macos")]
 fn launch_macos_custom_terminal(
     custom_path: &str,
     ssh_args: &[String],
     profile_name: &str,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
     use std::fs;
@@ -4893,14 +4980,24 @@ fn launch_macos_custom_terminal(
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
 
+    let askpass_env = if let Some(setup) = askpass_setup {
+        format!(
+            "export SSH_ASKPASS={}\nexport SSH_ASKPASS_REQUIRE=force\n",
+            shell_escape(&setup.askpass_script_path.to_string_lossy())
+        )
+    } else {
+        String::new()
+    };
+
     let script_content = format!(
         "#!/bin/bash\n\
          echo \"Connecting to {}...\"\n\
-         ssh {}\n\
+         {}ssh {}\n\
          echo \"\"\n\
          echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
          exec bash\n",
         escape_bash_double_quote(profile_name),
+        askpass_env,
         ssh_args.iter()
             .map(|arg| shell_escape(arg))
             .collect::<Vec<_>>()
@@ -4971,6 +5068,7 @@ fn delete_file_with_overwrite(path: &std::path::Path) {
 fn launch_macos_default_terminal(
     ssh_args: &[String],
     use_tabs: bool,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
@@ -4978,8 +5076,16 @@ fn launch_macos_default_terminal(
         .map(|arg| shell_escape(arg))
         .collect();
 
-    // Build command with auto-close
-    let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
+    // Build command with auto-close; prefix env vars inline for password auth
+    let ssh_cmd_no_exit = if let Some(setup) = askpass_setup {
+        format!(
+            "SSH_ASKPASS={} SSH_ASKPASS_REQUIRE=force ssh {}",
+            shell_escape(&setup.askpass_script_path.to_string_lossy()),
+            escaped_args.join(" ")
+        )
+    } else {
+        format!("ssh {}", escaped_args.join(" "))
+    };
     let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
     let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
     let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
@@ -5032,29 +5138,47 @@ fn launch_macos_default_terminal(
 }
 
 #[cfg(target_os = "windows")]
-fn launch_windows_cmd(ssh_args: &[String]) -> Result<(), String> {
+fn launch_windows_cmd(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>) -> Result<(), String> {
     use std::process::Command;
 
-    // Build SSH command with explicit exit to ensure auto-close
-    let mut full_command = vec!["ssh".to_string()];
-    full_command.extend(ssh_args.iter().cloned());
-    full_command.push("&".to_string());
-    full_command.push("exit".to_string());
+    if let Some(setup) = askpass_setup {
+        // Inline set chain — no temp file needed for cmd.exe
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let compound = format!(
+            "set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+            askpass_path,
+            ssh_args.join(" ")
+        );
+        Command::new("cmd")
+            .arg("/c")
+            .arg("start")
+            .arg("cmd")
+            .arg("/c")
+            .arg(&compound)
+            .spawn()
+            .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+    } else {
+        // Build SSH command with explicit exit to ensure auto-close
+        let mut full_command = vec!["ssh".to_string()];
+        full_command.extend(ssh_args.iter().cloned());
+        full_command.push("&".to_string());
+        full_command.push("exit".to_string());
 
-    Command::new("cmd")
-        .arg("/c")
-        .arg("start")
-        .arg("cmd")
-        .arg("/c")
-        .args(&full_command)
-        .spawn()
-        .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+        Command::new("cmd")
+            .arg("/c")
+            .arg("start")
+            .arg("cmd")
+            .arg("/c")
+            .args(&full_command)
+            .spawn()
+            .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+    }
 
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
-fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
+fn launch_windows_powershell(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>) -> Result<(), String> {
     use std::process::Command;
 
     // SECURITY: Use Base64-encoded command to avoid complex shell escaping issues
@@ -5072,8 +5196,18 @@ fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
         })
         .collect();
 
-    // Create PowerShell command that builds argument array and invokes ssh
-    let ps_command = format!("& {} | Out-Null; exit", args_quoted.join(" "));
+    // Create PowerShell command; prepend env var assignments for password auth
+    let ps_command = if let Some(setup) = askpass_setup {
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let askpass_path_escaped = askpass_path.replace('\'', "''");
+        format!(
+            "$env:SSH_ASKPASS = '{}'; $env:SSH_ASKPASS_REQUIRE = 'force'; & {} | Out-Null; exit",
+            askpass_path_escaped,
+            args_quoted.join(" ")
+        )
+    } else {
+        format!("& {} | Out-Null; exit", args_quoted.join(" "))
+    };
 
     // Convert to UTF-16LE and Base64 encode (required by PowerShell -EncodedCommand)
     let utf16_bytes: Vec<u16> = ps_command.encode_utf16().collect();
@@ -5101,25 +5235,49 @@ fn launch_windows_terminal(
     ssh_args: &[String],
     profile_name: &str,
     use_tabs: bool,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
-    let mut cmd = Command::new("wt");
+    if let Some(setup) = askpass_setup {
+        // Cannot inject env vars via wt command-line args — use a temp .bat script
+        // Known limitation: AppLocker/WDAC environments blocking %TEMP% .bat execution
+        // will fail; users should switch to cmd or PowerShell in settings.
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let script_content = format!(
+            "@echo off\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            askpass_path,
+            ssh_args.join(" ")
+        );
+        create_file_windows_secure(&script_path, &script_content)?;
 
-    if use_tabs {
-        // Use -w last to target the most recently used window, nt for new-tab
-        cmd.arg("-w").arg("last").arg("nt");
+        let mut cmd = Command::new("wt");
+        if use_tabs { cmd.arg("-w").arg("last").arg("nt"); } else { cmd.arg("-w").arg("new"); }
+        cmd.arg("--title")
+            .arg(profile_name)
+            .arg("cmd")
+            .arg("/c")
+            .arg(&script_path)
+            .spawn()
+            .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
+
+        let script_path_cleanup = script_path.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            delete_file_with_overwrite(&script_path_cleanup);
+        });
     } else {
-        // Use -w new to create a new window
-        cmd.arg("-w").arg("new");
+        let mut cmd = Command::new("wt");
+        if use_tabs { cmd.arg("-w").arg("last").arg("nt"); } else { cmd.arg("-w").arg("new"); }
+        cmd.arg("--title")
+            .arg(profile_name)
+            .arg("ssh")
+            .args(ssh_args)
+            .spawn()
+            .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
     }
-
-    cmd.arg("--title")
-        .arg(profile_name)
-        .arg("ssh")
-        .args(ssh_args)
-        .spawn()
-        .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
 
     Ok(())
 }
@@ -5129,6 +5287,7 @@ fn launch_windows_custom_terminal(
     custom_path: &str,
     ssh_args: &[String],
     profile_name: &str,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
@@ -5154,10 +5313,20 @@ fn launch_windows_custom_terminal(
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
 
+    let askpass_env = if let Some(setup) = askpass_setup {
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        format!(
+            "set \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\n",
+            askpass_path
+        )
+    } else {
+        String::new()
+    };
+
     let script_content = format!(
         "@echo off\r\n\
          echo Connecting to {}...\r\n\
-         ssh {}\r\n\
+         {}ssh {}\r\n\
          if errorlevel 1 (\r\n\
              echo.\r\n\
              echo Connection failed. Press any key to close...\r\n\
@@ -5167,6 +5336,7 @@ fn launch_windows_custom_terminal(
              echo Connection closed.\r\n\
          )\r\n",
         escape_batch_echo(profile_name),
+        askpass_env,
         ssh_args.iter()
             .map(|arg| escape_batch_arg(arg))
             .collect::<Vec<_>>()
@@ -5202,41 +5372,65 @@ fn launch_windows_default_terminal(
     ssh_args: &[String],
     profile_name: &str,
     use_tabs: bool,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
-    // Try Windows Terminal first
-    let mut wt_cmd = Command::new("wt");
+    if let Some(setup) = askpass_setup {
+        // Password auth: wt uses a temp .bat script; cmd fallback uses inline set chain
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let ssh_args_str = ssh_args.join(" ");
+        let script_content = format!(
+            "@echo off\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            askpass_path, ssh_args_str
+        );
+        create_file_windows_secure(&script_path, &script_content)?;
 
-    if use_tabs {
-        // Use -w last to target the most recently used window, nt for new-tab
-        wt_cmd.arg("-w").arg("last").arg("nt");
+        let mut wt_cmd = Command::new("wt");
+        if use_tabs { wt_cmd.arg("-w").arg("last").arg("nt"); } else { wt_cmd.arg("-w").arg("new"); }
+        wt_cmd.arg("--title").arg(profile_name).arg("cmd").arg("/c").arg(&script_path);
+
+        match wt_cmd.spawn() {
+            Ok(_) => {}
+            Err(_) => {
+                // Fall back to cmd.exe with inline set chain
+                let compound = format!(
+                    "set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+                    askpass_path, ssh_args_str
+                );
+                Command::new("cmd")
+                    .arg("/c").arg("start").arg("cmd").arg("/c").arg(&compound)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            }
+        }
+
+        let script_path_cleanup = script_path.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            delete_file_with_overwrite(&script_path_cleanup);
+        });
     } else {
-        // Use -w new to create a new window
-        wt_cmd.arg("-w").arg("new");
-    }
+        // Non-password: try Windows Terminal first, fall back to cmd.exe
+        let mut wt_cmd = Command::new("wt");
+        if use_tabs { wt_cmd.arg("-w").arg("last").arg("nt"); } else { wt_cmd.arg("-w").arg("new"); }
+        wt_cmd.arg("--title").arg(profile_name).arg("ssh").args(ssh_args);
 
-    wt_cmd.arg("--title")
-        .arg(profile_name)
-        .arg("ssh")
-        .args(ssh_args);
-
-    match wt_cmd.spawn() {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            // Fall back to cmd.exe
-            Command::new("cmd")
-                .arg("/c")
-                .arg("start")
-                .arg("cmd")
-                .arg("/c")
-                .arg("ssh")
-                .args(ssh_args)
-                .spawn()
-                .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-            Ok(())
+        match wt_cmd.spawn() {
+            Ok(_) => {}
+            Err(_) => {
+                Command::new("cmd")
+                    .arg("/c").arg("start").arg("cmd").arg("/c")
+                    .arg("ssh").args(ssh_args)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            }
         }
     }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -5262,6 +5456,23 @@ fn connect_ssh(
     // Build SSH arguments
     let ssh_args = build_ssh_args(&profile)?;
 
+    // Retrieve password and create askpass temp files if this is a password-auth profile
+    let askpass_setup = if profile.auth_method == "password" {
+        let password = get_password(&profile_id).map_err(|_| {
+            "No password stored for this profile. Edit the profile to set a password, \
+             or switch to a different authentication method.".to_string()
+        })?;
+        if password.is_empty() {
+            return Err(
+                "No password stored for this profile. Edit the profile to set a password, \
+                 or switch to a different authentication method.".to_string()
+            );
+        }
+        Some(create_askpass_setup(&password)?)
+    } else {
+        None
+    };
+
     // Get terminal preference (default to "default")
     let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
     let use_tabs = use_tabs_in_terminal.unwrap_or(true);
@@ -5273,13 +5484,13 @@ fn connect_ssh(
         match terminal_pref.as_str() {
             "custom" => {
                 if let Some(custom_path) = custom_terminal_path {
-                    launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
+                    launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name, askpass_setup.as_ref())?;
                 } else {
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
             "default" | _ => {
-                launch_macos_default_terminal(&ssh_args, use_tabs)?;
+                launch_macos_default_terminal(&ssh_args, use_tabs, askpass_setup.as_ref())?;
             }
         }
 
@@ -5294,17 +5505,17 @@ fn connect_ssh(
     #[cfg(target_os = "windows")]
     {
         match terminal_pref.as_str() {
-            "cmd" => launch_windows_cmd(&ssh_args)?,
-            "powershell" => launch_windows_powershell(&ssh_args)?,
-            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs)?,
+            "cmd" => launch_windows_cmd(&ssh_args, askpass_setup.as_ref())?,
+            "powershell" => launch_windows_powershell(&ssh_args, askpass_setup.as_ref())?,
+            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
             "custom" => {
                 if let Some(custom_path) = custom_terminal_path {
-                    launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
+                    launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name, askpass_setup.as_ref())?;
                 } else {
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
-            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs)?,
+            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
         }
 
         // Minimize app window if enabled
@@ -5313,6 +5524,11 @@ fn connect_ssh(
                 let _ = window.minimize();
             }
         }
+    }
+
+    // Schedule secure cleanup of askpass temp files (10s delay)
+    if let Some(setup) = askpass_setup {
+        schedule_askpass_cleanup(setup);
     }
 
     // Record connection
