@@ -2054,6 +2054,9 @@ struct ProfileExport {
     metadata: Option<ProfileMetadata>,
     #[serde(default)]
     tags: Vec<Tag>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    central_password_ref: Option<String>,  // v0.9.0+: Name of linked central password (portable reference)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -2091,6 +2094,9 @@ struct ProfileExportDetailed {
     password: Option<String>,
     metadata: Option<ProfileMetadata>,
     tags: Vec<Tag>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    central_password_ref: Option<String>,  // v0.9.0+: Name of linked central password (portable reference)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3168,11 +3174,21 @@ fn export_profiles(db: State<Database>, include_passwords: bool, encryption_pass
         // Fetch tags for the profile
         let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
 
+        // Resolve central password name for portable reference (v0.9.0+)
+        let central_password_ref = if profile.auth_method == "central_password" {
+            profile.central_password_id.as_deref()
+                .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+                .map(|cp| cp.name)
+        } else {
+            None
+        };
+
         export_profiles.push(ProfileExport {
             profile: profile.clone(),  // Use profile directly - group_path is already semantic
             password,
             metadata,
             tags,
+            central_password_ref,
         });
     }
 
@@ -3321,6 +3337,16 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
     for profile_export in import_data.profiles {
         let mut profile = profile_export.profile;
 
+        // Handle central_password_ref: resolve to local ID, or create empty shell (v0.9.0+)
+        if let Some(ref cp_name) = profile_export.central_password_ref {
+            let cp_id = resolve_or_create_central_password_for_import(&db, cp_name)?;
+            profile.central_password_id = Some(cp_id);
+            profile.auth_method = "central_password".to_string();
+        } else {
+            // Clear any exported central_password_id — UUIDs are machine-specific
+            profile.central_password_id = None;
+        }
+
         // SECURITY: Validate all profile fields to prevent injection attacks
         validate_profile_fields(&profile)
             .map_err(|e| format!("Invalid profile '{}': {}", profile.name, e))?;
@@ -3332,7 +3358,7 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
         db.create_profile(&profile)
             .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
 
-        // Store password if it exists
+        // Store password if it exists (individual password auth only — central passwords have no per-profile value)
         if let Some(password) = profile_export.password {
             if !password.is_empty() {
                 store_password(&profile.id, &password)?;
@@ -3448,11 +3474,21 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
     let tags = db.get_profile_tags(&profile_id)
         .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
+    // Resolve central password name for portable reference (v0.9.0+)
+    let central_password_ref = if profile.auth_method == "central_password" {
+        profile.central_password_id.as_deref()
+            .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+            .map(|cp| cp.name)
+    } else {
+        None
+    };
+
     let profile_export = ProfileExportDetailed {
         profile: profile.clone(),  // Use profile directly - group_path is already semantic
         password,
         metadata,
         tags,
+        central_password_ref,
     };
 
     let export_data = SingleProfileExportData {
@@ -3527,11 +3563,21 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
             let profile_tags = db.get_profile_tags(&profile.id)
                 .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
+            // Resolve central password name for portable reference (v0.9.0+)
+            let central_password_ref = if profile.auth_method == "central_password" {
+                profile.central_password_id.as_deref()
+                    .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+                    .map(|cp| cp.name)
+            } else {
+                None
+            };
+
             profile_exports.push(ProfileExportDetailed {
                 profile,  // Use profile directly - group_path is already semantic
                 password,
                 metadata,
                 tags: profile_tags,
+                central_password_ref,
             });
         }
 
@@ -3590,6 +3636,29 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
             }
         }
     }
+}
+
+// Helper function for import: look up central password by name, or create an empty shell if not found (v0.9.0+)
+fn resolve_or_create_central_password_for_import(db: &Database, name: &str) -> Result<String, String> {
+    if let Some(cp) = db.get_central_password_by_name(name)
+        .map_err(|e| format!("Failed to look up central password '{}': {}", name, e))?
+    {
+        return Ok(cp.id);
+    }
+
+    // Not found — create an empty shell; keychain entry will be set by the user via the CP manager
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = CentralPassword {
+        id: Uuid::new_v4().to_string(),
+        name: name.to_string(),
+        description: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    db.create_central_password(&cp)
+        .map_err(|e| format!("Failed to create central password '{}': {}", name, e))?;
+
+    Ok(cp.id)
 }
 
 // Helper function to create profile_metadata and profile_tags
@@ -3673,6 +3742,16 @@ fn import_profile(
 
     // Set target group_path (overriding the imported value)
     profile.group_path = target_group_path.clone();
+
+    // Handle central_password_ref: resolve to local ID, or create empty shell (v0.9.0+)
+    if let Some(ref cp_name) = profile_export.central_password_ref {
+        let cp_id = resolve_or_create_central_password_for_import(&db, cp_name)?;
+        profile.central_password_id = Some(cp_id);
+        profile.auth_method = "central_password".to_string();
+    } else {
+        // Clear any exported central_password_id — UUIDs are machine-specific
+        profile.central_password_id = None;
+    }
 
     // SECURITY: Validate all profile fields to prevent injection attacks
     validate_profile_fields(&profile)
@@ -3815,6 +3894,16 @@ fn import_group(
 
             // Set group_path
             profile.group_path = Some(actual_path.clone());
+
+            // Handle central_password_ref: resolve to local ID, or create empty shell (v0.9.0+)
+            if let Some(ref cp_name) = profile_export.central_password_ref {
+                let cp_id = resolve_or_create_central_password_for_import(db, cp_name)?;
+                profile.central_password_id = Some(cp_id);
+                profile.auth_method = "central_password".to_string();
+            } else {
+                // Clear any exported central_password_id — UUIDs are machine-specific
+                profile.central_password_id = None;
+            }
 
             // SECURITY: Validate all profile fields to prevent injection attacks
             validate_profile_fields(&profile)
@@ -4012,11 +4101,21 @@ fn export_settings(
             // Fetch tags for the profile
             let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
 
+            // Resolve central password name for portable reference (v0.9.0+)
+            let central_password_ref = if profile.auth_method == "central_password" {
+                profile.central_password_id.as_deref()
+                    .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+                    .map(|cp| cp.name)
+            } else {
+                None
+            };
+
             profile_exports.push(ProfileExport {
                 profile,  // Use profile directly - group_path is already semantic
                 password,
                 metadata,
                 tags,
+                central_password_ref,
             });
         }
 

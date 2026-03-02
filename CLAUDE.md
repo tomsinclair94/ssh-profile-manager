@@ -108,7 +108,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 142 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 143 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
@@ -527,7 +527,7 @@ fn test_feature_success() {
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~41s for 142 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 143 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Comprehensive:** Unit tests + 22 integration tests covering all backend logic
@@ -537,7 +537,7 @@ fn test_feature_success() {
 Before creating a release PR:
 
 **Automated Tests:**
-- [ ] Run `cargo test --lib` → All 142 tests pass
+- [ ] Run `cargo test --lib` → All 143 tests pass
 - [ ] New features have corresponding automated tests
 - [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation

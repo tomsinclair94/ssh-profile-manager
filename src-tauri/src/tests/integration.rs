@@ -46,6 +46,7 @@ fn test_export_import_profile_roundtrip_encrypted() {
         metadata,
         tags: tags_list,
         password: Some("stored_password".to_string()), // Simulated keyring retrieval
+        central_password_ref: None,
     };
 
     let json = serde_json::to_string(&export_data).unwrap();
@@ -161,6 +162,7 @@ fn test_export_import_group_roundtrip_with_subgroups() {
         metadata: db.get_profile_metadata(&profile2.id).unwrap(),
         tags: vec![],
         password: None,
+        central_password_ref: None,
     }];
 
     let child_export = GroupExportDetailed {
@@ -174,6 +176,7 @@ fn test_export_import_group_roundtrip_with_subgroups() {
         metadata: db.get_profile_metadata(&profile1.id).unwrap(),
         tags: vec![],
         password: None,
+        central_password_ref: None,
     }];
 
     let parent_export = GroupExportDetailed {
@@ -675,12 +678,14 @@ fn test_encrypted_group_export_with_password_profiles() {
             metadata: db.get_profile_metadata(&profile1.id).unwrap(),
             tags: vec![],
             password: None,
+            central_password_ref: None,
         },
         ProfileExportDetailed {
             profile: profile2.clone(),
             metadata: db.get_profile_metadata(&profile2.id).unwrap(),
             tags: vec![],
             password: Some("stored_password".to_string()),
+            central_password_ref: None,
         },
     ];
 
@@ -733,6 +738,7 @@ fn test_import_with_invalid_encryption_password() {
         metadata: None,
         tags: vec![],
         password: Some("test_pass".to_string()),
+        central_password_ref: None,
     };
 
     let json = serde_json::to_string(&export).unwrap();
@@ -766,6 +772,7 @@ fn test_tag_auto_creation_on_import() {
         metadata: None,
         tags: vec![tag1.clone(), tag2.clone()],
         password: None,
+        central_password_ref: None,
     };
 
     // Import into new database
