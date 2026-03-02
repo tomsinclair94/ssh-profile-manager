@@ -139,7 +139,8 @@ const DEFAULT_PROFILE_ICON = 'server';
 const PROFILE_ICON_VISIBILITY = {
     'star': false,          // Used for favorites feature
     'star-off': false,      // Used for favorites feature
-    'settings': false       // Used for settings/menu buttons
+    'settings': false,      // Used for settings/menu buttons
+    'key': false            // Used for central passwords toolbar button
 };
 
 // Each entry: [icon_name, svg_path]
@@ -723,6 +724,13 @@ let newTagNameInput;
 let newTagColorInput;
 let createTagBtn;
 let tagListContainer;
+// Central Passwords Modal Elements
+let centralPasswordsModal;
+let centralPasswordsCloseBtn;
+let newCpNameInput;
+let newCpPasswordInput;
+let createCpBtn;
+let cpListContainer;
 // Move Modal Elements
 let moveModal;
 // Encryption/Decryption Password Modal Elements
@@ -879,11 +887,15 @@ function setupModifierKeyTracking() {
         const groupBtn = document.getElementById('add-group-btn');
 
         if (profileBtn) {
+            const wideSpan = profileBtn.querySelector('.btn-label-wide');
+            const compactSpan = profileBtn.querySelector('.btn-label-compact');
             if (isModifierKeyHeld) {
-                profileBtn.textContent = 'Import Profile';
+                if (wideSpan) wideSpan.textContent = 'Import Profile';
+                if (compactSpan) compactSpan.textContent = '↑ Profile';
                 profileBtn.title = 'Import a profile from JSON file';
             } else {
-                profileBtn.textContent = '+ New Profile';
+                if (wideSpan) wideSpan.textContent = '+ New Profile';
+                if (compactSpan) compactSpan.textContent = '+ Profile';
                 profileBtn.title = 'Create a new SSH profile';
             }
             // Force tooltip refresh by removing and re-adding title
@@ -893,11 +905,15 @@ function setupModifierKeyTracking() {
         }
 
         if (groupBtn) {
+            const wideSpan = groupBtn.querySelector('.btn-label-wide');
+            const compactSpan = groupBtn.querySelector('.btn-label-compact');
             if (isModifierKeyHeld) {
-                groupBtn.textContent = 'Import Group';
+                if (wideSpan) wideSpan.textContent = 'Import Group';
+                if (compactSpan) compactSpan.textContent = '↑ Group';
                 groupBtn.title = 'Import a group from JSON file';
             } else {
-                groupBtn.textContent = '+ New Group';
+                if (wideSpan) wideSpan.textContent = '+ New Group';
+                if (compactSpan) compactSpan.textContent = '+ Group';
                 groupBtn.title = 'Create a new group to organise profiles';
             }
             // Force tooltip refresh by removing and re-adding title
@@ -973,6 +989,7 @@ function setupKeyboardShortcutListeners() {
                        !versionSplashModal.classList.contains('hidden') ||
                        !groupModal.classList.contains('hidden') ||
                        !tagManagerModal.classList.contains('hidden') ||
+                       !centralPasswordsModal.classList.contains('hidden') ||
                        !encryptionPasswordModal.classList.contains('hidden') ||
                        !decryptionPasswordModal.classList.contains('hidden') ||
                        !moveModal.classList.contains('hidden');
@@ -1128,6 +1145,13 @@ function handleGlobalShortcuts(e) {
     if ((e.key === 't' || e.key === 'T') && !cmdOrCtrl) {
         e.preventDefault();
         openTagManager();
+        return;
+    }
+
+    // C - Open Central Passwords (single key; not active when recent connections section has focus)
+    if ((e.key === 'c' || e.key === 'C') && !cmdOrCtrl && activeNavigationSection !== 'recent') {
+        e.preventDefault();
+        openCentralPasswordsModal();
         return;
     }
 
@@ -1384,6 +1408,35 @@ function getTagManagerModalTabbableItems() {
     return items;
 }
 
+function getCentralPasswordsModalTabbableItems() {
+    const items = [];
+
+    const nameInput = document.getElementById('new-cp-name-input');
+    if (nameInput) items.push(nameInput);
+
+    const descInput = document.getElementById('new-cp-description-input');
+    if (descInput) items.push(descInput);
+
+    const pwdInput = document.getElementById('new-cp-password-input');
+    if (pwdInput) items.push(pwdInput);
+
+    const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
+    if (toggleBtn) items.push(toggleBtn);
+
+    const createBtn = document.getElementById('create-cp-btn');
+    if (createBtn) items.push(createBtn);
+
+    // Per-item action buttons (only those in view mode, not inside open inline forms)
+    document.querySelectorAll('.cp-list-item:not(.cp-editing) .cp-item-view button').forEach(btn => {
+        items.push(btn);
+    });
+
+    const closeBtn = document.getElementById('central-passwords-close-btn');
+    if (closeBtn) items.push(closeBtn);
+
+    return items;
+}
+
 async function handleModalShortcuts(e) {
     // Get the topmost modal from the stack
     const topmostModal = getTopmostModal();
@@ -1523,6 +1576,25 @@ async function handleModalShortcuts(e) {
                 return;
             }
 
+            case 'central-passwords': {
+                const items = getCentralPasswordsModalTabbableItems();
+                if (items.length > 0) {
+                    const currentIndex = items.indexOf(document.activeElement);
+                    let nextIndex;
+
+                    if (e.shiftKey) {
+                        // Shift+Tab - backwards
+                        nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                    } else {
+                        // Tab - forwards
+                        nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                    }
+
+                    items[nextIndex].focus();
+                }
+                return;
+            }
+
             case 'encryptionPassword': {
                 // Filter out disabled elements from tab order
                 const allItems = [encryptExportCheck, encryptionPasswordInput, encryptionPasswordConfirm, encryptionPasswordSubmit, encryptionPasswordCancel];
@@ -1625,6 +1697,10 @@ async function handleModalShortcuts(e) {
 
             case 'tag-manager':
                 closeTagManager();
+                return;
+
+            case 'central-passwords':
+                closeCentralPasswordsModal();
                 return;
 
             case 'move':
@@ -1766,7 +1842,13 @@ function getAllTabbableItems() {
         items.push({ type: 'button', element: addGroupBtn, id: 'add-group-btn' });
     }
 
-    // 3. Settings button
+    // 3. Central Passwords button
+    const centralPasswordsBtn = document.getElementById('central-passwords-btn');
+    if (centralPasswordsBtn) {
+        items.push({ type: 'button', element: centralPasswordsBtn, id: 'central-passwords-btn' });
+    }
+
+    // 4. Settings button
     const settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) {
         items.push({ type: 'button', element: settingsBtn, id: 'settings-btn' });
@@ -2451,6 +2533,7 @@ function showKeyboardShortcutsHelp() {
             { keys: 'G', action: 'New Group' },
             { keys: 'S', action: 'Open Settings' },
             { keys: 'T', action: 'Open Tag Manager' },
+            { keys: 'C', action: 'Open Central Passwords' },
             { keys: `${modKey} + S`, action: 'Focus Search' },
             { keys: `${modKey} + F`, action: 'Filter Groups' },
             { keys: `${modKey} + ← / →`, action: 'Collapse / Expand All Groups' },
@@ -2688,6 +2771,13 @@ async function init() {
     newTagColorInput = document.getElementById('new-tag-color-input');
     createTagBtn = document.getElementById('create-tag-btn');
     tagListContainer = document.getElementById('tag-list-container');
+    // Central Passwords Modal Elements
+    centralPasswordsModal = document.getElementById('central-passwords-modal');
+    centralPasswordsCloseBtn = document.getElementById('central-passwords-close-btn');
+    newCpNameInput = document.getElementById('new-cp-name-input');
+    newCpPasswordInput = document.getElementById('new-cp-password-input');
+    createCpBtn = document.getElementById('create-cp-btn');
+    cpListContainer = document.getElementById('cp-list-container');
     // Encryption/Decryption Password Modal Elements
     encryptionPasswordModal = document.getElementById('encryption-password-modal');
     encryptionPasswordInput = document.getElementById('encryption-password-input');
@@ -5377,6 +5467,52 @@ function setupEventListeners() {
             showKeyboardShortcutsHelp();
         });
     }
+
+    // Central Passwords
+    document.getElementById('central-passwords-btn').addEventListener('click', () => {
+        openCentralPasswordsModal();
+    });
+
+    centralPasswordsCloseBtn.addEventListener('click', () => {
+        closeCentralPasswordsModal();
+    });
+
+    createCpBtn.addEventListener('click', () => {
+        createCentralPassword();
+    });
+
+    newCpNameInput.addEventListener('input', () => {
+        validateCpCreateForm();
+        updateCpNameCounter();
+    });
+
+    newCpPasswordInput.addEventListener('input', () => {
+        validateCpCreateForm();
+    });
+
+    newCpNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            createCentralPassword();
+        }
+    });
+
+    newCpPasswordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            createCentralPassword();
+        }
+    });
+
+    document.getElementById('toggle-new-cp-password-btn').addEventListener('click', () => {
+        if (newCpPasswordInput.type === 'password') {
+            newCpPasswordInput.type = 'text';
+            document.getElementById('toggle-new-cp-password-btn').textContent = 'Hide';
+        } else {
+            newCpPasswordInput.type = 'password';
+            document.getElementById('toggle-new-cp-password-btn').textContent = 'Show';
+        }
+    });
 
     // Tag Manager
     openTagManagerBtn.addEventListener('click', () => {
@@ -12375,4 +12511,435 @@ function clearTerminal() {
     if (activeTerminalSession && activeTerminalSession.term) {
         activeTerminalSession.term.clear();
     }
+}
+
+// ===========================
+// Central Passwords Functions
+// ===========================
+
+// Open Central Passwords modal
+async function openCentralPasswordsModal() {
+    try {
+        await refreshCentralPasswordsList();
+        centralPasswordsModal.classList.remove('hidden');
+        pushModal('central-passwords');
+        setTimeout(() => document.getElementById('new-cp-name-input')?.focus(), 100);
+    } catch (error) {
+        console.error('Failed to open central passwords modal:', error);
+        showToast('Failed to load central passwords', TOAST_DURATION_SHORT, 'error');
+    }
+}
+
+// Close Central Passwords modal
+function closeCentralPasswordsModal() {
+    centralPasswordsModal.classList.add('hidden');
+    popModal('central-passwords');
+
+    // Reset create form
+    if (newCpNameInput) newCpNameInput.value = '';
+    const descInput = document.getElementById('new-cp-description-input');
+    if (descInput) descInput.value = '';
+    if (newCpPasswordInput) {
+        newCpPasswordInput.value = '';
+        newCpPasswordInput.type = 'password';
+    }
+    const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
+    if (toggleBtn) toggleBtn.textContent = 'Show';
+    const counter = document.getElementById('cp-name-counter');
+    if (counter) {
+        counter.textContent = '0 / 64';
+        counter.classList.remove('over-limit');
+    }
+
+    validateCpCreateForm();
+
+    // Close any open inline forms
+    closeAllCpInlineForms();
+}
+
+// Fetch all CPs and usage counts, then render
+async function refreshCentralPasswordsList() {
+    const centralPasswords = await invoke('get_central_passwords');
+
+    // Fetch usage counts for all CPs in parallel
+    const items = await Promise.all(
+        centralPasswords.map(async cp => {
+            const profileNames = await invoke('get_profiles_using_central_password', { centralPasswordId: cp.id });
+            return { cp, count: profileNames.length };
+        })
+    );
+
+    renderCentralPasswordsList(items);
+}
+
+// Render the central passwords list
+function renderCentralPasswordsList(items) {
+    const container = document.getElementById('cp-list-container');
+    if (!container) return;
+
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="cp-list-empty">No central passwords created yet.</div>';
+        return;
+    }
+
+    const html = items.map(({ cp, count }) => {
+        const usageText = `${count} profile${count !== 1 ? 's' : ''}`;
+        const descText = cp.description ? ` · ${escapeHtml(cp.description)}` : '';
+        const metaText = `${usageText}${descText}`;
+
+        return `
+            <div class="cp-list-item" data-cp-id="${escapeHtml(cp.id)}">
+                <div class="cp-item-view">
+                    <div class="cp-item-info">
+                        <div class="cp-item-name">${escapeHtml(cp.name)}</div>
+                        <div class="cp-item-meta">${metaText}</div>
+                        <code class="cp-password-value hidden" data-cp-revealed="false"></code>
+                    </div>
+                    <div class="cp-item-actions">
+                        <button class="btn btn-small btn-secondary cp-show-btn" data-cp-id="${escapeHtml(cp.id)}">Show</button>
+                        <button class="btn btn-small btn-secondary cp-edit-btn" data-cp-id="${escapeHtml(cp.id)}" data-cp-name="${escapeHtml(cp.name)}" data-cp-desc="${escapeHtml(cp.description || '')}">Edit</button>
+                        <button class="btn btn-small btn-secondary cp-change-pwd-btn" data-cp-id="${escapeHtml(cp.id)}">Change Password</button>
+                        <button class="btn btn-small btn-danger cp-delete-btn" data-cp-id="${escapeHtml(cp.id)}" data-cp-name="${escapeHtml(cp.name)}" data-cp-count="${count}">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = html;
+
+    // Wire up event listeners
+    container.querySelectorAll('.cp-show-btn').forEach(btn => {
+        btn.addEventListener('click', () => showCentralPasswordValue(btn.dataset.cpId, btn));
+    });
+
+    container.querySelectorAll('.cp-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const itemEl = btn.closest('.cp-list-item');
+            openCpEditForm(btn.dataset.cpId, btn.dataset.cpName, btn.dataset.cpDesc, itemEl);
+        });
+    });
+
+    container.querySelectorAll('.cp-change-pwd-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const itemEl = btn.closest('.cp-list-item');
+            openCpChangePasswordForm(btn.dataset.cpId, itemEl);
+        });
+    });
+
+    container.querySelectorAll('.cp-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            deleteCentralPassword(btn.dataset.cpId, btn.dataset.cpName, parseInt(btn.dataset.cpCount));
+        });
+    });
+}
+
+// Update CP name character counter
+function updateCpNameCounter() {
+    const counter = document.getElementById('cp-name-counter');
+    if (!counter || !newCpNameInput) return;
+
+    const currentLength = newCpNameInput.value.length;
+    counter.textContent = `${currentLength} / 64`;
+
+    if (currentLength >= 64) {
+        counter.classList.add('over-limit');
+    } else {
+        counter.classList.remove('over-limit');
+    }
+}
+
+// Validate CP create form and enable/disable the Add Password button
+function validateCpCreateForm() {
+    if (!newCpNameInput || !newCpPasswordInput || !createCpBtn) return;
+
+    const nameOk = newCpNameInput.value.trim().length > 0;
+    const pwdOk = newCpPasswordInput.value.length > 0;
+    createCpBtn.disabled = !(nameOk && pwdOk);
+}
+
+// Create a new central password
+async function createCentralPassword() {
+    const name = newCpNameInput.value.trim();
+    const descInput = document.getElementById('new-cp-description-input');
+    const description = descInput ? (descInput.value.trim() || null) : null;
+    const password = newCpPasswordInput.value;
+
+    if (!name) {
+        showToast('Name is required', TOAST_DURATION_SHORT, 'error');
+        newCpNameInput.focus();
+        return;
+    }
+
+    if (!password) {
+        showToast('Password is required', TOAST_DURATION_SHORT, 'error');
+        newCpPasswordInput.focus();
+        return;
+    }
+
+    if (createCpBtn.disabled) return;
+
+    try {
+        createCpBtn.disabled = true;
+        await invoke('create_central_password', { input: { name, description, password } });
+        showToast('Central password added successfully', TOAST_DURATION_SHORT, 'success');
+
+        // Reset form
+        newCpNameInput.value = '';
+        if (descInput) descInput.value = '';
+        newCpPasswordInput.value = '';
+        newCpPasswordInput.type = 'password';
+        const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
+        if (toggleBtn) toggleBtn.textContent = 'Show';
+        const counter = document.getElementById('cp-name-counter');
+        if (counter) {
+            counter.textContent = '0 / 64';
+            counter.classList.remove('over-limit');
+        }
+
+        // Refresh list
+        await refreshCentralPasswordsList();
+
+        // Focus back on name input
+        newCpNameInput.focus();
+    } catch (error) {
+        console.error('Failed to create central password:', error);
+        showToast(`Failed to add central password: ${error}`, TOAST_DURATION_LONG, 'error');
+    } finally {
+        validateCpCreateForm();
+    }
+}
+
+// Delete a central password
+async function deleteCentralPassword(cpId, cpName, profileCount) {
+    const lines = [
+        {
+            segments: [
+                { text: 'Delete central password ' },
+                { highlight: cpName }
+            ]
+        }
+    ];
+
+    const warnings = [];
+    if (profileCount > 0) {
+        warnings.push(`${profileCount} profile${profileCount !== 1 ? 's' : ''} will revert to keyboard-interactive authentication.`);
+    }
+
+    const confirmMessage = buildConfirmMessage({
+        lines,
+        warnings,
+        question: 'Are you sure you want to delete this central password?'
+    });
+
+    const confirmed = await customConfirm(confirmMessage, {
+        title: 'Delete Central Password',
+        okText: 'Delete',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+        const revertedCount = await invoke('delete_central_password', { centralPasswordId: cpId });
+
+        let toastMsg = 'Central password deleted.';
+        if (revertedCount > 0) {
+            toastMsg += ` ${revertedCount} profile${revertedCount !== 1 ? 's' : ''} reverted to keyboard-interactive authentication.`;
+        }
+        showToast(toastMsg, TOAST_DURATION_LONG, 'success');
+
+        await refreshCentralPasswordsList();
+        await loadProfiles();
+    } catch (error) {
+        console.error('Failed to delete central password:', error);
+        showToast(`Failed to delete central password: ${error}`, TOAST_DURATION_LONG, 'error');
+    }
+}
+
+// Show or hide the actual password value inline in the list
+async function showCentralPasswordValue(cpId, btn) {
+    const itemEl = btn.closest('.cp-list-item');
+    const revealEl = itemEl.querySelector('.cp-password-value');
+    if (!revealEl) return;
+
+    const isRevealed = revealEl.dataset.cpRevealed === 'true';
+
+    if (isRevealed) {
+        revealEl.classList.add('hidden');
+        revealEl.dataset.cpRevealed = 'false';
+        revealEl.textContent = '';
+        btn.textContent = 'Show';
+    } else {
+        try {
+            btn.disabled = true;
+            btn.textContent = '…';
+            const value = await invoke('get_central_password_value', { centralPasswordId: cpId });
+            revealEl.textContent = value;
+            revealEl.dataset.cpRevealed = 'true';
+            revealEl.classList.remove('hidden');
+            btn.textContent = 'Hide';
+        } catch (error) {
+            console.error('Failed to retrieve central password value:', error);
+            showToast(`Failed to retrieve password: ${error}`, TOAST_DURATION_LONG, 'error');
+            btn.textContent = 'Show';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+}
+
+// Open inline edit form for name/description on a list item
+function openCpEditForm(cpId, currentName, currentDesc, itemEl) {
+    closeAllCpInlineForms();
+
+    const view = itemEl.querySelector('.cp-item-view');
+    view.classList.add('hidden');
+    itemEl.classList.add('cp-editing');
+
+    const form = document.createElement('div');
+    form.className = 'cp-inline-form';
+    form.innerHTML = `
+        <div class="form-group">
+            <label>Name <span class="required">*</span></label>
+            <input type="text" class="cp-edit-name" value="${escapeHtml(currentName)}" maxlength="64" spellcheck="false" autocorrect="off" autocapitalize="off" />
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <input type="text" class="cp-edit-desc" value="${escapeHtml(currentDesc)}" maxlength="128" placeholder="Optional description" />
+        </div>
+        <div class="cp-inline-actions">
+            <button class="btn btn-secondary btn-small cp-cancel-btn">Cancel</button>
+            <button class="btn btn-primary btn-small cp-save-meta-btn">Save</button>
+        </div>
+    `;
+
+    itemEl.appendChild(form);
+    setTimeout(() => form.querySelector('.cp-edit-name')?.focus(), 50);
+
+    form.querySelector('.cp-cancel-btn').addEventListener('click', () => {
+        form.remove();
+        view.classList.remove('hidden');
+        itemEl.classList.remove('cp-editing');
+    });
+
+    const saveBtn = form.querySelector('.cp-save-meta-btn');
+    const doSave = async () => {
+        const newName = form.querySelector('.cp-edit-name').value.trim();
+        const newDesc = form.querySelector('.cp-edit-desc').value.trim() || null;
+
+        if (!newName) {
+            showToast('Name is required', TOAST_DURATION_SHORT, 'error');
+            form.querySelector('.cp-edit-name').focus();
+            return;
+        }
+
+        try {
+            saveBtn.disabled = true;
+            await invoke('update_central_password', { input: { id: cpId, name: newName, description: newDesc } });
+            showToast('Central password updated', TOAST_DURATION_SHORT, 'success');
+            await refreshCentralPasswordsList();
+        } catch (error) {
+            console.error('Failed to update central password:', error);
+            showToast(`Failed to update: ${error}`, TOAST_DURATION_LONG, 'error');
+            saveBtn.disabled = false;
+        }
+    };
+
+    saveBtn.addEventListener('click', doSave);
+
+    form.querySelector('.cp-edit-name').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+    });
+    form.querySelector('.cp-edit-desc').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+    });
+}
+
+// Open inline change-password form on a list item
+function openCpChangePasswordForm(cpId, itemEl) {
+    closeAllCpInlineForms();
+
+    const view = itemEl.querySelector('.cp-item-view');
+    view.classList.add('hidden');
+    itemEl.classList.add('cp-editing');
+
+    const form = document.createElement('div');
+    form.className = 'cp-inline-form';
+    form.innerHTML = `
+        <div class="form-group">
+            <label>New Password <span class="required">*</span></label>
+            <div class="input-group">
+                <input type="password" class="cp-new-password" placeholder="Enter new password" spellcheck="false" autocorrect="off" autocapitalize="off" />
+                <button type="button" class="btn btn-secondary btn-toggle-password cp-toggle-pwd-btn">Show</button>
+            </div>
+        </div>
+        <div class="cp-inline-actions">
+            <button class="btn btn-secondary btn-small cp-cancel-btn">Cancel</button>
+            <button class="btn btn-primary btn-small cp-save-pwd-btn">Save Password</button>
+        </div>
+    `;
+
+    itemEl.appendChild(form);
+    setTimeout(() => form.querySelector('.cp-new-password')?.focus(), 50);
+
+    form.querySelector('.cp-toggle-pwd-btn').addEventListener('click', () => {
+        const pwdInput = form.querySelector('.cp-new-password');
+        const toggleBtn = form.querySelector('.cp-toggle-pwd-btn');
+        if (pwdInput.type === 'password') {
+            pwdInput.type = 'text';
+            toggleBtn.textContent = 'Hide';
+        } else {
+            pwdInput.type = 'password';
+            toggleBtn.textContent = 'Show';
+        }
+    });
+
+    form.querySelector('.cp-cancel-btn').addEventListener('click', () => {
+        form.remove();
+        view.classList.remove('hidden');
+        itemEl.classList.remove('cp-editing');
+    });
+
+    const saveBtn = form.querySelector('.cp-save-pwd-btn');
+    const doSave = async () => {
+        const newPassword = form.querySelector('.cp-new-password').value;
+
+        if (!newPassword) {
+            showToast('Password is required', TOAST_DURATION_SHORT, 'error');
+            form.querySelector('.cp-new-password').focus();
+            return;
+        }
+
+        try {
+            saveBtn.disabled = true;
+            await invoke('update_central_password_value', { centralPasswordId: cpId, password: newPassword });
+            showToast('Password updated successfully', TOAST_DURATION_SHORT, 'success');
+            form.remove();
+            view.classList.remove('hidden');
+            itemEl.classList.remove('cp-editing');
+        } catch (error) {
+            console.error('Failed to update central password value:', error);
+            showToast(`Failed to update password: ${error}`, TOAST_DURATION_LONG, 'error');
+            saveBtn.disabled = false;
+        }
+    };
+
+    saveBtn.addEventListener('click', doSave);
+
+    form.querySelector('.cp-new-password').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+    });
+}
+
+// Close all open CP inline forms (edit or change-password)
+function closeAllCpInlineForms() {
+    document.querySelectorAll('.cp-list-item .cp-inline-form').forEach(form => {
+        const itemEl = form.closest('.cp-list-item');
+        const view = itemEl.querySelector('.cp-item-view');
+        form.remove();
+        if (view) view.classList.remove('hidden');
+        itemEl.classList.remove('cp-editing');
+    });
 }

@@ -23,8 +23,13 @@
                 </div>
             </div>
             <div class="header-buttons">
-                <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile">+ New Profile</button>
-                <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles">+ New Group</button>
+                <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile"><span class="btn-label-wide">+ New Profile</span><span class="btn-label-compact">+ Profile</span></button>
+                <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles"><span class="btn-label-wide">+ New Group</span><span class="btn-label-compact">+ Group</span></button>
+                <button id="central-passwords-btn" class="btn btn-settings" title="Manage Central Passwords (C)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                </button>
                 <button id="settings-btn" class="btn btn-settings" title="Open application settings">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/>
@@ -798,6 +803,78 @@
                         <div id="tag-bulk-actions" class="tag-bulk-actions hidden">
                             <button id="select-all-tags-btn" class="btn btn-secondary">Select All</button>
                             <button id="delete-selected-tags-btn" class="btn btn-danger">Delete Selected</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Central Passwords Modal -->
+        <div id="central-passwords-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Central Passwords</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-secondary" id="central-passwords-close-btn">Close</button>
+                    </div>
+                </div>
+
+                <div class="central-passwords-content">
+                    <!-- Add New Central Password -->
+                    <div class="cp-create-section">
+                        <h3>Add New Central Password</h3>
+
+                        <div class="form-group">
+                            <label for="new-cp-name-input">Name <span class="required">*</span></label>
+                            <input
+                                type="text"
+                                id="new-cp-name-input"
+                                placeholder="e.g., AD Account, Jump Host"
+                                maxlength="64"
+                                spellcheck="false"
+                                autocorrect="off"
+                                autocapitalize="off"
+                            />
+                            <span class="char-counter" id="cp-name-counter">0 / 64</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new-cp-description-input">Description</label>
+                            <input
+                                type="text"
+                                id="new-cp-description-input"
+                                placeholder="Optional description"
+                                maxlength="128"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new-cp-password-input">Password <span class="required">*</span></label>
+                            <div class="input-group">
+                                <input
+                                    type="password"
+                                    id="new-cp-password-input"
+                                    placeholder="Enter password"
+                                    spellcheck="false"
+                                    autocorrect="off"
+                                    autocapitalize="off"
+                                />
+                                <button type="button" class="btn btn-secondary btn-toggle-password" id="toggle-new-cp-password-btn" title="Show password">Show</button>
+                            </div>
+                        </div>
+
+                        <div class="cp-create-actions">
+                            <button id="create-cp-btn" class="btn btn-primary" disabled>Add Password</button>
+                        </div>
+                    </div>
+
+                    <!-- Saved Central Passwords -->
+                    <div class="cp-list-section">
+                        <h3>Saved Central Passwords</h3>
+                        <div id="cp-list-container" class="cp-list">
+                            <!-- Populated dynamically -->
                         </div>
                     </div>
                 </div>

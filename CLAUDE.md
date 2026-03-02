@@ -26,6 +26,14 @@ bun run build    # Production build
 **Latest Release:** v0.8.0 (2026-02-27) ✅
 **In Development:** v0.9.0 — SSH Password Auth & Central Passwords (branch: `v0.9.0-dev`)
 
+**v0.9.0 Progress (In Development):**
+- ✅ Phase 1: SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
+- ✅ Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
+- ✅ Phase 3: Export/Import — `central_password_ref` field on all export/import paths
+- ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, inline edit/change-password forms, `C` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
+- ⏳ Phase 5: Profile Modal Updates — `central_password` auth method option + picker
+- ⏳ Phase 6: Tests — `central_passwords.rs` module (~15 tests) + integration tests
+
 **v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
 - ✅ Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items)
@@ -356,7 +364,8 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - `connect_ssh` creates a temp password file (`0600`) + askpass script (`0700`); both securely deleted after 10s
 - Injection strategy varies by terminal: inline env vars (macOS default, cmd, PowerShell), script prepend (macOS custom, Windows custom), temp `.bat` + `cmd /c` (Windows Terminal, Windows default wt path)
 - If no password stored, a clear error toast is shown directing the user to edit the profile
-- Central Passwords (shared credentials for multiple profiles) — backend complete (Phase 2), UI in Phase 4
+- Central Passwords (shared credentials for multiple profiles) — backend complete (Phase 2), UI complete (Phase 4)
+- Central Passwords manager: key-icon toolbar button + `C` shortcut; modal with create form, list with Show/Edit/Change Password/Delete actions; inline expand forms for editing
 - SSH key authentication remains recommended for automated/scripted connections
 
 ## Database Schema
