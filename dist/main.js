@@ -53,9 +53,18 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.8.0';
+const CURRENT_APP_VERSION = '0.9.0';
 
 const VERSION_CHANGELOG = {
+    '0.9.0': {
+        title: 'Central Passwords & SSH Password Auth',
+        subtitle: 'Central Passwords & SSH Password Auth',
+        highlights: [
+            'Placeholder — highlights to be finalised before release'
+        ],
+        releaseDate: '',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.0'
+    },
     '0.8.0': {
         title: 'Profile Moving & Custom Sort Order',
         subtitle: 'Profile Moving & Custom Sort Order',
