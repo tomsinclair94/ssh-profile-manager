@@ -185,9 +185,10 @@ pub struct Profile {
     pub host: String,
     pub port: i32,
     pub username: String,
-    pub auth_method: String, // "key", "password", or "none"
+    pub auth_method: String, // "key", "password", "central_password", or "none"
     pub key_path: Option<String>,
     pub group_path: Option<String>, // v0.7.0+: Semantic path like "Work/Production/Servers"
+    pub central_password_id: Option<String>, // v0.9.0+: ID of linked CentralPassword
 }
 
 // Profile with metadata and tags (for get_profiles response)
@@ -243,6 +244,16 @@ pub struct Tag {
     pub name: String,
     pub color: String,
     pub created_at: String,
+}
+
+// Central password structure for shared credentials
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CentralPassword {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // Recent connection structure
@@ -560,8 +571,8 @@ fn validate_profile_fields(profile: &Profile) -> Result<(), String> {
     }
 
     // Validate auth_method
-    if !matches!(profile.auth_method.as_str(), "key" | "password" | "none") {
-        return Err(format!("Invalid auth_method: '{}' (must be 'key', 'password', or 'none')", profile.auth_method));
+    if !matches!(profile.auth_method.as_str(), "key" | "password" | "central_password" | "none") {
+        return Err(format!("Invalid auth_method: '{}' (must be 'key', 'password', 'central_password', or 'none')", profile.auth_method));
     }
 
     Ok(())
@@ -1097,13 +1108,47 @@ impl Database {
             )?;
         }
 
+        // Migration 5: Central Passwords (v0.9.0)
+        if current_version < 5 {
+            // Create central_passwords table
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS central_passwords (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+
+            // Add central_password_id column to profiles
+            conn.execute(
+                "ALTER TABLE profiles ADD COLUMN central_password_id TEXT",
+                [],
+            )?;
+
+            // Index for lookups by central_password_id
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_profiles_central_password_id
+                 ON profiles(central_password_id)",
+                [],
+            )?;
+
+            // Record migration
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+                (5, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
         Ok(())
     }
 
     fn get_all_profiles(&self) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
              FROM profiles ORDER BY name"
         )?;
 
@@ -1119,6 +1164,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1132,7 +1178,7 @@ impl Database {
         // First, get all profiles with their metadata in one query
         let mut stmt = conn.prepare(
             "SELECT p.id, p.name, p.description, p.host, p.port, p.username, p.auth_method,
-                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0),
+                    p.key_path, p.group_path, p.central_password_id, m.icon, COALESCE(m.is_favorite, 0),
                     COALESCE(m.display_order, 0)
              FROM profiles p
              LEFT JOIN profile_metadata m ON p.id = m.profile_id
@@ -1152,6 +1198,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
                 };
                 let id = profile.id.clone();
 
@@ -1159,9 +1206,9 @@ impl Database {
                     id,
                     ProfileWithMetadata {
                         profile,
-                        icon: row.get(9)?,
-                        is_favorite: row.get::<_, i32>(10)? != 0,
-                        display_order: row.get(11)?,
+                        icon: row.get(10)?,
+                        is_favorite: row.get::<_, i32>(11)? != 0,
+                        display_order: row.get(12)?,
                         tags: Vec::new(), // Will populate below
                     }
                 ))
@@ -1205,8 +1252,8 @@ impl Database {
     fn create_profile(&self, profile: &Profile) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
-            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             (
                 &profile.id,
                 &profile.name,
@@ -1217,6 +1264,7 @@ impl Database {
                 &profile.auth_method,
                 &profile.key_path,
                 &profile.group_path,
+                &profile.central_password_id,
             ),
         )?;
         Ok(())
@@ -1227,7 +1275,8 @@ impl Database {
         conn.execute(
             "UPDATE profiles
              SET name = ?2, description = ?3, host = ?4, port = ?5,
-                 username = ?6, auth_method = ?7, key_path = ?8, group_path = ?9
+                 username = ?6, auth_method = ?7, key_path = ?8, group_path = ?9,
+                 central_password_id = ?10
              WHERE id = ?1",
             (
                 &profile.id,
@@ -1239,6 +1288,7 @@ impl Database {
                 &profile.auth_method,
                 &profile.key_path,
                 &profile.group_path,
+                &profile.central_password_id,
             ),
         )?;
         Ok(())
@@ -1409,7 +1459,7 @@ impl Database {
     fn get_profile_by_id(&self, id: &str) -> SqlResult<Option<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
              FROM profiles WHERE id = ?1"
         )?;
 
@@ -1424,6 +1474,7 @@ impl Database {
                 auth_method: row.get(6)?,
                 key_path: row.get(7)?,
                 group_path: row.get(8)?,
+                central_password_id: row.get(9)?,
             })
         })?;
 
@@ -1771,10 +1822,144 @@ impl Database {
         Ok(())
     }
 
+    // --- Central Password DB methods ---
+
+    fn create_central_password(&self, cp: &CentralPassword) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO central_passwords (id, name, description, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&cp.id, &cp.name, &cp.description, &cp.created_at, &cp.updated_at),
+        )?;
+        Ok(())
+    }
+
+    fn get_all_central_passwords(&self) -> SqlResult<Vec<CentralPassword>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at
+             FROM central_passwords ORDER BY name COLLATE NOCASE"
+        )?;
+
+        let cps = stmt
+            .query_map([], |row| {
+                Ok(CentralPassword {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(cps)
+    }
+
+    fn get_central_password_by_id(&self, id: &str) -> SqlResult<Option<CentralPassword>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at
+             FROM central_passwords WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query_map([id], |row| {
+            Ok(CentralPassword {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
+
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    fn get_central_password_by_name(&self, name: &str) -> SqlResult<Option<CentralPassword>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at
+             FROM central_passwords WHERE name = ?1"
+        )?;
+
+        let mut rows = stmt.query_map([name], |row| {
+            Ok(CentralPassword {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
+
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    fn update_central_password_meta(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+    ) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE central_passwords SET name = ?1, description = ?2, updated_at = ?3
+             WHERE id = ?4",
+            (name, description, chrono::Utc::now().to_rfc3339(), id),
+        )?;
+        Ok(())
+    }
+
+    fn get_profiles_by_central_password_id(&self, cp_id: &str) -> SqlResult<Vec<Profile>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
+             FROM profiles WHERE central_password_id = ?1 ORDER BY name"
+        )?;
+
+        let profiles = stmt
+            .query_map([cp_id], |row| {
+                Ok(Profile {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    host: row.get(3)?,
+                    port: row.get(4)?,
+                    username: row.get(5)?,
+                    auth_method: row.get(6)?,
+                    key_path: row.get(7)?,
+                    group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(profiles)
+    }
+
+    // Reverts all profiles linked to a central password back to keyboard-interactive auth.
+    // Returns the number of profiles updated (shown in deletion toast).
+    fn revert_profiles_central_password(&self, cp_id: &str) -> SqlResult<usize> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let count = conn.execute(
+            "UPDATE profiles SET auth_method = 'none', central_password_id = NULL
+             WHERE central_password_id = ?1",
+            [cp_id],
+        )?;
+        Ok(count)
+    }
+
     fn get_profiles_by_group_path(&self, group_path: &str) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
              FROM profiles WHERE group_path = ?1
              ORDER BY name"
         )?;
@@ -1791,6 +1976,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -2266,6 +2452,8 @@ struct CreateProfileInput {
     group_path: Option<String>, // v0.7.0+: Semantic path to group
     #[serde(default)]
     display_order: Option<i32>,
+    #[serde(default)]
+    central_password_id: Option<String>, // v0.9.0+: ID of linked CentralPassword
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -2282,6 +2470,7 @@ impl std::fmt::Debug for CreateProfileInput {
             .field("password", &"[REDACTED]")
             .field("group_path", &self.group_path)
             .field("display_order", &self.display_order)
+            .field("central_password_id", &self.central_password_id)
             .finish()
     }
 }
@@ -2316,6 +2505,20 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     let id = Uuid::new_v4().to_string();
 
+    // Resolve central_password_id: only relevant for "central_password" auth method
+    let central_password_id = if profile.auth_method == "central_password" {
+        let cp_id = profile.central_password_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "A central password must be selected".to_string())?;
+        // Verify the central password exists
+        db.get_central_password_by_id(&cp_id)
+            .map_err(|e| format!("Failed to verify central password: {}", e))?
+            .ok_or_else(|| "Selected central password not found".to_string())?;
+        Some(cp_id)
+    } else {
+        None
+    };
+
     let new_profile = Profile {
         id: id.clone(),
         name: profile.name,
@@ -2326,6 +2529,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
         group_path: profile.group_path,
+        central_password_id,
     };
 
     db.create_profile(&new_profile)
@@ -2345,7 +2549,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         ).map_err(|e| format!("Failed to set display_order: {}", e))?;
     }
 
-    // Store password in keychain if provided
+    // Store individual password in keychain if provided (not used for central_password auth)
     if profile.auth_method == "password" {
         if let Some(password) = profile.password {
             if !password.is_empty() {
@@ -2370,6 +2574,8 @@ struct UpdateProfileInput {
     key_path: Option<String>,
     password: Option<String>,
     group_path: Option<String>, // v0.7.0+: Semantic path to group
+    #[serde(default)]
+    central_password_id: Option<String>, // v0.9.0+: ID of linked CentralPassword
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -2386,6 +2592,7 @@ impl std::fmt::Debug for UpdateProfileInput {
             .field("key_path", &self.key_path)
             .field("password", &"[REDACTED]")
             .field("group_path", &self.group_path)
+            .field("central_password_id", &self.central_password_id)
             .finish()
     }
 }
@@ -2418,6 +2625,20 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         }
     }
 
+    // Resolve central_password_id: only relevant for "central_password" auth method
+    let central_password_id = if profile.auth_method == "central_password" {
+        let cp_id = profile.central_password_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "A central password must be selected".to_string())?;
+        // Verify the central password exists
+        db.get_central_password_by_id(&cp_id)
+            .map_err(|e| format!("Failed to verify central password: {}", e))?
+            .ok_or_else(|| "Selected central password not found".to_string())?;
+        Some(cp_id)
+    } else {
+        None
+    };
+
     let updated_profile = Profile {
         id: profile.id.clone(),
         name: profile.name,
@@ -2428,20 +2649,23 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
         group_path: profile.group_path,
+        central_password_id,
     };
 
     db.update_profile(&updated_profile)
         .map_err(|e| format!("Failed to update profile: {}", e))?;
 
-    // Update password in keychain if provided
+    // Manage individual keychain entry based on auth method
     if profile.auth_method == "password" {
+        // Update individual password in keychain if a new one was provided
         if let Some(password) = profile.password {
             if !password.is_empty() {
                 store_password(&profile.id, &password)?;
             }
         }
     } else {
-        // Try to delete password from keychain if auth method changed (ignore errors if no password exists)
+        // Auth method changed away from individual password — remove keychain entry
+        // (ignore errors if no password exists; central_password auth uses a different key)
         let _ = delete_password(&profile.id);
     }
 
@@ -4225,6 +4449,20 @@ struct CreateTagInput {
     color: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct CreateCentralPasswordInput {
+    name: String,
+    description: Option<String>,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateCentralPasswordInput {
+    id: String,
+    name: String,
+    description: Option<String>,
+}
+
 #[tauri::command]
 fn create_tag(db: State<Database>, input: CreateTagInput) -> Result<String, String> {
     // Validate tag name
@@ -4302,6 +4540,158 @@ fn remove_profile_tag(db: State<Database>, profile_id: String, tag_id: String) -
 fn set_profile_tags(db: State<Database>, profile_id: String, tag_ids: Vec<String>) -> Result<(), String> {
     db.set_profile_tags_db(&profile_id, &tag_ids)
         .map_err(|e| format!("Failed to set tags: {}", e))
+}
+
+// Central Password Commands
+
+#[tauri::command]
+fn get_central_passwords(db: State<Database>) -> Result<Vec<CentralPassword>, String> {
+    db.get_all_central_passwords()
+        .map_err(|e| format!("Failed to get central passwords: {}", e))
+}
+
+#[tauri::command]
+fn create_central_password(
+    db: State<Database>,
+    input: CreateCentralPasswordInput,
+) -> Result<String, String> {
+    let name = input.name.trim().to_string();
+
+    if name.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("Name must be 64 characters or less".to_string());
+    }
+    // Alphanumeric + spaces + - _ ( )
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')')) {
+        return Err(
+            "Name can only contain letters, numbers, spaces, hyphens, underscores, and parentheses"
+                .to_string(),
+        );
+    }
+    if input.password.is_empty() {
+        return Err("Password cannot be empty".to_string());
+    }
+
+    // Check name uniqueness
+    if db
+        .get_central_password_by_name(&name)
+        .map_err(|e| format!("Failed to check name: {}", e))?
+        .is_some()
+    {
+        return Err("A central password with this name already exists".to_string());
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = CentralPassword {
+        id: id.clone(),
+        name,
+        description: input.description,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    db.create_central_password(&cp)
+        .map_err(|e| format!("Failed to create central password: {}", e))?;
+
+    let keychain_key = format!("central-{}", id);
+    store_password(&keychain_key, &input.password)
+        .map_err(|e| format!("Failed to store password in keychain: {}", e))?;
+
+    Ok(id)
+}
+
+#[tauri::command]
+fn update_central_password(
+    db: State<Database>,
+    input: UpdateCentralPasswordInput,
+) -> Result<(), String> {
+    let name = input.name.trim().to_string();
+
+    if name.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("Name must be 64 characters or less".to_string());
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')')) {
+        return Err(
+            "Name can only contain letters, numbers, spaces, hyphens, underscores, and parentheses"
+                .to_string(),
+        );
+    }
+
+    // Check name uniqueness (allow keeping own name)
+    if let Some(existing) = db
+        .get_central_password_by_name(&name)
+        .map_err(|e| format!("Failed to check name: {}", e))?
+    {
+        if existing.id != input.id {
+            return Err("A central password with this name already exists".to_string());
+        }
+    }
+
+    db.update_central_password_meta(&input.id, &name, input.description.as_deref())
+        .map_err(|e| format!("Failed to update central password: {}", e))
+}
+
+#[tauri::command]
+fn update_central_password_value(
+    central_password_id: String,
+    password: String,
+) -> Result<(), String> {
+    if password.is_empty() {
+        return Err("Password cannot be empty".to_string());
+    }
+    let keychain_key = format!("central-{}", central_password_id);
+    store_password(&keychain_key, &password)
+        .map_err(|e| format!("Failed to update password in keychain: {}", e))
+}
+
+#[tauri::command]
+fn get_central_password_value(central_password_id: String) -> Result<String, String> {
+    let keychain_key = format!("central-{}", central_password_id);
+    get_password(&keychain_key)
+        .map_err(|_| "No password stored for this central password".to_string())
+}
+
+#[tauri::command]
+fn delete_central_password(
+    db: State<Database>,
+    central_password_id: String,
+) -> Result<usize, String> {
+    // Revert all linked profiles to keyboard-interactive auth
+    let reverted = db
+        .revert_profiles_central_password(&central_password_id)
+        .map_err(|e| format!("Failed to revert profiles: {}", e))?;
+
+    // Remove keychain entry (ignore if already absent)
+    let keychain_key = format!("central-{}", central_password_id);
+    let _ = delete_password(&keychain_key);
+
+    // Delete the DB record
+    {
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "DELETE FROM central_passwords WHERE id = ?1",
+            [&central_password_id],
+        )
+        .map_err(|e| format!("Failed to delete central password: {}", e))?;
+    }
+
+    Ok(reverted)
+}
+
+#[tauri::command]
+fn get_profiles_using_central_password(
+    db: State<Database>,
+    central_password_id: String,
+) -> Result<Vec<String>, String> {
+    db.get_profiles_by_central_password_id(&central_password_id)
+        .map(|profiles| profiles.into_iter().map(|p| p.name).collect())
+        .map_err(|e| format!("Failed to get profiles: {}", e))
 }
 
 #[tauri::command]
@@ -5457,8 +5847,13 @@ fn connect_ssh(
     let ssh_args = build_ssh_args(&profile)?;
 
     // Retrieve password and create askpass temp files if this is a password-auth profile
-    let askpass_setup = if profile.auth_method == "password" {
-        let password = get_password(&profile_id).map_err(|_| {
+    let askpass_setup = if profile.auth_method == "password" || profile.auth_method == "central_password" {
+        let keychain_key = if let Some(ref cp_id) = profile.central_password_id {
+            format!("central-{}", cp_id)
+        } else {
+            profile_id.clone()
+        };
+        let password = get_password(&keychain_key).map_err(|_| {
             "No password stored for this profile. Edit the profile to set a password, \
              or switch to a different authentication method.".to_string()
         })?;
@@ -5723,6 +6118,13 @@ pub fn run() {
             add_profile_tag,
             remove_profile_tag,
             set_profile_tags,
+            get_central_passwords,
+            create_central_password,
+            update_central_password,
+            update_central_password_value,
+            get_central_password_value,
+            delete_central_password,
+            get_profiles_using_central_password,
             create_terminal_session,
             write_to_terminal,
             resize_terminal,

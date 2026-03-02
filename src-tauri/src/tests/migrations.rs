@@ -23,6 +23,7 @@ fn test_migrations_create_required_tables() {
     assert!(tables.contains(&"recent_connections".to_string()));
     assert!(tables.contains(&"user_settings".to_string()));
     assert!(tables.contains(&"schema_version".to_string()));
+    assert!(tables.contains(&"central_passwords".to_string()));
 }
 
 #[test]
@@ -67,8 +68,8 @@ fn test_schema_version_tracked() {
         .query_row("SELECT MAX(version) FROM schema_version", [], |row| row.get(0))
         .unwrap();
 
-    // Should have applied all migrations (currently 4)
-    assert_eq!(version, 4);
+    // Should have applied all migrations (currently 5)
+    assert_eq!(version, 5);
 }
 
 #[test]
@@ -368,4 +369,38 @@ fn test_bundle_migration_idempotent() {
     );
     assert!(result2.is_ok());
     assert_eq!(result2.unwrap(), false); // Skipped because new DB exists
+}
+
+#[test]
+fn test_migration_5_applied() {
+    let db = create_test_db();
+    let conn = db.conn.lock().unwrap();
+
+    // central_passwords table exists
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='central_passwords'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap()
+        > 0;
+    assert!(table_exists, "central_passwords table should exist after migration 5");
+
+    // central_password_id column exists on profiles
+    let col_exists: bool = conn
+        .prepare("SELECT central_password_id FROM profiles LIMIT 0")
+        .is_ok();
+    assert!(col_exists, "profiles.central_password_id column should exist after migration 5");
+
+    // Index exists
+    let index_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_profiles_central_password_id'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap()
+        > 0;
+    assert!(index_exists, "idx_profiles_central_password_id index should exist after migration 5");
 }

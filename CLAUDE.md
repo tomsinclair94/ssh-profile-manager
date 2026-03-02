@@ -225,6 +225,17 @@ add_profile_tag(profile_id: String, tag_id: String)
 remove_profile_tag(profile_id: String, tag_id: String)
 ```
 
+**Central Passwords (v0.9.0):**
+```rust
+get_central_passwords() // Returns Vec<CentralPassword>
+create_central_password(input: CreateCentralPasswordInput) // name + description + password; stores in keychain as "central-{id}"; returns new id
+update_central_password(input: UpdateCentralPasswordInput) // name + description only
+update_central_password_value(central_password_id: String, password: String) // updates keychain entry
+get_central_password_value(central_password_id: String) // retrieves from keychain (show button)
+delete_central_password(central_password_id: String) // reverts linked profiles → removes keychain → deletes row; returns revert count
+get_profiles_using_central_password(central_password_id: String) // Returns Vec<String> of profile names
+```
+
 **Settings & Export/Import:**
 ```rust
 export_profiles(include_passwords: bool, encryption_password: Option<String>)
@@ -345,7 +356,7 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - `connect_ssh` creates a temp password file (`0600`) + askpass script (`0700`); both securely deleted after 10s
 - Injection strategy varies by terminal: inline env vars (macOS default, cmd, PowerShell), script prepend (macOS custom, Windows custom), temp `.bat` + `cmd /c` (Windows Terminal, Windows default wt path)
 - If no password stored, a clear error toast is shown directing the user to edit the profile
-- Central Passwords (shared credentials for multiple profiles) — v0.9.0 Phase 2+
+- Central Passwords (shared credentials for multiple profiles) — backend complete (Phase 2), UI in Phase 4
 - SSH key authentication remains recommended for automated/scripted connections
 
 ## Database Schema
@@ -357,9 +368,18 @@ CREATE TABLE profiles (
     host TEXT NOT NULL,
     port INTEGER NOT NULL DEFAULT 22,
     username TEXT NOT NULL,
-    auth_method TEXT NOT NULL DEFAULT 'key',
+    auth_method TEXT NOT NULL DEFAULT 'key',  -- "key", "password", "central_password", or "none"
     key_path TEXT,
-    group_path TEXT  -- Semantic hierarchical path (e.g., "Work/Production")
+    group_path TEXT,  -- Semantic hierarchical path (e.g., "Work/Production")
+    central_password_id TEXT  -- v0.9.0+: FK to central_passwords.id (no ON DELETE constraint)
+);
+
+CREATE TABLE central_passwords (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE groups (
@@ -407,9 +427,12 @@ CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 **Important Notes:**
 - All profiles automatically receive default metadata on creation (icon='server', is_favorite=false, display_order=0)
 - Migration 4 backfills metadata for existing profiles and creates hierarchical group structure
+- Migration 5 adds `central_passwords` table and `central_password_id` column to `profiles` (schema version 5)
 - Groups use semantic paths (e.g., "Work/Production") for hierarchy, max 3 levels deep
 - Profile names are unique within parent group only (allows "Server1" in multiple groups)
 - Tag names must be unique globally (case-sensitive)
+- Central password keychain key format: `"central-{uuid}"` (same service `"ssh-profile-manager"`, distinct from profile keys)
+- Deletion of a central password reverts all linked profiles to `auth_method='none'` (keyboard-interactive)
 
 **Database Location:** `~/Library/Application Support/ssh-profile-manager/profiles.db` (macOS)
 **Keychain:** System keychain (service: "ssh-profile-manager")
@@ -443,10 +466,10 @@ src-tauri/src/tests/
 ├── tags.rs           #  9 tests - Tag system
 ├── connections.rs    #  5 tests - Recent connections
 ├── settings.rs       #  3 tests - User settings
-├── migrations.rs     #  5 tests - Schema migrations
+├── migrations.rs     #  6 tests - Schema migrations (incl. migration 5)
 └── integration.rs    # 22 tests - Multi-step workflows
 
-Total: 142 tests (all must pass before release)
+Total: 143 tests (all must pass before release)
 ```
 
 **Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.

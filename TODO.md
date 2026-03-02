@@ -8,7 +8,7 @@
 
 ### Phase Progress
 - [x] Phase 1: SSH_ASKPASS Infrastructure — passwords now passed automatically via SSH_ASKPASS mechanism ✅
-- [ ] Phase 2: Central Passwords Backend
+- [x] Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands, Profile struct updated ✅
 - [ ] Phase 3: Export/Import for Central Passwords
 - [ ] Phase 4: Central Passwords Manager UI
 - [ ] Phase 5: Profile Modal Updates

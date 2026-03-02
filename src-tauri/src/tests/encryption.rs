@@ -319,6 +319,7 @@ fn make_profile(auth_method: &str) -> Profile {
         auth_method: auth_method.to_string(),
         key_path: None,
         group_path: None,
+        central_password_id: None,
     }
 }
 
