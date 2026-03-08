@@ -32,7 +32,7 @@ bun run build    # Production build
 - ✅ Phase 3: Export/Import — `central_password_ref` field on all export/import paths
 - ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode (Edit populates top form), bulk select/delete with checkboxes, `P` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
 - ✅ Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
-- ⏳ Phase 6: Tests — `central_passwords.rs` module (~15 tests) + integration tests
+- ✅ Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration tests + 1 profiles test; 163 total
 
 **v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
@@ -116,7 +116,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 143 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 163 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
@@ -468,20 +468,21 @@ All backend tests are located in `src-tauri/src/tests/` with a modular structure
 ```
 src-tauri/src/tests/
 ├── helpers.rs        # Shared test utilities
-├── encryption.rs     # 38 tests - AES-256-GCM encryption
-├── validation.rs     # 27 tests - Input validation
-├── profiles.rs       # 16 tests - Profile CRUD + move + reorder
-├── groups.rs         # 11 tests - Hierarchical groups + move + reorder
-├── tags.rs           #  9 tests - Tag system
-├── connections.rs    #  5 tests - Recent connections
-├── settings.rs       #  3 tests - User settings
-├── migrations.rs     #  6 tests - Schema migrations (incl. migration 5)
-└── integration.rs    # 22 tests - Multi-step workflows
+├── encryption.rs          # 38 tests - AES-256-GCM encryption
+├── validation.rs          # 27 tests - Input validation
+├── profiles.rs            # 17 tests - Profile CRUD + move + reorder + CP linkage
+├── groups.rs              # 11 tests - Hierarchical groups + move + reorder
+├── tags.rs                #  9 tests - Tag system
+├── connections.rs         #  5 tests - Recent connections
+├── settings.rs            #  3 tests - User settings
+├── migrations.rs          #  6 tests - Schema migrations (incl. migration 5)
+├── central_passwords.rs   # 17 tests - Central passwords DB layer (v0.9.0)
+└── integration.rs         # 24 tests - Multi-step workflows (incl. 2 CP workflows)
 
-Total: 143 tests (all must pass before release)
+Total: 163 tests (all must pass before release)
 ```
 
-**Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
+**Integration tests (integration.rs):** 24 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, central password lifecycle, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
 
 **Test helpers (helpers.rs):** Shared utilities (`create_test_db()`, `make_test_profile()`, `make_test_group()`, `make_test_tag()`) used across all test modules. All tests use in-memory databases for isolation.
 
@@ -536,7 +537,7 @@ fn test_feature_success() {
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~41s for 143 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 163 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Comprehensive:** Unit tests + 22 integration tests covering all backend logic
@@ -546,7 +547,7 @@ fn test_feature_success() {
 Before creating a release PR:
 
 **Automated Tests:**
-- [ ] Run `cargo test --lib` → All 143 tests pass
+- [ ] Run `cargo test --lib` → All 163 tests pass
 - [ ] New features have corresponding automated tests
 - [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation

@@ -12,7 +12,7 @@
 - [x] Phase 3: Export/Import for Central Passwords — central_password_ref field on all export/import paths ✅
 - [x] Phase 4: Central Passwords Manager UI — modal, toolbar button (key icon), `P` shortcut, form-based edit mode, bulk select/delete with checkboxes ✅
 - [x] Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate ✅
-- [ ] Phase 6: Tests
+- [x] Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration + 1 profiles test; 163 total ✅
 
 See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.
 

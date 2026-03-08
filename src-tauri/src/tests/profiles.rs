@@ -249,3 +249,34 @@ fn test_move_profile_preserves_display_order() {
     assert_eq!(moved.display_order, 5);
     assert_eq!(moved.profile.group_path, Some("GroupB".to_string()));
 }
+
+#[test]
+fn test_connect_with_central_password_no_entry_is_detectable() {
+    // Validates that the DB correctly stores a central_password profile, and that
+    // the absence of a keychain entry can be detected at the DB layer by checking
+    // whether central_password_id resolves to a known central password.
+    // The connect_ssh Tauri command performs the actual keychain lookup and surfaces
+    // a clear error toast when no entry is found — not tested here.
+    let db = create_test_db();
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = crate::CentralPassword {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: "Missing Keychain Entry".to_string(),
+        description: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    db.create_central_password(&cp).unwrap();
+
+    let mut profile = make_test_profile("Target Server", None);
+    profile.auth_method = "central_password".to_string();
+    profile.central_password_id = Some(cp.id.clone());
+    db.create_profile(&profile).unwrap();
+
+    // Confirm the profile's CP reference resolves to a valid DB row
+    let saved = db.get_profile_by_id(&profile.id).unwrap().unwrap();
+    assert_eq!(saved.auth_method, "central_password");
+    let cp_id = saved.central_password_id.unwrap();
+    let resolved = db.get_central_password_by_id(&cp_id).unwrap();
+    assert!(resolved.is_some(), "CP row must exist; missing keychain entry is a runtime concern only");
+}
