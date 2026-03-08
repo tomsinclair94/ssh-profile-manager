@@ -2918,6 +2918,12 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
     font-style: italic;
 }
 
+.cp-dropdown-desc {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 400;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 12px;
@@ -2983,6 +2989,18 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
 .form-group label:hover ~ .input-tooltip {
     opacity: 1;
     visibility: visible;
+}
+
+/* SSH key path: show tooltip when hovering the Browse button */
+#key-path-group:has(#browse-key-btn:hover) .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transition-duration: 0.1s;
+}
+
+/* SSH key path: faster transition for field + button (feels snappier than other tooltips) */
+#key-path-group .input-tooltip {
+    transition-duration: 0.1s;
 }
 
 /* Show search tooltip on hover */

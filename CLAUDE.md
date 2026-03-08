@@ -31,7 +31,7 @@ bun run build    # Production build
 - ✅ Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
 - ✅ Phase 3: Export/Import — `central_password_ref` field on all export/import paths
 - ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, inline edit/change-password forms, `C` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
-- ⏳ Phase 5: Profile Modal Updates — `central_password` auth method option + picker
+- ✅ Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
 - ⏳ Phase 6: Tests — `central_passwords.rs` module (~15 tests) + integration tests
 
 **v0.8.0 Features (Released - 2026-02-27):**

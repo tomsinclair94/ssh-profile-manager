@@ -11,7 +11,7 @@
 - [x] Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands, Profile struct updated ✅
 - [x] Phase 3: Export/Import for Central Passwords — central_password_ref field on all export/import paths ✅
 - [x] Phase 4: Central Passwords Manager UI — modal, toolbar button (key icon), `C` shortcut, inline edit/change-password forms ✅
-- [ ] Phase 5: Profile Modal Updates
+- [x] Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate ✅
 - [ ] Phase 6: Tests
 
 See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.

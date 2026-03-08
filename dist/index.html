@@ -230,27 +230,60 @@
                             <option value="none">None (Keyboard-Interactive)</option>
                             <option value="key">SSH Key</option>
                             <option value="password">Password</option>
+                            <option value="central_password">Central Password</option>
                         </select>
+                    </div>
+
+                    <!-- None / Keyboard-Interactive (shown when auth-method is 'none') -->
+                    <div class="form-group hidden" id="none-auth-group">
+                        <small>SSH will prompt for credentials in the terminal on connection. Nothing is stored by this app.</small>
                     </div>
 
                     <!-- SSH Key Path (shown when auth-method is 'key') -->
                     <div class="form-group hidden" id="key-path-group">
-                        <label for="profile-key-path">SSH Key Path</label>
+                        <label for="profile-key-path">SSH Key Path <span class="required">*</span></label>
                         <div class="input-group">
                             <input type="text" id="profile-key-path" placeholder="e.g., ~/.ssh/id_rsa" spellcheck="false" autocorrect="off" autocapitalize="off">
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">SSH Key Path</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Path to your private key file (e.g., ~/.ssh/id_rsa)</li>
+                                        <li id="browse-key-tip"></li>
+                                    </ul>
+                                </div>
+                            </div>
                             <button type="button" class="btn btn-secondary btn-browse" id="browse-key-btn">Browse</button>
                         </div>
-                        <small id="browse-hint"></small>
+                        <small>Authenticates using a private key file on disk. Recommended for scripted or automated use.</small>
                     </div>
 
                     <!-- Password (shown when auth-method is 'password') -->
                     <div class="form-group hidden" id="password-group">
-                        <label for="profile-password">Password</label>
+                        <label for="profile-password">Password <span class="required">*</span></label>
                         <div class="input-group">
                             <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
                             <button type="button" class="btn btn-secondary btn-toggle-password" id="toggle-password-btn" title="Show password">Show</button>
                         </div>
-                        <small>Stored securely in system keychain</small>
+                        <small>Authenticates using a stored password. Stored securely in the system keychain.</small>
+                    </div>
+
+                    <!-- Central Password (shown when auth-method is 'central_password') -->
+                    <div class="form-group hidden" id="central-password-group">
+                        <label for="profile-central-password-search">Central Password <span class="required">*</span></label>
+                        <div class="input-group">
+                            <div class="searchable-dropdown-wrapper">
+                                <input type="text" id="profile-central-password-search"
+                                    placeholder="Type to search or select..."
+                                    autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off">
+                                <div id="profile-central-password-dropdown" class="searchable-dropdown hidden">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-icon-text" id="add-cp-from-profile-btn" title="Manage central passwords">Manage</button>
+                        </div>
+                        <input type="hidden" id="profile-central-password-id">
+                        <small>A shared credential used across multiple profiles. Stored securely in the system keychain.</small>
                     </div>
 
                     <div class="form-group">

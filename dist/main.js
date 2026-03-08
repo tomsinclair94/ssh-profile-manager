@@ -658,8 +658,10 @@ let profileSaveBtn; // Profile save button in header
 let deleteProfileBtn;
 let modalTitle;
 let authMethodSelect;
+let noneAuthGroup;
 let keyPathGroup;
 let passwordGroup;
+let centralPasswordGroup;
 let confirmModal;
 let confirmMessage;
 let confirmOkBtn;
@@ -1218,6 +1220,15 @@ function getProfileModalTabbableItems() {
 
         const togglePasswordBtn = document.getElementById('toggle-password-btn');
         if (togglePasswordBtn) items.push(togglePasswordBtn);
+    }
+
+    const centralPasswordGroup = document.getElementById('central-password-group');
+    if (centralPasswordGroup && !centralPasswordGroup.classList.contains('hidden')) {
+        const cpSearchInput = document.getElementById('profile-central-password-search');
+        if (cpSearchInput) items.push(cpSearchInput);
+
+        const addCpBtn = document.getElementById('add-cp-from-profile-btn');
+        if (addCpBtn) items.push(addCpBtn);
     }
 
     const profileGroup = document.getElementById('profile-group');
@@ -2706,8 +2717,10 @@ async function init() {
     deleteProfileBtn = document.getElementById('delete-profile-btn');
     modalTitle = document.getElementById('modal-title');
     authMethodSelect = document.getElementById('profile-auth-method');
+    noneAuthGroup = document.getElementById('none-auth-group');
     keyPathGroup = document.getElementById('key-path-group');
     passwordGroup = document.getElementById('password-group');
+    centralPasswordGroup = document.getElementById('central-password-group');
     confirmModal = document.getElementById('confirm-modal');
     confirmMessage = document.getElementById('confirm-message');
     confirmOkBtn = document.getElementById('confirm-ok');
@@ -2858,23 +2871,21 @@ async function init() {
     debug.log('App initialized');
 }
 
-// Set OS-specific hint for browse button
+// Set OS-specific hint in the SSH key path tooltip
 function setBrowseHint() {
-    const browseHint = document.getElementById('browse-hint');
-    if (!browseHint) return;
+    const browseTip = document.getElementById('browse-key-tip');
+    if (!browseTip) return;
 
     // Detect OS using navigator.platform or userAgent
     const platform = navigator.platform.toLowerCase();
     const userAgent = navigator.userAgent.toLowerCase();
 
     if (platform.includes('mac') || userAgent.includes('mac')) {
-        browseHint.textContent = 'Tip: Press Cmd+Shift+. to show hidden files in browser';
+        browseTip.textContent = 'Tip: Press Cmd+Shift+. in the file browser to show hidden files';
     } else if (platform.includes('win') || userAgent.includes('win')) {
-        browseHint.textContent = 'Tip: Enable "Show hidden files" in File Explorer settings to see hidden folders';
-    } else {
-        // Linux or other - could add Linux-specific tip if needed
-        browseHint.textContent = 'Tip: Browser opens in ~/.ssh directory';
+        browseTip.textContent = 'Tip: Enable "Show hidden files" in File Explorer to see hidden folders';
     }
+    // No tip shown for other platforms
 }
 
 // Update scrollbar width CSS variable for search-bar alignment
@@ -5146,6 +5157,36 @@ function setupEventListeners() {
         profileGroupInput.addEventListener('keydown', handleProfileGroupKeydown);
     }
 
+    // Central password searchable dropdown handlers
+    const cpSearchInput = document.getElementById('profile-central-password-search');
+    if (cpSearchInput) {
+        cpSearchInput.addEventListener('input', (e) => {
+            showCentralPasswordDropdown(e.target.value);
+            checkFormChanged();
+        });
+
+        cpSearchInput.addEventListener('focus', () => {
+            showCentralPasswordDropdown(cpSearchInput.value);
+        });
+
+        cpSearchInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                hideCentralPasswordDropdown();
+            }, 150);
+        });
+
+        cpSearchInput.addEventListener('keydown', handleCentralPasswordKeydown);
+    }
+
+    // "Manage Central Passwords" link in profile modal
+    // "+ Password" button in profile modal — opens Central Passwords manager
+    const addCpFromProfileBtn = document.getElementById('add-cp-from-profile-btn');
+    if (addCpFromProfileBtn) {
+        addCpFromProfileBtn.addEventListener('click', () => {
+            openCentralPasswordsModal();
+        });
+    }
+
     // Profile icon searchable dropdown handlers
     const profileIconInput = document.getElementById('profile-icon');
     if (profileIconInput) {
@@ -6355,8 +6396,10 @@ function showUndoToast(message, undoFn, duration = 5000) {
 function updateAuthMethodVisibility() {
     const method = authMethodSelect.value;
 
+    noneAuthGroup.classList.toggle('hidden', method !== 'none');
     keyPathGroup.classList.toggle('hidden', method !== 'key');
     passwordGroup.classList.toggle('hidden', method !== 'password');
+    centralPasswordGroup.classList.toggle('hidden', method !== 'central_password');
 }
 
 // Settings modal functions
@@ -8003,7 +8046,7 @@ function validateProfileImportData(data) {
         }
 
         // Validate auth_method is one of the allowed values
-        const validAuthMethods = ['none', 'key', 'password'];
+        const validAuthMethods = ['none', 'key', 'password', 'central_password'];
         if (!validAuthMethods.includes(profile.auth_method)) {
             return {
                 valid: false,
@@ -9289,6 +9332,14 @@ async function openModal(profile = null) {
             document.getElementById('profile-password').value = '';
         }
 
+        // Load central password reference if auth method is central_password
+        if (profile.auth_method === 'central_password') {
+            await loadCentralPasswordForProfile(profile.central_password_id);
+        } else {
+            document.getElementById('profile-central-password-search').value = '';
+            document.getElementById('profile-central-password-id').value = '';
+        }
+
         // Set icon for editing
         const profileIcon = profile.icon || '';
         document.getElementById('profile-icon').value = profileIcon;
@@ -9319,6 +9370,9 @@ async function openModal(profile = null) {
         // Reset tags for new profile
         selectedProfileTags = new Set();
         renderSelectedTags();
+        // Reset central password fields for new profile
+        document.getElementById('profile-central-password-search').value = '';
+        document.getElementById('profile-central-password-id').value = '';
         deleteProfileBtn.classList.add('hidden');
     }
 
@@ -9372,6 +9426,7 @@ function getCurrentFormValues() {
         auth_method: document.getElementById('profile-auth-method').value,
         key_path: document.getElementById('profile-key-path').value,
         password: document.getElementById('profile-password').value,
+        central_password_id: document.getElementById('profile-central-password-id').value,
         group: document.getElementById('profile-group-id').value, // Use hidden field for group ID
         icon: document.getElementById('profile-icon-value').value, // Icon selection
         favorite: document.getElementById('profile-favorite-checkbox').checked, // Favorite status
@@ -9742,6 +9797,34 @@ async function saveProfile() {
         return;
     }
 
+    const authMethod = document.getElementById('profile-auth-method').value;
+
+    // Validate auth-method-specific required fields
+    if (authMethod === 'key') {
+        const keyPath = document.getElementById('profile-key-path').value.trim();
+        if (!keyPath) {
+            showToast('Please enter an SSH key path.', TOAST_DURATION_LONG, 'error');
+            document.getElementById('profile-key-path').focus();
+            return;
+        }
+    }
+    if (authMethod === 'password') {
+        const password = document.getElementById('profile-password').value;
+        if (!password) {
+            showToast('Please enter a password.', TOAST_DURATION_LONG, 'error');
+            document.getElementById('profile-password').focus();
+            return;
+        }
+    }
+    if (authMethod === 'central_password') {
+        const cpId = document.getElementById('profile-central-password-id').value;
+        if (!cpId) {
+            showToast('Please select a central password.', TOAST_DURATION_LONG, 'error');
+            document.getElementById('profile-central-password-search').focus();
+            return;
+        }
+    }
+
     const profileData = {
         id: editingProfileId,
         name: profileName,
@@ -9749,9 +9832,10 @@ async function saveProfile() {
         host: document.getElementById('profile-host').value,
         port: parseInt(document.getElementById('profile-port').value) || 22,
         username: document.getElementById('profile-username').value,
-        auth_method: document.getElementById('profile-auth-method').value,
-        key_path: document.getElementById('profile-key-path').value || null,
-        password: document.getElementById('profile-password').value || null,
+        auth_method: authMethod,
+        key_path: authMethod === 'key' ? (document.getElementById('profile-key-path').value || null) : null,
+        password: authMethod === 'password' ? (document.getElementById('profile-password').value || null) : null,
+        central_password_id: authMethod === 'central_password' ? (document.getElementById('profile-central-password-id').value || null) : null,
         group_path: selectedGroupPath // Use actual path from group object, not formatted display
     };
 
@@ -9833,6 +9917,13 @@ function duplicateProfile(id) {
     document.getElementById('profile-auth-method').value = duplicatedProfile.auth_method || 'none';
     document.getElementById('profile-key-path').value = duplicatedProfile.key_path || '';
     document.getElementById('profile-password').value = ''; // Don't copy password for security
+    // Central password reference is safe to copy (it's a shared credential by design)
+    if (duplicatedProfile.auth_method === 'central_password' && duplicatedProfile.central_password_id) {
+        loadCentralPasswordForProfile(duplicatedProfile.central_password_id);
+    } else {
+        document.getElementById('profile-central-password-search').value = '';
+        document.getElementById('profile-central-password-id').value = '';
+    }
 
     // Set group (both visible select and hidden ID field)
     const groupPath = duplicatedProfile.group_path || '';
@@ -10427,6 +10518,147 @@ async function closeGroupModal() {
     popModal('group');
     editingGroupId = null;
     groupForm.reset();
+}
+
+// ========== Profile Central Password Dropdown ==========
+
+let centralPasswordDropdownVisible = false;
+let focusedCpDropdownIndex = -1;
+let filteredCpOptions = [];
+
+async function showCentralPasswordDropdown(filterText = '') {
+    const dropdown = document.getElementById('profile-central-password-dropdown');
+    if (!dropdown) return;
+
+    let centralPasswords;
+    try {
+        centralPasswords = await invoke('get_central_passwords');
+    } catch (e) {
+        centralPasswords = [];
+    }
+
+    const normalizedFilter = (filterText || '').toLowerCase().trim();
+    filteredCpOptions = centralPasswords.filter(cp =>
+        cp.name.toLowerCase().includes(normalizedFilter) ||
+        (cp.description && cp.description.toLowerCase().includes(normalizedFilter))
+    );
+
+    let html = '';
+    if (filteredCpOptions.length === 0) {
+        html = '<div class="searchable-dropdown-empty">No central passwords found</div>';
+    } else {
+        const currentCpId = document.getElementById('profile-central-password-id').value;
+        filteredCpOptions.forEach((cp, index) => {
+            const isSelected = cp.id === currentCpId;
+            const descHtml = cp.description
+                ? ` <span class="cp-dropdown-desc">— ${escapeHtml(cp.description)}</span>`
+                : '';
+            html += `<div class="searchable-dropdown-item ${isSelected ? 'selected' : ''}"
+                         data-cp-id="${escapeHtml(cp.id)}"
+                         data-index="${index}">
+                        ${escapeHtml(cp.name)}${descHtml}
+                    </div>`;
+        });
+    }
+
+    dropdown.innerHTML = html;
+    dropdown.classList.remove('hidden');
+    centralPasswordDropdownVisible = true;
+    focusedCpDropdownIndex = -1;
+
+    dropdown.querySelectorAll('.searchable-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const cpId = e.currentTarget.dataset.cpId;
+            const cp = filteredCpOptions.find(c => c.id === cpId);
+            if (cp) selectCentralPassword(cp);
+        });
+    });
+}
+
+function hideCentralPasswordDropdown() {
+    const dropdown = document.getElementById('profile-central-password-dropdown');
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
+    centralPasswordDropdownVisible = false;
+    focusedCpDropdownIndex = -1;
+}
+
+function selectCentralPassword(cp) {
+    document.getElementById('profile-central-password-search').value = cp.name;
+    document.getElementById('profile-central-password-id').value = cp.id;
+    hideCentralPasswordDropdown();
+    checkFormChanged();
+}
+
+function handleCentralPasswordKeydown(e) {
+    if (!centralPasswordDropdownVisible) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+            e.preventDefault();
+            const searchInput = document.getElementById('profile-central-password-search');
+            showCentralPasswordDropdown(searchInput.value);
+        }
+        return;
+    }
+
+    const items = document.querySelectorAll('#profile-central-password-dropdown .searchable-dropdown-item');
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedCpDropdownIndex = Math.min(focusedCpDropdownIndex + 1, items.length - 1);
+        updateFocusedCpDropdownItem(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedCpDropdownIndex = Math.max(focusedCpDropdownIndex - 1, -1);
+        updateFocusedCpDropdownItem(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedCpDropdownIndex >= 0 && focusedCpDropdownIndex < filteredCpOptions.length) {
+            selectCentralPassword(filteredCpOptions[focusedCpDropdownIndex]);
+        }
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideCentralPasswordDropdown();
+    }
+}
+
+function updateFocusedCpDropdownItem(items) {
+    items.forEach((item, index) => {
+        if (index === focusedCpDropdownIndex) {
+            item.classList.add('focused');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('focused');
+        }
+    });
+}
+
+// Load and display a central password name for a given ID (used when opening profile modal)
+async function loadCentralPasswordForProfile(centralPasswordId) {
+    const searchInput = document.getElementById('profile-central-password-search');
+    const idInput = document.getElementById('profile-central-password-id');
+    if (!searchInput || !idInput) return;
+
+    if (!centralPasswordId) {
+        searchInput.value = '';
+        idInput.value = '';
+        return;
+    }
+
+    try {
+        const centralPasswords = await invoke('get_central_passwords');
+        const cp = centralPasswords.find(c => c.id === centralPasswordId);
+        if (cp) {
+            searchInput.value = cp.name;
+            idInput.value = cp.id;
+        } else {
+            searchInput.value = '';
+            idInput.value = '';
+        }
+    } catch (e) {
+        searchInput.value = '';
+        idInput.value = '';
+    }
 }
 
 // ========== Move Profile / Group Modal ==========
