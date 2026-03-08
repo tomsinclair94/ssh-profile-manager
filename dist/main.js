@@ -733,6 +733,7 @@ let newCpNameInput;
 let newCpPasswordInput;
 let createCpBtn;
 let cpListContainer;
+let editingCpId = null; // null = add mode, string = edit mode (the CP id being edited)
 // Move Modal Elements
 let moveModal;
 // Encryption/Decryption Password Modal Elements
@@ -1150,8 +1151,8 @@ function handleGlobalShortcuts(e) {
         return;
     }
 
-    // C - Open Central Passwords (single key; not active when recent connections section has focus)
-    if ((e.key === 'c' || e.key === 'C') && !cmdOrCtrl && activeNavigationSection !== 'recent') {
+    // P - Open Central Password Manager (single key)
+    if ((e.key === 'p' || e.key === 'P') && !cmdOrCtrl) {
         e.preventDefault();
         openCentralPasswordsModal();
         return;
@@ -1441,6 +1442,16 @@ function getCentralPasswordsModalTabbableItems() {
     document.querySelectorAll('.cp-list-item:not(.cp-editing) .cp-item-view button').forEach(btn => {
         items.push(btn);
     });
+
+    // Bulk action buttons (only if visible)
+    const bulkActions = document.getElementById('cp-bulk-actions');
+    if (bulkActions && !bulkActions.classList.contains('hidden')) {
+        const selectAllBtn = document.getElementById('select-all-cps-btn');
+        if (selectAllBtn) items.push(selectAllBtn);
+
+        const deleteSelectedBtn = document.getElementById('delete-selected-cps-btn');
+        if (deleteSelectedBtn) items.push(deleteSelectedBtn);
+    }
 
     const closeBtn = document.getElementById('central-passwords-close-btn');
     if (closeBtn) items.push(closeBtn);
@@ -2544,7 +2555,7 @@ function showKeyboardShortcutsHelp() {
             { keys: 'G', action: 'New Group' },
             { keys: 'S', action: 'Open Settings' },
             { keys: 'T', action: 'Open Tag Manager' },
-            { keys: 'C', action: 'Open Central Passwords' },
+            { keys: 'P', action: 'Open Central Password Manager' },
             { keys: `${modKey} + S`, action: 'Focus Search' },
             { keys: `${modKey} + F`, action: 'Filter Groups' },
             { keys: `${modKey} + ← / →`, action: 'Collapse / Expand All Groups' },
@@ -5522,14 +5533,41 @@ function setupEventListeners() {
         createCentralPassword();
     });
 
+    const cancelCpEditBtn = document.getElementById('cancel-cp-edit-btn');
+    if (cancelCpEditBtn) {
+        cancelCpEditBtn.addEventListener('click', () => {
+            exitCpEditMode();
+            resetCpForm();
+            validateCpCreateForm();
+            newCpNameInput?.focus();
+        });
+    }
+
     newCpNameInput.addEventListener('input', () => {
         validateCpCreateForm();
         updateCpNameCounter();
     });
 
+    const cpDescInput = document.getElementById('new-cp-description-input');
+    if (cpDescInput) {
+        cpDescInput.addEventListener('input', () => {
+            updateCpDescriptionCounter();
+        });
+    }
+
     newCpPasswordInput.addEventListener('input', () => {
         validateCpCreateForm();
     });
+
+    const selectAllCpsBtn = document.getElementById('select-all-cps-btn');
+    if (selectAllCpsBtn) {
+        selectAllCpsBtn.addEventListener('click', toggleSelectAllCps);
+    }
+
+    const deleteSelectedCpsBtn = document.getElementById('delete-selected-cps-btn');
+    if (deleteSelectedCpsBtn) {
+        deleteSelectedCpsBtn.addEventListener('click', deleteSelectedCps);
+    }
 
     newCpNameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -12766,27 +12804,9 @@ async function openCentralPasswordsModal() {
 function closeCentralPasswordsModal() {
     centralPasswordsModal.classList.add('hidden');
     popModal('central-passwords');
-
-    // Reset create form
-    if (newCpNameInput) newCpNameInput.value = '';
-    const descInput = document.getElementById('new-cp-description-input');
-    if (descInput) descInput.value = '';
-    if (newCpPasswordInput) {
-        newCpPasswordInput.value = '';
-        newCpPasswordInput.type = 'password';
-    }
-    const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
-    if (toggleBtn) toggleBtn.textContent = 'Show';
-    const counter = document.getElementById('cp-name-counter');
-    if (counter) {
-        counter.textContent = '0 / 64';
-        counter.classList.remove('over-limit');
-    }
-
+    exitCpEditMode();
+    resetCpForm();
     validateCpCreateForm();
-
-    // Close any open inline forms
-    closeAllCpInlineForms();
 }
 
 // Fetch all CPs and usage counts, then render
@@ -12807,10 +12827,12 @@ async function refreshCentralPasswordsList() {
 // Render the central passwords list
 function renderCentralPasswordsList(items) {
     const container = document.getElementById('cp-list-container');
+    const bulkActions = document.getElementById('cp-bulk-actions');
     if (!container) return;
 
     if (!items || items.length === 0) {
         container.innerHTML = '<div class="cp-list-empty">No central passwords created yet.</div>';
+        if (bulkActions) bulkActions.classList.add('hidden');
         return;
     }
 
@@ -12822,6 +12844,7 @@ function renderCentralPasswordsList(items) {
         return `
             <div class="cp-list-item" data-cp-id="${escapeHtml(cp.id)}">
                 <div class="cp-item-view">
+                    <input type="checkbox" class="cp-checkbox" data-cp-id="${escapeHtml(cp.id)}" data-cp-name="${escapeHtml(cp.name)}" data-cp-count="${count}">
                     <div class="cp-item-info">
                         <div class="cp-item-name">${escapeHtml(cp.name)}</div>
                         <div class="cp-item-meta">${metaText}</div>
@@ -12829,8 +12852,7 @@ function renderCentralPasswordsList(items) {
                     </div>
                     <div class="cp-item-actions">
                         <button class="btn btn-small btn-secondary cp-show-btn" data-cp-id="${escapeHtml(cp.id)}">Show</button>
-                        <button class="btn btn-small btn-secondary cp-edit-btn" data-cp-id="${escapeHtml(cp.id)}" data-cp-name="${escapeHtml(cp.name)}" data-cp-desc="${escapeHtml(cp.description || '')}">Edit</button>
-                        <button class="btn btn-small btn-secondary cp-change-pwd-btn" data-cp-id="${escapeHtml(cp.id)}">Change Password</button>
+                        <button class="btn btn-small btn-primary cp-edit-btn" data-cp-id="${escapeHtml(cp.id)}" data-cp-name="${escapeHtml(cp.name)}" data-cp-desc="${escapeHtml(cp.description || '')}">Edit</button>
                         <button class="btn btn-small btn-danger cp-delete-btn" data-cp-id="${escapeHtml(cp.id)}" data-cp-name="${escapeHtml(cp.name)}" data-cp-count="${count}">Delete</button>
                     </div>
                 </div>
@@ -12840,6 +12862,9 @@ function renderCentralPasswordsList(items) {
 
     container.innerHTML = html;
 
+    // Show bulk actions
+    if (bulkActions) bulkActions.classList.remove('hidden');
+
     // Wire up event listeners
     container.querySelectorAll('.cp-show-btn').forEach(btn => {
         btn.addEventListener('click', () => showCentralPasswordValue(btn.dataset.cpId, btn));
@@ -12847,15 +12872,7 @@ function renderCentralPasswordsList(items) {
 
     container.querySelectorAll('.cp-edit-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const itemEl = btn.closest('.cp-list-item');
-            openCpEditForm(btn.dataset.cpId, btn.dataset.cpName, btn.dataset.cpDesc, itemEl);
-        });
-    });
-
-    container.querySelectorAll('.cp-change-pwd-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const itemEl = btn.closest('.cp-list-item');
-            openCpChangePasswordForm(btn.dataset.cpId, itemEl);
+            enterCpEditMode(btn.dataset.cpId, btn.dataset.cpName, btn.dataset.cpDesc);
         });
     });
 
@@ -12864,9 +12881,15 @@ function renderCentralPasswordsList(items) {
             deleteCentralPassword(btn.dataset.cpId, btn.dataset.cpName, parseInt(btn.dataset.cpCount));
         });
     });
+
+    container.querySelectorAll('.cp-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateCpBulkActionsUI);
+    });
+
+    updateCpBulkActionsUI();
 }
 
-// Update CP name character counter
+// Update CP name character counter and validate character pattern
 function updateCpNameCounter() {
     const counter = document.getElementById('cp-name-counter');
     if (!counter || !newCpNameInput) return;
@@ -12879,19 +12902,127 @@ function updateCpNameCounter() {
     } else {
         counter.classList.remove('over-limit');
     }
+
+    // Validate character pattern
+    const validPattern = /^[a-zA-Z0-9\s\-_().\[\]#]*$/;
+    if (newCpNameInput.value && !validPattern.test(newCpNameInput.value)) {
+        newCpNameInput.classList.add('validation-error');
+    } else {
+        newCpNameInput.classList.remove('validation-error');
+    }
+}
+
+// Update CP description character counter
+function updateCpDescriptionCounter() {
+    const counter = document.getElementById('cp-description-counter');
+    const descInput = document.getElementById('new-cp-description-input');
+    if (!counter || !descInput) return;
+
+    const currentLength = descInput.value.length;
+    counter.textContent = `${currentLength} / 128`;
+
+    if (currentLength >= 128) {
+        counter.classList.add('over-limit');
+    } else {
+        counter.classList.remove('over-limit');
+    }
 }
 
 // Validate CP create form and enable/disable the Add Password button
 function validateCpCreateForm() {
     if (!newCpNameInput || !newCpPasswordInput || !createCpBtn) return;
 
-    const nameOk = newCpNameInput.value.trim().length > 0;
+    const name = newCpNameInput.value.trim();
+    const validPattern = /^[a-zA-Z0-9\s\-_().\[\]#]+$/;
+    const nameOk = name.length > 0 && validPattern.test(name);
     const pwdOk = newCpPasswordInput.value.length > 0;
     createCpBtn.disabled = !(nameOk && pwdOk);
 }
 
-// Create a new central password
-async function createCentralPassword() {
+// Update Select All / Delete Selected button state for CP bulk actions
+function updateCpBulkActionsUI() {
+    const selectAllBtn = document.getElementById('select-all-cps-btn');
+    const deleteSelectedBtn = document.getElementById('delete-selected-cps-btn');
+    if (!selectAllBtn) return;
+
+    const checkboxes = document.querySelectorAll('.cp-checkbox');
+    const checkedCount = document.querySelectorAll('.cp-checkbox:checked').length;
+
+    selectAllBtn.textContent = (checkedCount === checkboxes.length && checkboxes.length > 0) ? 'Unselect All' : 'Select All';
+
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.disabled = checkedCount === 0;
+        if (checkedCount === 0) {
+            deleteSelectedBtn.textContent = 'Delete Selected';
+        } else if (checkedCount === 1) {
+            deleteSelectedBtn.textContent = 'Delete 1 Password';
+        } else {
+            deleteSelectedBtn.textContent = `Delete ${checkedCount} Passwords`;
+        }
+    }
+}
+
+// Toggle select/unselect all CP checkboxes
+function toggleSelectAllCps() {
+    const checkboxes = document.querySelectorAll('.cp-checkbox');
+    const checkedCount = document.querySelectorAll('.cp-checkbox:checked').length;
+    const shouldSelect = checkedCount !== checkboxes.length;
+    checkboxes.forEach(cb => { cb.checked = shouldSelect; });
+    updateCpBulkActionsUI();
+}
+
+// Delete all selected central passwords
+async function deleteSelectedCps() {
+    const checkboxes = document.querySelectorAll('.cp-checkbox:checked');
+    if (checkboxes.length === 0) return;
+
+    const cpsToDelete = Array.from(checkboxes).map(cb => ({
+        id: cb.dataset.cpId,
+        name: cb.dataset.cpName,
+        count: parseInt(cb.dataset.cpCount)
+    }));
+
+    const totalCount = cpsToDelete.length;
+    const totalProfiles = cpsToDelete.reduce((sum, cp) => sum + cp.count, 0);
+
+    const lines = [
+        {
+            segments: [
+                { text: 'Delete ' },
+                { highlight: `${totalCount} central password${totalCount !== 1 ? 's' : ''}` }
+            ]
+        }
+    ];
+
+    const warnings = [];
+    if (totalProfiles > 0) {
+        warnings.push(`${totalProfiles} profile${totalProfiles !== 1 ? 's' : ''} use these passwords and will revert to keyboard-interactive authentication.`);
+    }
+
+    const confirmed = await showConfirmDialog({
+        title: `Delete ${totalCount} Central Password${totalCount !== 1 ? 's' : ''}`,
+        message: buildConfirmMessage({ lines, warnings }),
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+        for (const cp of cpsToDelete) {
+            await invoke('delete_central_password', { centralPasswordId: cp.id });
+        }
+        showToast(`Deleted ${totalCount} central password${totalCount !== 1 ? 's' : ''}`, TOAST_DURATION_SHORT, 'success');
+        await refreshCentralPasswordsList();
+    } catch (error) {
+        console.error('Failed to delete central passwords:', error);
+        showToast(`Failed to delete: ${error}`, TOAST_DURATION_LONG, 'error');
+        await refreshCentralPasswordsList();
+    }
+}
+
+// Shared validation for the CP form (used by both create and update paths)
+function validateAndGetCpFormValues() {
     const name = newCpNameInput.value.trim();
     const descInput = document.getElementById('new-cp-description-input');
     const description = descInput ? (descInput.value.trim() || null) : null;
@@ -12900,45 +13031,91 @@ async function createCentralPassword() {
     if (!name) {
         showToast('Name is required', TOAST_DURATION_SHORT, 'error');
         newCpNameInput.focus();
-        return;
+        return null;
+    }
+
+    const validNamePattern = /^[a-zA-Z0-9\s\-_().\[\]#]+$/;
+    if (!validNamePattern.test(name)) {
+        showToast('Name contains invalid characters', TOAST_DURATION_SHORT, 'error');
+        newCpNameInput.focus();
+        return null;
     }
 
     if (!password) {
         showToast('Password is required', TOAST_DURATION_SHORT, 'error');
         newCpPasswordInput.focus();
-        return;
+        return null;
     }
 
-    if (createCpBtn.disabled) return;
+    return { name, description, password };
+}
 
-    try {
-        createCpBtn.disabled = true;
-        await invoke('create_central_password', { input: { name, description, password } });
-        showToast('Central password added successfully', TOAST_DURATION_SHORT, 'success');
-
-        // Reset form
+// Reset the CP form fields and counters after a successful save
+function resetCpForm() {
+    if (newCpNameInput) {
         newCpNameInput.value = '';
-        if (descInput) descInput.value = '';
+        newCpNameInput.classList.remove('validation-error');
+    }
+    const descInput = document.getElementById('new-cp-description-input');
+    if (descInput) descInput.value = '';
+    if (newCpPasswordInput) {
         newCpPasswordInput.value = '';
         newCpPasswordInput.type = 'password';
-        const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
-        if (toggleBtn) toggleBtn.textContent = 'Show';
-        const counter = document.getElementById('cp-name-counter');
-        if (counter) {
-            counter.textContent = '0 / 64';
-            counter.classList.remove('over-limit');
+    }
+    const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
+    if (toggleBtn) toggleBtn.textContent = 'Show';
+    const counter = document.getElementById('cp-name-counter');
+    if (counter) { counter.textContent = '0 / 64'; counter.classList.remove('over-limit'); }
+    const descCounter = document.getElementById('cp-description-counter');
+    if (descCounter) { descCounter.textContent = '0 / 128'; descCounter.classList.remove('over-limit'); }
+}
+
+// Create or update a central password depending on whether we are in edit mode
+async function createCentralPassword() {
+    if (createCpBtn.disabled) return;
+
+    if (editingCpId) {
+        // --- Update existing ---
+        const values = validateAndGetCpFormValues();
+        if (!values) return;
+        const { name, description, password } = values;
+
+        try {
+            createCpBtn.disabled = true;
+            await invoke('update_central_password', { input: { id: editingCpId, name, description } });
+            await invoke('update_central_password_value', { centralPasswordId: editingCpId, password });
+            showToast('Central password updated', TOAST_DURATION_SHORT, 'success');
+            exitCpEditMode();
+            resetCpForm();
+            await refreshCentralPasswordsList();
+            newCpNameInput?.focus();
+        } catch (error) {
+            console.error('Failed to update central password:', error);
+            const msg = String(error).includes('UNIQUE') ? 'A central password with that name already exists' : `Failed to update: ${error}`;
+            showToast(msg, TOAST_DURATION_LONG, 'error');
+        } finally {
+            validateCpCreateForm();
         }
+    } else {
+        // --- Create new ---
+        const values = validateAndGetCpFormValues();
+        if (!values) return;
+        const { name, description, password } = values;
 
-        // Refresh list
-        await refreshCentralPasswordsList();
-
-        // Focus back on name input
-        newCpNameInput.focus();
-    } catch (error) {
-        console.error('Failed to create central password:', error);
-        showToast(`Failed to add central password: ${error}`, TOAST_DURATION_LONG, 'error');
-    } finally {
-        validateCpCreateForm();
+        try {
+            createCpBtn.disabled = true;
+            await invoke('create_central_password', { input: { name, description, password } });
+            showToast('Central password added successfully', TOAST_DURATION_SHORT, 'success');
+            resetCpForm();
+            await refreshCentralPasswordsList();
+            newCpNameInput?.focus();
+        } catch (error) {
+            console.error('Failed to create central password:', error);
+            const msg = String(error).includes('UNIQUE') ? 'A central password with that name already exists' : `Failed to add central password: ${error}`;
+            showToast(msg, TOAST_DURATION_LONG, 'error');
+        } finally {
+            validateCpCreateForm();
+        }
     }
 }
 
@@ -13023,155 +13200,58 @@ async function showCentralPasswordValue(cpId, btn) {
 }
 
 // Open inline edit form for name/description on a list item
-function openCpEditForm(cpId, currentName, currentDesc, itemEl) {
-    closeAllCpInlineForms();
+// Enter edit mode: populate the create form with existing CP values
+async function enterCpEditMode(cpId, cpName, cpDesc) {
+    editingCpId = cpId;
 
-    const view = itemEl.querySelector('.cp-item-view');
-    view.classList.add('hidden');
-    itemEl.classList.add('cp-editing');
+    // Populate fields
+    if (newCpNameInput) {
+        newCpNameInput.value = cpName;
+        newCpNameInput.classList.remove('validation-error');
+    }
+    const descInput = document.getElementById('new-cp-description-input');
+    if (descInput) descInput.value = cpDesc || '';
 
-    const form = document.createElement('div');
-    form.className = 'cp-inline-form';
-    form.innerHTML = `
-        <div class="form-group">
-            <label>Name <span class="required">*</span></label>
-            <input type="text" class="cp-edit-name" value="${escapeHtml(currentName)}" maxlength="64" spellcheck="false" autocorrect="off" autocapitalize="off" />
-        </div>
-        <div class="form-group">
-            <label>Description</label>
-            <input type="text" class="cp-edit-desc" value="${escapeHtml(currentDesc)}" maxlength="128" placeholder="Optional description" />
-        </div>
-        <div class="cp-inline-actions">
-            <button class="btn btn-secondary btn-small cp-cancel-btn">Cancel</button>
-            <button class="btn btn-primary btn-small cp-save-meta-btn">Save</button>
-        </div>
-    `;
-
-    itemEl.appendChild(form);
-    setTimeout(() => form.querySelector('.cp-edit-name')?.focus(), 50);
-
-    form.querySelector('.cp-cancel-btn').addEventListener('click', () => {
-        form.remove();
-        view.classList.remove('hidden');
-        itemEl.classList.remove('cp-editing');
-    });
-
-    const saveBtn = form.querySelector('.cp-save-meta-btn');
-    const doSave = async () => {
-        const newName = form.querySelector('.cp-edit-name').value.trim();
-        const newDesc = form.querySelector('.cp-edit-desc').value.trim() || null;
-
-        if (!newName) {
-            showToast('Name is required', TOAST_DURATION_SHORT, 'error');
-            form.querySelector('.cp-edit-name').focus();
-            return;
+    // Fetch and populate password
+    try {
+        const password = await invoke('get_central_password_value', { centralPasswordId: cpId });
+        if (newCpPasswordInput) {
+            newCpPasswordInput.value = password;
+            newCpPasswordInput.type = 'password';
+            const toggleBtn = document.getElementById('toggle-new-cp-password-btn');
+            if (toggleBtn) toggleBtn.textContent = 'Show';
         }
+    } catch (error) {
+        console.error('Failed to fetch password for editing:', error);
+        showToast('Failed to load password for editing', TOAST_DURATION_SHORT, 'error');
+    }
 
-        try {
-            saveBtn.disabled = true;
-            await invoke('update_central_password', { input: { id: cpId, name: newName, description: newDesc } });
-            showToast('Central password updated', TOAST_DURATION_SHORT, 'success');
-            await refreshCentralPasswordsList();
-        } catch (error) {
-            console.error('Failed to update central password:', error);
-            showToast(`Failed to update: ${error}`, TOAST_DURATION_LONG, 'error');
-            saveBtn.disabled = false;
-        }
-    };
+    // Switch UI to edit mode
+    const formTitle = document.getElementById('cp-form-title');
+    if (formTitle) formTitle.textContent = 'Edit Central Password';
+    if (createCpBtn) createCpBtn.textContent = 'Update Password';
+    const cancelBtn = document.getElementById('cancel-cp-edit-btn');
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
 
-    saveBtn.addEventListener('click', doSave);
+    // Update counters and validation
+    updateCpNameCounter();
+    updateCpDescriptionCounter();
+    validateCpCreateForm();
 
-    form.querySelector('.cp-edit-name').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
-    });
-    form.querySelector('.cp-edit-desc').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
-    });
+    // Scroll to top and focus name field
+    const content = document.querySelector('.central-passwords-content');
+    if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => newCpNameInput?.focus(), 150);
 }
 
-// Open inline change-password form on a list item
-function openCpChangePasswordForm(cpId, itemEl) {
-    closeAllCpInlineForms();
+// Exit edit mode: reset form back to add mode
+function exitCpEditMode() {
+    if (!editingCpId) return;
+    editingCpId = null;
 
-    const view = itemEl.querySelector('.cp-item-view');
-    view.classList.add('hidden');
-    itemEl.classList.add('cp-editing');
-
-    const form = document.createElement('div');
-    form.className = 'cp-inline-form';
-    form.innerHTML = `
-        <div class="form-group">
-            <label>New Password <span class="required">*</span></label>
-            <div class="input-group">
-                <input type="password" class="cp-new-password" placeholder="Enter new password" spellcheck="false" autocorrect="off" autocapitalize="off" />
-                <button type="button" class="btn btn-secondary btn-toggle-password cp-toggle-pwd-btn">Show</button>
-            </div>
-        </div>
-        <div class="cp-inline-actions">
-            <button class="btn btn-secondary btn-small cp-cancel-btn">Cancel</button>
-            <button class="btn btn-primary btn-small cp-save-pwd-btn">Save Password</button>
-        </div>
-    `;
-
-    itemEl.appendChild(form);
-    setTimeout(() => form.querySelector('.cp-new-password')?.focus(), 50);
-
-    form.querySelector('.cp-toggle-pwd-btn').addEventListener('click', () => {
-        const pwdInput = form.querySelector('.cp-new-password');
-        const toggleBtn = form.querySelector('.cp-toggle-pwd-btn');
-        if (pwdInput.type === 'password') {
-            pwdInput.type = 'text';
-            toggleBtn.textContent = 'Hide';
-        } else {
-            pwdInput.type = 'password';
-            toggleBtn.textContent = 'Show';
-        }
-    });
-
-    form.querySelector('.cp-cancel-btn').addEventListener('click', () => {
-        form.remove();
-        view.classList.remove('hidden');
-        itemEl.classList.remove('cp-editing');
-    });
-
-    const saveBtn = form.querySelector('.cp-save-pwd-btn');
-    const doSave = async () => {
-        const newPassword = form.querySelector('.cp-new-password').value;
-
-        if (!newPassword) {
-            showToast('Password is required', TOAST_DURATION_SHORT, 'error');
-            form.querySelector('.cp-new-password').focus();
-            return;
-        }
-
-        try {
-            saveBtn.disabled = true;
-            await invoke('update_central_password_value', { centralPasswordId: cpId, password: newPassword });
-            showToast('Password updated successfully', TOAST_DURATION_SHORT, 'success');
-            form.remove();
-            view.classList.remove('hidden');
-            itemEl.classList.remove('cp-editing');
-        } catch (error) {
-            console.error('Failed to update central password value:', error);
-            showToast(`Failed to update password: ${error}`, TOAST_DURATION_LONG, 'error');
-            saveBtn.disabled = false;
-        }
-    };
-
-    saveBtn.addEventListener('click', doSave);
-
-    form.querySelector('.cp-new-password').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
-    });
-}
-
-// Close all open CP inline forms (edit or change-password)
-function closeAllCpInlineForms() {
-    document.querySelectorAll('.cp-list-item .cp-inline-form').forEach(form => {
-        const itemEl = form.closest('.cp-list-item');
-        const view = itemEl.querySelector('.cp-item-view');
-        form.remove();
-        if (view) view.classList.remove('hidden');
-        itemEl.classList.remove('cp-editing');
-    });
+    const formTitle = document.getElementById('cp-form-title');
+    if (formTitle) formTitle.textContent = 'Add New Central Password';
+    if (createCpBtn) createCpBtn.textContent = 'Add Password';
+    const cancelBtn = document.getElementById('cancel-cp-edit-btn');
+    if (cancelBtn) cancelBtn.classList.add('hidden');
 }

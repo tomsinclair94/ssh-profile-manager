@@ -25,7 +25,7 @@
             <div class="header-buttons">
                 <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile"><span class="btn-label-wide">+ New Profile</span><span class="btn-label-compact">+ Profile</span></button>
                 <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles"><span class="btn-label-wide">+ New Group</span><span class="btn-label-compact">+ Group</span></button>
-                <button id="central-passwords-btn" class="btn btn-settings" title="Manage Central Passwords (C)">
+                <button id="central-passwords-btn" class="btn btn-settings" title="Central Password Manager (P)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
                     </svg>
@@ -847,7 +847,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <div class="modal-header-left">
-                        <h2>Central Passwords</h2>
+                        <h2>Central Password Manager</h2>
                     </div>
                     <div class="modal-header-right">
                         <button type="button" class="btn btn-secondary" id="central-passwords-close-btn">Close</button>
@@ -857,19 +857,30 @@
                 <div class="central-passwords-content">
                     <!-- Add New Central Password -->
                     <div class="cp-create-section">
-                        <h3>Add New Central Password</h3>
+                        <h3 id="cp-form-title">Add New Central Password</h3>
 
                         <div class="form-group">
                             <label for="new-cp-name-input">Name <span class="required">*</span></label>
                             <input
                                 type="text"
                                 id="new-cp-name-input"
-                                placeholder="e.g., AD Account, Jump Host"
+                                placeholder="e.g., Active Directory Password"
                                 maxlength="64"
                                 spellcheck="false"
                                 autocorrect="off"
                                 autocapitalize="off"
                             />
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">Name Requirements</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Letters and numbers allowed</li>
+                                        <li>Special characters: - _ ( ) . [ ] #</li>
+                                        <li>Spaces allowed</li>
+                                        <li>Maximum 64 characters</li>
+                                    </ul>
+                                </div>
+                            </div>
                             <span class="char-counter" id="cp-name-counter">0 / 64</span>
                         </div>
 
@@ -881,6 +892,17 @@
                                 placeholder="Optional description"
                                 maxlength="128"
                             />
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">Description Requirements</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Most characters allowed</li>
+                                        <li>Cannot contain &lt; or &gt;</li>
+                                        <li>Maximum 128 characters</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <span class="char-counter" id="cp-description-counter">0 / 128</span>
                         </div>
 
                         <div class="form-group">
@@ -899,6 +921,7 @@
                         </div>
 
                         <div class="cp-create-actions">
+                            <button id="cancel-cp-edit-btn" class="btn btn-secondary hidden">Cancel</button>
                             <button id="create-cp-btn" class="btn btn-primary" disabled>Add Password</button>
                         </div>
                     </div>
@@ -908,6 +931,11 @@
                         <h3>Saved Central Passwords</h3>
                         <div id="cp-list-container" class="cp-list">
                             <!-- Populated dynamically -->
+                        </div>
+                        <!-- Bulk Actions -->
+                        <div id="cp-bulk-actions" class="cp-bulk-actions hidden">
+                            <button id="select-all-cps-btn" class="btn btn-secondary">Select All</button>
+                            <button id="delete-selected-cps-btn" class="btn btn-danger">Delete Selected</button>
                         </div>
                     </div>
                 </div>

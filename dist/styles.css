@@ -1309,7 +1309,8 @@ button.keyboard-selected {
 #settings-modal .modal-content,
 #group-modal .modal-content,
 #move-modal .modal-content,
-#tag-manager-modal .modal-content {
+#tag-manager-modal .modal-content,
+#central-passwords-modal .modal-content {
     display: flex;
     flex-direction: column;
     overflow: hidden; /* Prevent all scroll propagation */
@@ -2205,9 +2206,7 @@ form {
 }
 
 .tag-list-section {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+    display: block;
     padding-bottom: 24px; /* Consistent bottom gap whether bulk actions are hidden or visible */
 }
 
@@ -2216,7 +2215,6 @@ form {
     font-weight: 600;
     margin-bottom: 12px;
     color: var(--text-color);
-    flex-shrink: 0;
 }
 
 .tag-list {
@@ -2224,8 +2222,8 @@ form {
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     background: var(--bg-secondary);
-    min-height: 59px; /* Always show at least one row (12px + 33px button + 12px padding + 2px border) */
-    max-height: 291px; /* Exactly 5 rows (58px × 4 + 57px last + 2px border = 291px); scrolls with more tags */
+    min-height: 59px; /* 1 row min — Tag Manager formula: 58px × n + 1px; for n=1: 58×1 + 1 = 59px */
+    max-height: 291px; /* 5 rows max — Tag Manager formula: 58px × n + 1px; for n=5: 58×5 + 1 = 291px; to change: substitute n */
 }
 
 .tag-list:empty {
@@ -2307,18 +2305,18 @@ form {
 }
 
 .tag-bulk-actions .btn {
-    width: 145px;
+    width: 155px;
     white-space: nowrap;
 }
 
 /* Central Passwords Modal */
 #central-passwords-modal .modal-content {
-    max-width: 620px;
+    max-width: 600px;
     padding-bottom: 0;
 }
 
 .central-passwords-content {
-    padding: 24px 24px 0 24px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -2328,9 +2326,7 @@ form {
 }
 
 .cp-create-section {
-    background: var(--bg-secondary);
-    border-radius: var(--radius);
-    padding: 12px;
+    padding: 0;
     margin-bottom: 4px;
     flex-shrink: 0;
 }
@@ -2353,14 +2349,12 @@ form {
 .cp-create-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
     padding-top: 8px;
 }
 
 .cp-list-section {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    padding-bottom: 24px;
+    display: block;
     margin-top: 16px;
 }
 
@@ -2369,7 +2363,6 @@ form {
     font-weight: 600;
     margin-bottom: 12px;
     color: var(--text-color);
-    flex-shrink: 0;
 }
 
 .cp-list {
@@ -2377,7 +2370,8 @@ form {
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     background: var(--bg-secondary);
-    min-height: 59px;
+    min-height: 60px; /* 1 row min — CP Manager formula: 59px × n + 1px; for n=1: 59×1 + 1 = 60px */
+    max-height: 178px; /* 3 rows max — CP Manager formula: 59px × n + 1px; for n=3: 59×3 + 1 = 178px; to change: substitute n */ /* Show up to 3 rows before scrolling (57px × 3 items + 1px top border + 1px bottom border) */
 }
 
 .cp-list-item {
@@ -2406,6 +2400,14 @@ form {
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
+}
+
+.cp-item-view .cp-checkbox {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
 }
 
 .cp-item-info {
@@ -2477,6 +2479,23 @@ form {
     gap: 8px;
     justify-content: flex-end;
     margin-top: 10px;
+}
+
+/* CP Bulk Actions */
+.cp-bulk-actions {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 24px 16px 24px 16px;
+}
+
+.cp-bulk-actions.hidden {
+    display: none;
+}
+
+.cp-bulk-actions .btn {
+    width: 155px;
+    white-space: nowrap;
 }
 
 /* Tag Selector (Profile Editor) - Tokenized Input */

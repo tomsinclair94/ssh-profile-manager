@@ -30,7 +30,7 @@ bun run build    # Production build
 - ✅ Phase 1: SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
 - ✅ Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
 - ✅ Phase 3: Export/Import — `central_password_ref` field on all export/import paths
-- ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, inline edit/change-password forms, `C` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
+- ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode (Edit populates top form), bulk select/delete with checkboxes, `P` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
 - ✅ Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
 - ⏳ Phase 6: Tests — `central_passwords.rs` module (~15 tests) + integration tests
 
@@ -365,7 +365,7 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Injection strategy varies by terminal: inline env vars (macOS default, cmd, PowerShell), script prepend (macOS custom, Windows custom), temp `.bat` + `cmd /c` (Windows Terminal, Windows default wt path)
 - If no password stored, a clear error toast is shown directing the user to edit the profile
 - Central Passwords (shared credentials for multiple profiles) — backend complete (Phase 2), UI complete (Phase 4)
-- Central Passwords manager: key-icon toolbar button + `C` shortcut; modal with create form, list with Show/Edit/Change Password/Delete actions; inline expand forms for editing
+- Central Passwords manager: key-icon toolbar button + `P` shortcut; modal with create/edit form at top (Edit populates form, fetches password), list with Show/Edit/Delete actions, bulk select/delete with checkboxes
 - SSH key authentication remains recommended for automated/scripted connections
 
 ## Database Schema
