@@ -13,6 +13,7 @@
 - [x] Phase 4: Central Passwords Manager UI — modal, toolbar button (key icon), `P` shortcut, form-based edit mode, bulk select/delete with checkboxes ✅
 - [x] Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate ✅
 - [x] Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration + 1 profiles test; 163 total ✅
+- [ ] Phase 7: Functional GUI Testing — test plan + macOS execution + bug fixes
 
 See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.
 
