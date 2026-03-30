@@ -25,7 +25,7 @@ tauri = { version = "2.10", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
-uuid = { version = "1.22", features = ["v4", "serde", "fast-rng"] }
+uuid = { version = "1.23", features = ["v4", "serde", "fast-rng"] }
 keyring = { version = "3.6", features = ["apple-native", "windows-native", "linux-native"] }
 dirs = "5.0"
 shellexpand = "3.1"
