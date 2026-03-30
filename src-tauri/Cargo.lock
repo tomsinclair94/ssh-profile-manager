@@ -4117,7 +4117,7 @@ dependencies = [
  "log",
  "pbkdf2",
  "portable-pty",
- "rand 0.8.5",
+ "rand 0.10.0",
  "reqwest",
  "rfd",
  "rusqlite",
