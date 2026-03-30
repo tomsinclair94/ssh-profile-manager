@@ -42,7 +42,7 @@ unicode-normalization = "0.1"
 # Cryptographic dependencies for export encryption (Phase 6)
 aes-gcm = "0.10"                    # AES-256-GCM authenticated encryption
 pbkdf2 = { version = "0.12", features = ["simple"] }  # PBKDF2 key derivation
-sha2 = "0.10"                       # SHA256 hashing for HMAC
+sha2 = "0.11"                       # SHA256 hashing for HMAC
 hmac = "0.12"                       # HMAC construction
 zeroize = "1.7"                     # Secure memory clearing
 
