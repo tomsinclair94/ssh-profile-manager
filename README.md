@@ -7,7 +7,7 @@
 **A lightweight, native SSH profile manager built with Tauri and Rust**
 
 [![macOS](https://img.shields.io/badge/macOS-14.0+-000000?style=flat&logo=apple&logoColor=white)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
-[![Windows](https://img.shields.io/badge/Windows-10+-0078D6?style=flat&logo=windows&logoColor=white)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
+[![Windows](https://img.shields.io/badge/Windows-11+-0078D6?style=flat&logo=windows&logoColor=white)](https://github.com/tomsinclair94/ssh-profile-manager/releases)
 [![Rust](https://img.shields.io/badge/Rust-1.77+-orange?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat)](LICENSE)
@@ -15,7 +15,7 @@
 
 [![Download Latest Release](https://img.shields.io/badge/Download-v0.9.0-brightgreen?style=for-the-badge&logo=github)](https://github.com/tomsinclair94/ssh-profile-manager/releases/latest)
 
-<sub>**macOS 14.0+ | Windows 10+ | Native Performance**</sub>
+<sub>**macOS 14.0+ | Windows 11+ | Native Performance**</sub>
 
 <sub>⚠️ **macOS Gatekeeper Warning** ⚠️</sub>
 
@@ -43,7 +43,8 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 - ⭐ Favourites — star profiles for instant access from the top of the list
 - 🎨 Profile icons — choose from 40+ icons for visual recognition
 - 🏷️ Tags — colour-coded labels with `tag:name` search filtering
-- 🔑 SSH Key, Password (keychain), or Keyboard-Interactive auth
+- 🔑 SSH Key, Password (keychain), Central Password (shared credential), or Keyboard-Interactive auth
+- 🗝️ Central Passwords — shared credentials across multiple profiles; rotate once, all profiles update
 
 **Export & Import**
 - 📤 Export/import individual profiles or entire group trees
@@ -191,7 +192,7 @@ ssh-profile-manager/
 ├── src-tauri/         # Rust backend
 │   ├── src/
 │   │   ├── lib.rs     # Main backend code
-│   │   └── tests/     # Test modules (142 tests)
+│   │   └── tests/     # Test modules (163 tests)
 │   ├── icons/         # App icons
 │   └── Cargo.toml     # Rust dependencies
 ├── plans/             # Development plans and test artefacts
@@ -211,7 +212,7 @@ ssh-profile-manager/
 ## Platform Support
 
 - ✅ macOS 14.0+ (Apple Silicon / ARM64)
-- ✅ Windows 10+
+- ✅ Windows 11+
 
 ## License
 

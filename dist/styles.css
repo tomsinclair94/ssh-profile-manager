@@ -1194,6 +1194,12 @@ button.keyboard-selected {
     background-color: var(--border-color);
 }
 
+.btn-primary:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 5px rgba(0, 122, 255, 0.2);
+}
+
 .btn-secondary-header {
     background-color: rgba(108, 117, 125, 0.2);
     border: 1px solid rgba(108, 117, 125, 0.4);
@@ -2486,7 +2492,7 @@ form {
     display: flex;
     justify-content: center;
     gap: 40px;
-    padding: 24px 16px 24px 16px;
+    padding: 24px 16px 0 16px; /* Bottom gap provided by parent .central-passwords-content */
 }
 
 .cp-bulk-actions.hidden {

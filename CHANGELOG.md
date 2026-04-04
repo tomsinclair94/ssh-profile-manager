@@ -5,6 +5,26 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-04-05
+
+### Added
+- **Central Passwords Manager** — shared credentials that can be linked to multiple profiles; change the password once and all linked profiles immediately use the new value (ideal for AD accounts and shared jump hosts)
+- **Central Password auth method** — new "Central Password" option in the profile auth method dropdown; a searchable picker lets you select which central password to use
+- **"Manage Central Passwords" link** — opens the Central Password Manager directly from the profile editor without losing your place
+- **SSH_ASKPASS integration** — passwords stored in the system keychain are now passed to SSH automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`; no interactive password prompt appears in the terminal
+- **Central password export/import** — exports include a `central_password_ref` field (the central password name, never the value); on import, profiles are re-linked by name, or an empty shell is created if the name is not found on the destination machine
+- **Bulk select and delete** in the Central Password Manager — checkboxes on each item, Select All, and a "Delete N Passwords" button with confirmation
+- **Custom terminal disclaimer** — when "Custom Terminal (unsupported)" is selected in Settings, a note explains that password authentication may not work with all custom terminals
+- **Profile modal save button validation** — Save is now disabled until all auth-method-specific required fields are filled: key path for SSH Key, password for Password, and a selected entry for Central Password
+
+### Changed
+- Windows minimum requirement raised to Windows 11 (OpenSSH 8.4+ required for `SSH_ASKPASS_REQUIRE=force`)
+
+### Fixed
+- Central Password Manager bulk delete button now correctly shows a confirmation dialog before deleting
+- Tab cycling in the Central Password Manager now correctly includes the Close button when the Add Password form is incomplete
+- "Add Password" button focus highlight is now clearly visible (blue outline with gap matches the rest of the app)
+
 ## [0.8.0] - 2026-02-27
 
 ### Added

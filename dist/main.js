@@ -58,11 +58,17 @@ const CURRENT_APP_VERSION = '0.9.0';
 const VERSION_CHANGELOG = {
     '0.9.0': {
         title: 'Central Passwords & SSH Password Auth',
-        subtitle: 'Central Passwords & SSH Password Auth',
+        subtitle: 'Shared credentials and automatic password authentication',
         highlights: [
-            'Placeholder — highlights to be finalised before release'
+            { header: 'Central Passwords' },
+            'New Central Password Manager — create shared credentials and link them to multiple profiles',
+            'Change a password once and all linked profiles use the new value immediately',
+            'New "Central Password" auth method in the profile editor with a searchable picker',
+            { header: 'SSH Password Auth' },
+            'Passwords stored in your keychain are now passed to SSH automatically — no interactive prompt',
+            'Powered by the OpenSSH SSH_ASKPASS mechanism — no third-party agent required'
         ],
-        releaseDate: '',
+        releaseDate: '2026-04-05',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.0'
     },
     '0.8.0': {
@@ -1599,7 +1605,7 @@ async function handleModalShortcuts(e) {
             }
 
             case 'central-passwords': {
-                const items = getCentralPasswordsModalTabbableItems();
+                const items = getCentralPasswordsModalTabbableItems().filter(item => !item.disabled);
                 if (items.length > 0) {
                     const currentIndex = items.indexOf(document.activeElement);
                     let nextIndex;
@@ -9483,7 +9489,19 @@ function areRequiredFieldsPopulated() {
     const name = document.getElementById('profile-name').value.trim();
     const host = document.getElementById('profile-host').value.trim();
     const username = document.getElementById('profile-username').value.trim();
-    return name && host && username;
+    if (!name || !host || !username) return false;
+
+    const method = document.getElementById('profile-auth-method').value;
+    if (method === 'key') {
+        return !!document.getElementById('profile-key-path').value.trim();
+    }
+    if (method === 'password') {
+        return !!document.getElementById('profile-password').value;
+    }
+    if (method === 'central_password') {
+        return !!document.getElementById('profile-central-password-id').value;
+    }
+    return true; // 'none' — no additional requirement
 }
 
 function checkFormChanged() {
@@ -12999,11 +13017,17 @@ async function deleteSelectedCps() {
         warnings.push(`${totalProfiles} profile${totalProfiles !== 1 ? 's' : ''} use these passwords and will revert to keyboard-interactive authentication.`);
     }
 
-    const confirmed = await showConfirmDialog({
+    const confirmMessage = buildConfirmMessage({
+        lines,
+        warnings,
+        question: `Are you sure you want to delete the selected central password${totalCount !== 1 ? 's' : ''}?`
+    });
+
+    const confirmed = await customConfirm(confirmMessage, {
         title: `Delete ${totalCount} Central Password${totalCount !== 1 ? 's' : ''}`,
-        message: buildConfirmMessage({ lines, warnings }),
-        confirmText: 'Delete',
-        confirmClass: 'btn-danger'
+        okText: 'Delete',
+        cancelText: 'Cancel',
+        okClass: 'btn-danger'
     });
 
     if (!confirmed) return;

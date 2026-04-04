@@ -33,7 +33,7 @@ bun run build    # Production build
 - ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode (Edit populates top form), bulk select/delete with checkboxes, `P` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
 - ✅ Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
 - ✅ Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration tests + 1 profiles test; 163 total
-- ⏳ Phase 7: Functional GUI Testing — test plan created (`plans/test-results/v0.9.0-functional-test-plan.md`); pending macOS execution + bug fixes
+- ✅ Phase 7: Functional GUI Testing — complete; macOS execution done, 4 bugs fixed
 
 **v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked

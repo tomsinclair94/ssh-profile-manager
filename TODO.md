@@ -1,6 +1,6 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.0 — In Development
+## Current Version: v0.9.0 — Ready for Release
 
 **Latest Release:** v0.8.0 (2026-02-27) ✅
 **Branch:** `v0.9.0-dev`
@@ -13,7 +13,7 @@
 - [x] Phase 4: Central Passwords Manager UI — modal, toolbar button (key icon), `P` shortcut, form-based edit mode, bulk select/delete with checkboxes ✅
 - [x] Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate ✅
 - [x] Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration + 1 profiles test; 163 total ✅
-- [ ] Phase 7: Functional GUI Testing — test plan ✅ created (`plans/test-results/v0.9.0-functional-test-plan.md`) + macOS execution + bug fixes
+- [x] Phase 7: Functional GUI Testing — test plan created, macOS execution complete, 4 bugs fixed ✅
 
 See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.
 
