@@ -6,8 +6,8 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.8.x   | :white_check_mark: |
-| < 0.8.0 | :x:                |
+| 0.9.x   | :white_check_mark: |
+| < 0.9.0 | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -57,7 +57,9 @@ SSH Profile Manager includes several security measures:
 - **Path Traversal Protection:** SSH key paths sanitized and validated
 - **Command Injection Prevention:** Shell commands properly escaped
 - **Rate Limiting:** Protection against DoS via rapid operations
-- **Temp File Security:** Minimal exposure time for temporary connection scripts
+- **Temp File Security:** Temporary password files created atomically with restricted permissions (Unix: `O_CREAT|mode 0600`; Windows: `icacls` ACL restriction); minimal exposure time before secure deletion
+- **SSH_ASKPASS Integration:** Passwords retrieved from keychain and zeroized in memory immediately after temp file write; temp files deleted after 10 seconds via background thread
+- **Central Passwords:** Shared credentials stored exclusively in the system keychain (never in the database); keychain operations gated on DB existence checks to prevent arbitrary keychain writes
 - **Encrypted Exports:** AES-256-GCM authenticated encryption with PBKDF2-HMAC-SHA256 key derivation (600k iterations)
 - **Export Integrity:** HMAC-SHA256 verification detects tampering before decryption begins
 - **Mandatory Encryption:** Exports containing password-authenticated profiles require encryption (cannot be bypassed)
@@ -72,6 +74,7 @@ Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-mana
 ## Security Review History
 
 This project undergoes regular security reviews:
+- **v0.9.0:** Feature release — code review (1 CRITICAL, 4 HIGH, 6 MEDIUM — all resolved) + security review (0 CRITICAL, 1 HIGH, 5 MEDIUM — all resolved); key fixes: TOCTOU-safe temp file creation, password zeroization after use, DB existence checks before keychain access, custom `Debug` impl redacting passwords, input validation on central password descriptions and import paths. Dependency audit (`cargo audit`): 0 vulnerabilities; 19 Linux-only GTK3 warnings (pre-existing, not applicable to macOS/Windows targets).
 - **v0.8.0:** Feature release — code review (0 CRITICAL, 0 HIGH after fixes) + security review (0 CRITICAL, 0 HIGH, 1 MEDIUM, 3 LOW — all resolved)
 - **v0.7.1:** Patch release — no security-specific findings; 4 UI/UX bug fixes only
 - **v0.7.0:** Comprehensive security review (1 CRITICAL, 6 HIGH, 9 MEDIUM, 4 LOW findings — 20 resolved, 12 deferred to v1.0.0)

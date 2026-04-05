@@ -2390,7 +2390,10 @@ fn decrypt_data(encrypted: &EncryptedExport, password: &str) -> Result<String, S
 }
 
 /// Helper function to check if any profile in a list requires encryption
-/// Returns true if ANY profile has password authentication
+/// Returns true if ANY profile has password authentication.
+/// Note: `central_password` profiles are intentionally excluded — exports only store the
+/// central password name as a reference (`central_password_ref`), never the credential value,
+/// so there is nothing sensitive to encrypt for those profiles.
 fn export_requires_encryption(profiles: &[Profile]) -> bool {
     profiles.iter().any(|p| p.auth_method == "password")
 }
@@ -3640,6 +3643,14 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
 
 // Helper function for import: look up central password by name, or create an empty shell if not found (v0.9.0+)
 fn resolve_or_create_central_password_for_import(db: &Database, name: &str) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 64 {
+        return Err(format!("Invalid central password name in import: name must be 1–64 characters"));
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')')) {
+        return Err("Invalid central password name in import: name contains invalid characters".to_string());
+    }
+
     if let Some(cp) = db.get_central_password_by_name(name)
         .map_err(|e| format!("Failed to look up central password '{}': {}", name, e))?
     {
@@ -4548,11 +4559,21 @@ struct CreateTagInput {
     color: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct CreateCentralPasswordInput {
     name: String,
     description: Option<String>,
     password: String,
+}
+
+impl std::fmt::Debug for CreateCentralPasswordInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateCentralPasswordInput")
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -4669,6 +4690,9 @@ fn create_central_password(
                 .to_string(),
         );
     }
+    if let Some(ref desc) = input.description {
+        validate_description(desc)?;
+    }
     if input.password.is_empty() {
         return Err("Password cannot be empty".to_string());
     }
@@ -4696,8 +4720,12 @@ fn create_central_password(
         .map_err(|e| format!("Failed to create central password: {}", e))?;
 
     let keychain_key = format!("central-{}", id);
-    store_password(&keychain_key, &input.password)
-        .map_err(|e| format!("Failed to store password in keychain: {}", e))?;
+    if let Err(e) = store_password(&keychain_key, &input.password) {
+        // Roll back the DB record so the CP doesn't appear with no usable password
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        let _ = conn.execute("DELETE FROM central_passwords WHERE id = ?1", [&id]);
+        return Err(format!("Failed to store password in keychain: {}", e));
+    }
 
     Ok(id)
 }
@@ -4721,6 +4749,9 @@ fn update_central_password(
                 .to_string(),
         );
     }
+    if let Some(ref desc) = input.description {
+        validate_description(desc)?;
+    }
 
     // Check name uniqueness (allow keeping own name)
     if let Some(existing) = db
@@ -4738,19 +4769,31 @@ fn update_central_password(
 
 #[tauri::command]
 fn update_central_password_value(
+    db: State<Database>,
     central_password_id: String,
     password: String,
 ) -> Result<(), String> {
     if password.is_empty() {
         return Err("Password cannot be empty".to_string());
     }
+    // Verify the CP exists before touching the keychain
+    db.get_central_password_by_id(&central_password_id)
+        .map_err(|e| format!("Failed to verify central password: {}", e))?
+        .ok_or_else(|| "Central password not found".to_string())?;
     let keychain_key = format!("central-{}", central_password_id);
     store_password(&keychain_key, &password)
         .map_err(|e| format!("Failed to update password in keychain: {}", e))
 }
 
 #[tauri::command]
-fn get_central_password_value(central_password_id: String) -> Result<String, String> {
+fn get_central_password_value(
+    db: State<Database>,
+    central_password_id: String,
+) -> Result<String, String> {
+    // Verify the CP exists before touching the keychain
+    db.get_central_password_by_id(&central_password_id)
+        .map_err(|e| format!("Failed to verify central password: {}", e))?
+        .ok_or_else(|| "Central password not found".to_string())?;
     let keychain_key = format!("central-{}", central_password_id);
     get_password(&keychain_key)
         .map_err(|_| "No password stored for this central password".to_string())
@@ -5376,56 +5419,75 @@ struct AskpassSetup {
 // The password file is written with restricted permissions (0600 on Unix).
 // The askpass script simply cats the password file to stdout when invoked by SSH.
 fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
-    use std::fs;
-
     let temp_dir = std::env::temp_dir();
     let uuid = Uuid::new_v4();
 
-    // Write password to temp file with restricted permissions
+    // Write password to temp file with restricted permissions.
+    // On Unix, the file is created atomically with mode 0o600 (no intermediate world-readable
+    // state). On Windows, icacls restricts access after creation; failure is treated as an error
+    // and the file is removed to avoid leaving it with default permissions.
     let pwd_file_path = temp_dir.join(format!("spm-pwd-{}", uuid));
-    fs::write(&pwd_file_path, password)
-        .map_err(|e| format!("Failed to create temporary password file: {}", e))?;
 
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&pwd_file_path)
-            .map_err(|e| format!("Failed to get password file permissions: {}", e))?
-            .permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(&pwd_file_path, perms)
-            .map_err(|e| format!("Failed to set password file permissions: {}", e))?;
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&pwd_file_path)
+            .map_err(|e| format!("Failed to create temporary password file: {}", e))?;
+        file.write_all(password.as_bytes())
+            .map_err(|e| format!("Failed to write password file: {}", e))?;
     }
 
     #[cfg(windows)]
     {
+        use std::fs;
         use std::process::Command;
+        fs::write(&pwd_file_path, password)
+            .map_err(|e| format!("Failed to create temporary password file: {}", e))?;
         // Restrict file to current user only via icacls
         let path_str = pwd_file_path.to_string_lossy().to_string();
-        let username = std::env::var("USERNAME").unwrap_or_default();
+        let username = std::env::var("USERNAME").map_err(|_| {
+            let _ = fs::remove_file(&pwd_file_path);
+            "Failed to get current username for file permission setup".to_string()
+        })?;
+        if username.is_empty() {
+            let _ = fs::remove_file(&pwd_file_path);
+            return Err("Failed to get current username for file permission setup".to_string());
+        }
         // Remove inherited permissions, then grant current user full control only
-        let _ = Command::new("icacls")
+        let status = Command::new("icacls")
             .args([&path_str, "/inheritance:r", "/grant:r", &format!("{}:F", username)])
-            .output();
+            .output()
+            .map_err(|e| {
+                let _ = fs::remove_file(&pwd_file_path);
+                format!("Failed to run icacls: {}", e)
+            })?;
+        if !status.status.success() {
+            let _ = fs::remove_file(&pwd_file_path);
+            return Err("Failed to restrict password file permissions (icacls failed)".to_string());
+        }
     }
 
-    // Write platform-specific askpass script
+    // Write platform-specific askpass script atomically with restricted permissions
     #[cfg(unix)]
     let askpass_script_path = {
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::io::Write;
         let script_path = temp_dir.join(format!("spm-askpass-{}.sh", uuid));
         let pwd_path_escaped = shell_escape(&pwd_file_path.to_string_lossy());
         let script_content = format!("#!/bin/sh\ncat {}\n", pwd_path_escaped);
-        fs::write(&script_path, &script_content)
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o700)
+            .open(&script_path)
             .map_err(|e| format!("Failed to create askpass script: {}", e))?;
-
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&script_path)
-            .map_err(|e| format!("Failed to get askpass script permissions: {}", e))?
-            .permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&script_path, perms)
-            .map_err(|e| format!("Failed to set askpass script permissions: {}", e))?;
-
+        file.write_all(script_content.as_bytes())
+            .map_err(|e| format!("Failed to write askpass script: {}", e))?;
         script_path
     };
 
@@ -5947,12 +6009,18 @@ fn connect_ssh(
 
     // Retrieve password and create askpass temp files if this is a password-auth profile
     let askpass_setup = if profile.auth_method == "password" || profile.auth_method == "central_password" {
-        let keychain_key = if let Some(ref cp_id) = profile.central_password_id {
-            format!("central-{}", cp_id)
+        let keychain_key = if profile.auth_method == "central_password" {
+            match profile.central_password_id {
+                Some(ref cp_id) => format!("central-{}", cp_id),
+                None => return Err(
+                    "This profile is set to use a central password but none is assigned. \
+                     Edit the profile to select a central password.".to_string()
+                ),
+            }
         } else {
             profile_id.clone()
         };
-        let password = get_password(&keychain_key).map_err(|_| {
+        let mut password = get_password(&keychain_key).map_err(|_| {
             "No password stored for this profile. Edit the profile to set a password, \
              or switch to a different authentication method.".to_string()
         })?;
@@ -5962,7 +6030,9 @@ fn connect_ssh(
                  or switch to a different authentication method.".to_string()
             );
         }
-        Some(create_askpass_setup(&password)?)
+        let setup = create_askpass_setup(&password)?;
+        password.zeroize();
+        Some(setup)
     } else {
         None
     };

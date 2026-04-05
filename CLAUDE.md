@@ -23,17 +23,16 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.8.0 (2026-02-27) ✅
-**In Development:** v0.9.0 — SSH Password Auth & Central Passwords (branch: `v0.9.0-dev`)
+**Latest Release:** v0.9.0 (2026-04-05) ✅
+**Next:** v0.10.0 (planned features TBD)
 
-**v0.9.0 Progress (In Development):**
-- ✅ Phase 1: SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
-- ✅ Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
-- ✅ Phase 3: Export/Import — `central_password_ref` field on all export/import paths
-- ✅ Phase 4: Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode (Edit populates top form), bulk select/delete with checkboxes, `P` shortcut; compact header labels (`+ Profile`/`+ Group`, `↑ Profile`/`↑ Group`)
-- ✅ Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
-- ✅ Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration tests + 1 profiles test; 163 total
-- ✅ Phase 7: Functional GUI Testing — complete; macOS execution done, 4 bugs fixed
+**v0.9.0 Features (Released - 2026-04-05):**
+- ✅ SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
+- ✅ Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
+- ✅ Export/Import — `central_password_ref` field on all export/import paths
+- ✅ Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode, bulk select/delete with checkboxes, `P` shortcut
+- ✅ Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
+- ✅ 163 automated tests; functional GUI + migration testing complete; 0 CRITICAL/HIGH after review
 
 **v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
@@ -124,7 +123,7 @@ git commit -m "Bump version to X.X.X for dev branch"
 7. Security review (`voltagent-infra:security-engineer` agent)
 8. Fix CRITICAL/HIGH/MEDIUM issues
 9. **RE-RUN AUTOMATED TESTS** after fixes: `cargo test --lib` (ensure no regressions)
-10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-manual-gui-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
+10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
 11. Fix any GUI bugs found during manual testing
 12. **RUN MIGRATION TESTS** (if database migrations present): Open version-specific plan `plans/vX.X.X-migration-testing.md` and complete all migration validation tests (~1.5 hours total)
 13. Fix any migration issues found during testing
@@ -555,7 +554,7 @@ Before creating a release PR:
 - [ ] CI/CD tests pass on both macOS and Windows
 
 **Manual GUI Tests:**
-- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-manual-gui-test-results.md`
+- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-test-results.md`
 - [ ] Complete macOS testing section (~2-3 hours)
 - [ ] Complete Windows testing section (~45 minutes)
 - [ ] Document test results (fill in summary, issues fixed, observations)
@@ -577,7 +576,7 @@ Before creating a release PR:
 ## Manual GUI Testing
 
 **Template:** `plans/templates/manual-gui-test-plan-template.md`
-**Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md`
+**Results:** `plans/test-results/vX.X.X-test-results.md`
 
 **Purpose:** Comprehensive manual testing of all GUI/frontend functionality before each major release.
 
@@ -589,7 +588,7 @@ Before creating a release PR:
 
 **Test Results Storage:**
 - **Template:** `plans/templates/manual-gui-test-plan-template.md` (never modified, always blank)
-- **Completed Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md` (one per release)
+- **Completed Results:** `plans/test-results/vX.X.X-test-results.md` (one per release)
 - **Version Prefix:** Use `vX.X.X-` prefix for chronological sorting
 
 ## Migration Testing

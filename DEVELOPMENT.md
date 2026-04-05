@@ -325,7 +325,7 @@ cargo test --lib # Run all tests (required before release)
 dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
   ├── src/
-  │   ├── lib.rs        # Main backend code (~5190 lines)
+  │   ├── lib.rs        # Main backend code (~6300 lines)
   │   └── tests/        # Test modules (142 tests)
 ```
 

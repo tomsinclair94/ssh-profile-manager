@@ -12921,8 +12921,8 @@ function updateCpNameCounter() {
         counter.classList.remove('over-limit');
     }
 
-    // Validate character pattern
-    const validPattern = /^[a-zA-Z0-9\s\-_().\[\]#]*$/;
+    // Validate character pattern (must match backend: alphanumeric + spaces + - _ ( ) only)
+    const validPattern = /^[a-zA-Z0-9\s\-_()]*$/;
     if (newCpNameInput.value && !validPattern.test(newCpNameInput.value)) {
         newCpNameInput.classList.add('validation-error');
     } else {
@@ -12951,7 +12951,7 @@ function validateCpCreateForm() {
     if (!newCpNameInput || !newCpPasswordInput || !createCpBtn) return;
 
     const name = newCpNameInput.value.trim();
-    const validPattern = /^[a-zA-Z0-9\s\-_().\[\]#]+$/;
+    const validPattern = /^[a-zA-Z0-9\s\-_()]+$/;
     const nameOk = name.length > 0 && validPattern.test(name);
     const pwdOk = newCpPasswordInput.value.length > 0;
     createCpBtn.disabled = !(nameOk && pwdOk);
@@ -13032,16 +13032,24 @@ async function deleteSelectedCps() {
 
     if (!confirmed) return;
 
-    try {
-        for (const cp of cpsToDelete) {
+    let deleted = 0;
+    let failed = 0;
+    for (const cp of cpsToDelete) {
+        try {
             await invoke('delete_central_password', { centralPasswordId: cp.id });
+            deleted++;
+        } catch (error) {
+            console.error(`Failed to delete central password '${cp.name}':`, error);
+            failed++;
         }
-        showToast(`Deleted ${totalCount} central password${totalCount !== 1 ? 's' : ''}`, TOAST_DURATION_SHORT, 'success');
-        await refreshCentralPasswordsList();
-    } catch (error) {
-        console.error('Failed to delete central passwords:', error);
-        showToast(`Failed to delete: ${error}`, TOAST_DURATION_LONG, 'error');
-        await refreshCentralPasswordsList();
+    }
+    await refreshCentralPasswordsList();
+    if (failed === 0) {
+        showToast(`Deleted ${deleted} central password${deleted !== 1 ? 's' : ''}`, TOAST_DURATION_SHORT, 'success');
+    } else if (deleted === 0) {
+        showToast(`Failed to delete ${failed} central password${failed !== 1 ? 's' : ''}`, TOAST_DURATION_LONG, 'error');
+    } else {
+        showToast(`Deleted ${deleted}, failed ${failed} central password${(deleted + failed) !== 1 ? 's' : ''}`, TOAST_DURATION_LONG, 'warning');
     }
 }
 
@@ -13058,7 +13066,7 @@ function validateAndGetCpFormValues() {
         return null;
     }
 
-    const validNamePattern = /^[a-zA-Z0-9\s\-_().\[\]#]+$/;
+    const validNamePattern = /^[a-zA-Z0-9\s\-_()]+$/;
     if (!validNamePattern.test(name)) {
         showToast('Name contains invalid characters', TOAST_DURATION_SHORT, 'error');
         newCpNameInput.focus();
@@ -13094,9 +13102,11 @@ function resetCpForm() {
     if (descCounter) { descCounter.textContent = '0 / 128'; descCounter.classList.remove('over-limit'); }
 }
 
+let isCpSubmitting = false;
+
 // Create or update a central password depending on whether we are in edit mode
 async function createCentralPassword() {
-    if (createCpBtn.disabled) return;
+    if (createCpBtn.disabled || isCpSubmitting) return;
 
     if (editingCpId) {
         // --- Update existing ---
@@ -13104,8 +13114,9 @@ async function createCentralPassword() {
         if (!values) return;
         const { name, description, password } = values;
 
+        isCpSubmitting = true;
+        createCpBtn.disabled = true;
         try {
-            createCpBtn.disabled = true;
             await invoke('update_central_password', { input: { id: editingCpId, name, description } });
             await invoke('update_central_password_value', { centralPasswordId: editingCpId, password });
             showToast('Central password updated', TOAST_DURATION_SHORT, 'success');
@@ -13118,6 +13129,7 @@ async function createCentralPassword() {
             const msg = String(error).includes('UNIQUE') ? 'A central password with that name already exists' : `Failed to update: ${error}`;
             showToast(msg, TOAST_DURATION_LONG, 'error');
         } finally {
+            isCpSubmitting = false;
             validateCpCreateForm();
         }
     } else {
@@ -13126,8 +13138,9 @@ async function createCentralPassword() {
         if (!values) return;
         const { name, description, password } = values;
 
+        isCpSubmitting = true;
+        createCpBtn.disabled = true;
         try {
-            createCpBtn.disabled = true;
             await invoke('create_central_password', { input: { name, description, password } });
             showToast('Central password added successfully', TOAST_DURATION_SHORT, 'success');
             resetCpForm();
@@ -13138,6 +13151,7 @@ async function createCentralPassword() {
             const msg = String(error).includes('UNIQUE') ? 'A central password with that name already exists' : `Failed to add central password: ${error}`;
             showToast(msg, TOAST_DURATION_LONG, 'error');
         } finally {
+            isCpSubmitting = false;
             validateCpCreateForm();
         }
     }

@@ -90,6 +90,11 @@ Manage SSH connection profiles with a clean GUI and launch them in your native t
 
 *Colour-coded tags with multi-select management and tag:name search filtering*
 
+### Central Password Manager
+<img src="screenshots/password-manager.png" alt="Central Password Manager" width="800">
+
+*Shared credentials linked to multiple profiles — change a password once and all linked profiles update immediately*
+
 ### Keyboard Shortcuts Help
 <img src="screenshots/keyboard-shortcuts-help.png" alt="Keyboard Shortcuts Help" width="800">
 
