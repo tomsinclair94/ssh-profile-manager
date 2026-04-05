@@ -4311,7 +4311,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-profile-manager"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
