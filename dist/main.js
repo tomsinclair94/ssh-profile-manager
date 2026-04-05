@@ -53,9 +53,20 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.9.0';
+const CURRENT_APP_VERSION = '0.9.1';
 
 const VERSION_CHANGELOG = {
+    '0.9.1': {
+        title: 'Dependency Updates',
+        subtitle: 'Maintenance release with updated dependencies',
+        highlights: [
+            { header: 'Maintenance' },
+            'Updated rand, rusqlite, sha2, and hmac to latest major versions',
+            'No new features or user-facing changes'
+        ],
+        releaseDate: '',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.1'
+    },
     '0.9.0': {
         title: 'Central Passwords & SSH Password Auth',
         subtitle: 'Shared credentials and automatic password authentication',
