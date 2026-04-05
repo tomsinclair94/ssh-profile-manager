@@ -52,7 +52,7 @@
    ```
 
 4. **Prepare for Release** - Before creating PR, ensure:
-   - ✅ **All tests passing** (`cargo test --lib` - 142 tests must pass)
+   - ✅ **All tests passing** (`cargo test --lib` - 163 tests must pass)
    - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
    - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
@@ -229,18 +229,19 @@ All tests are located in `src-tauri/src/tests/` with a modular structure:
 
 ```
 src-tauri/src/tests/
-├── helpers.rs        # Shared test utilities (create_test_db, make_test_*)
-├── encryption.rs     # 38 tests - AES-256-GCM encryption/decryption
-├── validation.rs     # 27 tests - Input validation (hostname, username, etc.)
-├── profiles.rs       # 16 tests - Profile CRUD + move + reorder
-├── groups.rs         # 11 tests - Hierarchical groups + move + reorder
-├── tags.rs           #  9 tests - Tag system operations
-├── connections.rs    #  5 tests - Recent connections tracking
-├── settings.rs       #  3 tests - User settings storage
-├── migrations.rs     #  5 tests - Database schema migrations
-└── integration.rs    # 22 tests - Multi-step workflow validation
+├── helpers.rs             # Shared test utilities (create_test_db, make_test_*)
+├── encryption.rs          # 38 tests - AES-256-GCM encryption/decryption
+├── validation.rs          # 27 tests - Input validation (hostname, username, etc.)
+├── profiles.rs            # 17 tests - Profile CRUD + move + reorder + CP linkage
+├── groups.rs              # 11 tests - Hierarchical groups + move + reorder
+├── tags.rs                #  9 tests - Tag system operations
+├── connections.rs         #  5 tests - Recent connections tracking
+├── settings.rs            #  3 tests - User settings storage
+├── migrations.rs          #  6 tests - Database schema migrations (incl. migration 5)
+├── central_passwords.rs   # 17 tests - Central passwords DB layer (v0.9.0)
+└── integration.rs         # 24 tests - Multi-step workflow validation
 
-Total: 142 tests (all must pass before release)
+Total: 163 tests (all must pass before release)
 ```
 
 ### Running Tests
@@ -262,7 +263,7 @@ cargo test --lib test_create_profile_success
 cargo test --lib -- --nocapture
 ```
 
-**Expected result:** `142 passed; 0 failed` in ~41 seconds
+**Expected result:** `163 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
@@ -324,7 +325,7 @@ cargo test --lib # Run all tests (required before release)
 dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
   ├── src/
-  │   ├── lib.rs        # Main backend code (~5190 lines)
+  │   ├── lib.rs        # Main backend code (~6300 lines)
   │   └── tests/        # Test modules (142 tests)
 ```
 

@@ -126,7 +126,26 @@ body.drag-in-progress .profile-info-value {
     text-align: center;
 }
 
+/* Compact button labels — switch between wide and short text via media query */
+.btn-label-wide { display: inline; }
+.btn-label-compact { display: none; }
+
+@media (max-width: 799px) {
+    .btn-label-wide { display: none; }
+    .btn-label-compact { display: inline; }
+
+    #new-profile-btn,
+    #add-group-btn {
+        width: 90px;
+    }
+}
+
 #settings-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+#central-passwords-btn {
     flex-shrink: 0;
     white-space: nowrap;
 }
@@ -342,6 +361,7 @@ body.drag-in-progress .profile-info-value {
 /* Focus styles for keyboard navigation */
 #new-profile-btn:focus,
 #add-group-btn:focus,
+#central-passwords-btn:focus,
 #settings-btn:focus,
 #search-input:focus,
 #expand-collapse-btn:focus,
@@ -1174,6 +1194,12 @@ button.keyboard-selected {
     background-color: var(--border-color);
 }
 
+.btn-primary:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 5px rgba(0, 122, 255, 0.2);
+}
+
 .btn-secondary-header {
     background-color: rgba(108, 117, 125, 0.2);
     border: 1px solid rgba(108, 117, 125, 0.4);
@@ -1289,7 +1315,8 @@ button.keyboard-selected {
 #settings-modal .modal-content,
 #group-modal .modal-content,
 #move-modal .modal-content,
-#tag-manager-modal .modal-content {
+#tag-manager-modal .modal-content,
+#central-passwords-modal .modal-content {
     display: flex;
     flex-direction: column;
     overflow: hidden; /* Prevent all scroll propagation */
@@ -2185,9 +2212,7 @@ form {
 }
 
 .tag-list-section {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+    display: block;
     padding-bottom: 24px; /* Consistent bottom gap whether bulk actions are hidden or visible */
 }
 
@@ -2196,7 +2221,6 @@ form {
     font-weight: 600;
     margin-bottom: 12px;
     color: var(--text-color);
-    flex-shrink: 0;
 }
 
 .tag-list {
@@ -2204,8 +2228,8 @@ form {
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     background: var(--bg-secondary);
-    min-height: 59px; /* Always show at least one row (12px + 33px button + 12px padding + 2px border) */
-    max-height: 291px; /* Exactly 5 rows (58px × 4 + 57px last + 2px border = 291px); scrolls with more tags */
+    min-height: 59px; /* 1 row min — Tag Manager formula: 58px × n + 1px; for n=1: 58×1 + 1 = 59px */
+    max-height: 291px; /* 5 rows max — Tag Manager formula: 58px × n + 1px; for n=5: 58×5 + 1 = 291px; to change: substitute n */
 }
 
 .tag-list:empty {
@@ -2287,7 +2311,196 @@ form {
 }
 
 .tag-bulk-actions .btn {
-    width: 145px;
+    width: 155px;
+    white-space: nowrap;
+}
+
+/* Central Passwords Modal */
+#central-passwords-modal .modal-content {
+    max-width: 600px;
+    padding-bottom: 0;
+}
+
+.central-passwords-content {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.cp-create-section {
+    padding: 0;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.cp-create-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-color);
+}
+
+.cp-create-section .form-group {
+    margin-bottom: 12px;
+}
+
+.cp-create-section .form-group:last-of-type {
+    margin-bottom: 0;
+}
+
+.cp-create-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+.cp-list-section {
+    display: block;
+    margin-top: 16px;
+}
+
+.cp-list-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-color);
+}
+
+.cp-list {
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    min-height: 60px; /* 1 row min — CP Manager formula: 59px × n + 1px; for n=1: 59×1 + 1 = 60px */
+    max-height: 178px; /* 3 rows max — CP Manager formula: 59px × n + 1px; for n=3: 59×3 + 1 = 178px; to change: substitute n */ /* Show up to 3 rows before scrolling (57px × 3 items + 1px top border + 1px bottom border) */
+}
+
+.cp-list-item {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+
+.cp-list-item:last-child {
+    border-bottom: none;
+}
+
+.cp-list-item:hover {
+    background: var(--hover-bg);
+}
+
+.cp-list-item.cp-editing {
+    background: var(--bg-color);
+}
+
+.cp-list-item.cp-editing:hover {
+    background: var(--bg-color);
+}
+
+.cp-item-view {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+}
+
+.cp-item-view .cp-checkbox {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.cp-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.cp-item-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cp-item-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cp-password-value {
+    display: inline-block;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-color);
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-top: 4px;
+    user-select: all;
+    word-break: break-all;
+}
+
+.cp-item-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.cp-list-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.cp-inline-form {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-color);
+}
+
+.cp-inline-form .form-group {
+    margin-bottom: 10px;
+}
+
+.cp-inline-form .form-group:last-of-type {
+    margin-bottom: 0;
+}
+
+.cp-inline-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+/* CP Bulk Actions */
+.cp-bulk-actions {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 24px 16px 0 16px; /* Bottom gap provided by parent .central-passwords-content */
+}
+
+.cp-bulk-actions.hidden {
+    display: none;
+}
+
+.cp-bulk-actions .btn {
+    width: 155px;
     white-space: nowrap;
 }
 
@@ -2730,6 +2943,12 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
     font-style: italic;
 }
 
+.cp-dropdown-desc {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 400;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 12px;
@@ -2795,6 +3014,18 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
 .form-group label:hover ~ .input-tooltip {
     opacity: 1;
     visibility: visible;
+}
+
+/* SSH key path: show tooltip when hovering the Browse button */
+#key-path-group:has(#browse-key-btn:hover) .input-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transition-duration: 0.1s;
+}
+
+/* SSH key path: faster transition for field + button (feels snappier than other tooltips) */
+#key-path-group .input-tooltip {
+    transition-duration: 0.1s;
 }
 
 /* Show search tooltip on hover */

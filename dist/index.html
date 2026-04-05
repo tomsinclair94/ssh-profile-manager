@@ -19,12 +19,17 @@
                 <img src="128x128@2x.png" alt="Logo" class="app-logo">
                 <div class="title-version">
                     <h1>SSH Profile Manager</h1>
-                    <a href="#" class="version version-link" id="main-version-link">v0.8.0</a>
+                    <a href="#" class="version version-link" id="main-version-link">v0.9.0</a>
                 </div>
             </div>
             <div class="header-buttons">
-                <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile">+ New Profile</button>
-                <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles">+ New Group</button>
+                <button id="new-profile-btn" class="btn btn-primary" title="Create a new SSH profile"><span class="btn-label-wide">+ New Profile</span><span class="btn-label-compact">+ Profile</span></button>
+                <button id="add-group-btn" class="btn btn-secondary-header" title="Create a new group to organise profiles"><span class="btn-label-wide">+ New Group</span><span class="btn-label-compact">+ Group</span></button>
+                <button id="central-passwords-btn" class="btn btn-settings" title="Central Password Manager (P)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                </button>
                 <button id="settings-btn" class="btn btn-settings" title="Open application settings">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/>
@@ -225,27 +230,60 @@
                             <option value="none">None (Keyboard-Interactive)</option>
                             <option value="key">SSH Key</option>
                             <option value="password">Password</option>
+                            <option value="central_password">Central Password</option>
                         </select>
+                    </div>
+
+                    <!-- None / Keyboard-Interactive (shown when auth-method is 'none') -->
+                    <div class="form-group hidden" id="none-auth-group">
+                        <small>SSH will prompt for credentials in the terminal on connection. Nothing is stored by this app.</small>
                     </div>
 
                     <!-- SSH Key Path (shown when auth-method is 'key') -->
                     <div class="form-group hidden" id="key-path-group">
-                        <label for="profile-key-path">SSH Key Path</label>
+                        <label for="profile-key-path">SSH Key Path <span class="required">*</span></label>
                         <div class="input-group">
                             <input type="text" id="profile-key-path" placeholder="e.g., ~/.ssh/id_rsa" spellcheck="false" autocorrect="off" autocapitalize="off">
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">SSH Key Path</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Path to your private key file (e.g., ~/.ssh/id_rsa)</li>
+                                        <li id="browse-key-tip"></li>
+                                    </ul>
+                                </div>
+                            </div>
                             <button type="button" class="btn btn-secondary btn-browse" id="browse-key-btn">Browse</button>
                         </div>
-                        <small id="browse-hint"></small>
+                        <small>Authenticates using a private key file on disk. Recommended for scripted or automated use.</small>
                     </div>
 
                     <!-- Password (shown when auth-method is 'password') -->
                     <div class="form-group hidden" id="password-group">
-                        <label for="profile-password">Password</label>
+                        <label for="profile-password">Password <span class="required">*</span></label>
                         <div class="input-group">
                             <input type="password" id="profile-password" placeholder="Enter password" spellcheck="false" autocorrect="off" autocapitalize="off">
                             <button type="button" class="btn btn-secondary btn-toggle-password" id="toggle-password-btn" title="Show password">Show</button>
                         </div>
-                        <small>Stored securely in system keychain</small>
+                        <small>Authenticates using a stored password. Stored securely in the system keychain.</small>
+                    </div>
+
+                    <!-- Central Password (shown when auth-method is 'central_password') -->
+                    <div class="form-group hidden" id="central-password-group">
+                        <label for="profile-central-password-search">Central Password <span class="required">*</span></label>
+                        <div class="input-group">
+                            <div class="searchable-dropdown-wrapper">
+                                <input type="text" id="profile-central-password-search"
+                                    placeholder="Type to search or select..."
+                                    autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off">
+                                <div id="profile-central-password-dropdown" class="searchable-dropdown hidden">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-icon-text" id="add-cp-from-profile-btn" title="Manage central passwords">Manage</button>
+                        </div>
+                        <input type="hidden" id="profile-central-password-id">
+                        <small>A shared credential used across multiple profiles. Stored securely in the system keychain.</small>
                     </div>
 
                     <div class="form-group">
@@ -455,6 +493,7 @@
                                 <input type="text" id="custom-terminal-path" placeholder="Select terminal application..." readonly spellcheck="false" autocorrect="off" autocapitalize="off">
                                 <button type="button" class="btn btn-secondary btn-browse" id="browse-terminal-btn">Browse</button>
                             </div>
+                            <span class="settings-help-text">Custom terminal support is not tested or officially supported. Behaviour may vary depending on the application. Password authentication may not work with all custom terminals.</span>
                         </div>
                         <div class="form-group settings-no-gap settings-top-gap">
                             <label class="checkbox-label">
@@ -559,7 +598,7 @@
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Version:</span>
-                                <a href="#" class="about-value version-link" id="settings-version-link">0.8.0</a>
+                                <a href="#" class="about-value version-link" id="settings-version-link">0.9.0</a>
                             </div>
                             <div class="about-item">
                                 <span class="about-label">Author:</span>
@@ -797,6 +836,106 @@
                         <div id="tag-bulk-actions" class="tag-bulk-actions hidden">
                             <button id="select-all-tags-btn" class="btn btn-secondary">Select All</button>
                             <button id="delete-selected-tags-btn" class="btn btn-danger">Delete Selected</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Central Passwords Modal -->
+        <div id="central-passwords-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-left">
+                        <h2>Central Password Manager</h2>
+                    </div>
+                    <div class="modal-header-right">
+                        <button type="button" class="btn btn-secondary" id="central-passwords-close-btn">Close</button>
+                    </div>
+                </div>
+
+                <div class="central-passwords-content">
+                    <!-- Add New Central Password -->
+                    <div class="cp-create-section">
+                        <h3 id="cp-form-title">Add New Central Password</h3>
+
+                        <div class="form-group">
+                            <label for="new-cp-name-input">Name <span class="required">*</span></label>
+                            <input
+                                type="text"
+                                id="new-cp-name-input"
+                                placeholder="e.g., Active Directory Password"
+                                maxlength="64"
+                                spellcheck="false"
+                                autocorrect="off"
+                                autocapitalize="off"
+                            />
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">Name Requirements</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Letters and numbers allowed</li>
+                                        <li>Special characters: - _ ( )</li>
+                                        <li>Spaces allowed</li>
+                                        <li>Maximum 64 characters</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <span class="char-counter" id="cp-name-counter">0 / 64</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new-cp-description-input">Description</label>
+                            <input
+                                type="text"
+                                id="new-cp-description-input"
+                                placeholder="Optional description"
+                                maxlength="128"
+                            />
+                            <div class="input-tooltip">
+                                <div class="tooltip-content">
+                                    <div class="tooltip-title">Description Requirements</div>
+                                    <ul class="tooltip-rules">
+                                        <li>Most characters allowed</li>
+                                        <li>Cannot contain &lt; or &gt;</li>
+                                        <li>Maximum 128 characters</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <span class="char-counter" id="cp-description-counter">0 / 128</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new-cp-password-input">Password <span class="required">*</span></label>
+                            <div class="input-group">
+                                <input
+                                    type="password"
+                                    id="new-cp-password-input"
+                                    placeholder="Enter password"
+                                    spellcheck="false"
+                                    autocorrect="off"
+                                    autocapitalize="off"
+                                />
+                                <button type="button" class="btn btn-secondary btn-toggle-password" id="toggle-new-cp-password-btn" title="Show password">Show</button>
+                            </div>
+                        </div>
+
+                        <div class="cp-create-actions">
+                            <button id="cancel-cp-edit-btn" class="btn btn-secondary hidden">Cancel</button>
+                            <button id="create-cp-btn" class="btn btn-primary" disabled>Add Password</button>
+                        </div>
+                    </div>
+
+                    <!-- Saved Central Passwords -->
+                    <div class="cp-list-section">
+                        <h3>Saved Central Passwords</h3>
+                        <div id="cp-list-container" class="cp-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <!-- Bulk Actions -->
+                        <div id="cp-bulk-actions" class="cp-bulk-actions hidden">
+                            <button id="select-all-cps-btn" class="btn btn-secondary">Select All</button>
+                            <button id="delete-selected-cps-btn" class="btn btn-danger">Delete Selected</button>
                         </div>
                     </div>
                 </div>

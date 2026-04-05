@@ -51,6 +51,7 @@ pub fn make_test_profile(name: &str, group_path: Option<&str>) -> crate::Profile
         auth_method: "key".to_string(),
         key_path: Some("~/.ssh/id_rsa".to_string()),
         group_path: group_path.map(|s| s.to_string()),
+        central_password_id: None,
     }
 }
 

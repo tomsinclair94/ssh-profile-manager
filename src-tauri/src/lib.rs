@@ -185,9 +185,10 @@ pub struct Profile {
     pub host: String,
     pub port: i32,
     pub username: String,
-    pub auth_method: String, // "key", "password", or "none"
+    pub auth_method: String, // "key", "password", "central_password", or "none"
     pub key_path: Option<String>,
     pub group_path: Option<String>, // v0.7.0+: Semantic path like "Work/Production/Servers"
+    pub central_password_id: Option<String>, // v0.9.0+: ID of linked CentralPassword
 }
 
 // Profile with metadata and tags (for get_profiles response)
@@ -243,6 +244,16 @@ pub struct Tag {
     pub name: String,
     pub color: String,
     pub created_at: String,
+}
+
+// Central password structure for shared credentials
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CentralPassword {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // Recent connection structure
@@ -560,8 +571,8 @@ fn validate_profile_fields(profile: &Profile) -> Result<(), String> {
     }
 
     // Validate auth_method
-    if !matches!(profile.auth_method.as_str(), "key" | "password" | "none") {
-        return Err(format!("Invalid auth_method: '{}' (must be 'key', 'password', or 'none')", profile.auth_method));
+    if !matches!(profile.auth_method.as_str(), "key" | "password" | "central_password" | "none") {
+        return Err(format!("Invalid auth_method: '{}' (must be 'key', 'password', 'central_password', or 'none')", profile.auth_method));
     }
 
     Ok(())
@@ -1097,13 +1108,47 @@ impl Database {
             )?;
         }
 
+        // Migration 5: Central Passwords (v0.9.0)
+        if current_version < 5 {
+            // Create central_passwords table
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS central_passwords (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )?;
+
+            // Add central_password_id column to profiles
+            conn.execute(
+                "ALTER TABLE profiles ADD COLUMN central_password_id TEXT",
+                [],
+            )?;
+
+            // Index for lookups by central_password_id
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_profiles_central_password_id
+                 ON profiles(central_password_id)",
+                [],
+            )?;
+
+            // Record migration
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+                (5, chrono::Utc::now().to_rfc3339()),
+            )?;
+        }
+
         Ok(())
     }
 
     fn get_all_profiles(&self) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
              FROM profiles ORDER BY name"
         )?;
 
@@ -1119,6 +1164,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1132,7 +1178,7 @@ impl Database {
         // First, get all profiles with their metadata in one query
         let mut stmt = conn.prepare(
             "SELECT p.id, p.name, p.description, p.host, p.port, p.username, p.auth_method,
-                    p.key_path, p.group_path, m.icon, COALESCE(m.is_favorite, 0),
+                    p.key_path, p.group_path, p.central_password_id, m.icon, COALESCE(m.is_favorite, 0),
                     COALESCE(m.display_order, 0)
              FROM profiles p
              LEFT JOIN profile_metadata m ON p.id = m.profile_id
@@ -1152,6 +1198,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
                 };
                 let id = profile.id.clone();
 
@@ -1159,9 +1206,9 @@ impl Database {
                     id,
                     ProfileWithMetadata {
                         profile,
-                        icon: row.get(9)?,
-                        is_favorite: row.get::<_, i32>(10)? != 0,
-                        display_order: row.get(11)?,
+                        icon: row.get(10)?,
+                        is_favorite: row.get::<_, i32>(11)? != 0,
+                        display_order: row.get(12)?,
                         tags: Vec::new(), // Will populate below
                     }
                 ))
@@ -1205,8 +1252,8 @@ impl Database {
     fn create_profile(&self, profile: &Profile) -> SqlResult<()> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         conn.execute(
-            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO profiles (id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             (
                 &profile.id,
                 &profile.name,
@@ -1217,6 +1264,7 @@ impl Database {
                 &profile.auth_method,
                 &profile.key_path,
                 &profile.group_path,
+                &profile.central_password_id,
             ),
         )?;
         Ok(())
@@ -1227,7 +1275,8 @@ impl Database {
         conn.execute(
             "UPDATE profiles
              SET name = ?2, description = ?3, host = ?4, port = ?5,
-                 username = ?6, auth_method = ?7, key_path = ?8, group_path = ?9
+                 username = ?6, auth_method = ?7, key_path = ?8, group_path = ?9,
+                 central_password_id = ?10
              WHERE id = ?1",
             (
                 &profile.id,
@@ -1239,6 +1288,7 @@ impl Database {
                 &profile.auth_method,
                 &profile.key_path,
                 &profile.group_path,
+                &profile.central_password_id,
             ),
         )?;
         Ok(())
@@ -1409,7 +1459,7 @@ impl Database {
     fn get_profile_by_id(&self, id: &str) -> SqlResult<Option<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
              FROM profiles WHERE id = ?1"
         )?;
 
@@ -1424,6 +1474,7 @@ impl Database {
                 auth_method: row.get(6)?,
                 key_path: row.get(7)?,
                 group_path: row.get(8)?,
+                central_password_id: row.get(9)?,
             })
         })?;
 
@@ -1771,10 +1822,144 @@ impl Database {
         Ok(())
     }
 
+    // --- Central Password DB methods ---
+
+    fn create_central_password(&self, cp: &CentralPassword) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "INSERT INTO central_passwords (id, name, description, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&cp.id, &cp.name, &cp.description, &cp.created_at, &cp.updated_at),
+        )?;
+        Ok(())
+    }
+
+    fn get_all_central_passwords(&self) -> SqlResult<Vec<CentralPassword>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at
+             FROM central_passwords ORDER BY name COLLATE NOCASE"
+        )?;
+
+        let cps = stmt
+            .query_map([], |row| {
+                Ok(CentralPassword {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(cps)
+    }
+
+    fn get_central_password_by_id(&self, id: &str) -> SqlResult<Option<CentralPassword>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at
+             FROM central_passwords WHERE id = ?1"
+        )?;
+
+        let mut rows = stmt.query_map([id], |row| {
+            Ok(CentralPassword {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
+
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    fn get_central_password_by_name(&self, name: &str) -> SqlResult<Option<CentralPassword>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at
+             FROM central_passwords WHERE name = ?1"
+        )?;
+
+        let mut rows = stmt.query_map([name], |row| {
+            Ok(CentralPassword {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
+
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    fn update_central_password_meta(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+    ) -> SqlResult<()> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "UPDATE central_passwords SET name = ?1, description = ?2, updated_at = ?3
+             WHERE id = ?4",
+            (name, description, chrono::Utc::now().to_rfc3339(), id),
+        )?;
+        Ok(())
+    }
+
+    fn get_profiles_by_central_password_id(&self, cp_id: &str) -> SqlResult<Vec<Profile>> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
+             FROM profiles WHERE central_password_id = ?1 ORDER BY name"
+        )?;
+
+        let profiles = stmt
+            .query_map([cp_id], |row| {
+                Ok(Profile {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    host: row.get(3)?,
+                    port: row.get(4)?,
+                    username: row.get(5)?,
+                    auth_method: row.get(6)?,
+                    key_path: row.get(7)?,
+                    group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(profiles)
+    }
+
+    // Reverts all profiles linked to a central password back to keyboard-interactive auth.
+    // Returns the number of profiles updated (shown in deletion toast).
+    fn revert_profiles_central_password(&self, cp_id: &str) -> SqlResult<usize> {
+        let conn = self.conn.lock().expect("Database lock poisoned");
+        let count = conn.execute(
+            "UPDATE profiles SET auth_method = 'none', central_password_id = NULL
+             WHERE central_password_id = ?1",
+            [cp_id],
+        )?;
+        Ok(count)
+    }
+
     fn get_profiles_by_group_path(&self, group_path: &str) -> SqlResult<Vec<Profile>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path
+            "SELECT id, name, description, host, port, username, auth_method, key_path, group_path, central_password_id
              FROM profiles WHERE group_path = ?1
              ORDER BY name"
         )?;
@@ -1791,6 +1976,7 @@ impl Database {
                     auth_method: row.get(6)?,
                     key_path: row.get(7)?,
                     group_path: row.get(8)?,
+                    central_password_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1868,6 +2054,9 @@ struct ProfileExport {
     metadata: Option<ProfileMetadata>,
     #[serde(default)]
     tags: Vec<Tag>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    central_password_ref: Option<String>,  // v0.9.0+: Name of linked central password (portable reference)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1905,6 +2094,9 @@ struct ProfileExportDetailed {
     password: Option<String>,
     metadata: Option<ProfileMetadata>,
     tags: Vec<Tag>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    central_password_ref: Option<String>,  // v0.9.0+: Name of linked central password (portable reference)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2198,7 +2390,10 @@ fn decrypt_data(encrypted: &EncryptedExport, password: &str) -> Result<String, S
 }
 
 /// Helper function to check if any profile in a list requires encryption
-/// Returns true if ANY profile has password authentication
+/// Returns true if ANY profile has password authentication.
+/// Note: `central_password` profiles are intentionally excluded — exports only store the
+/// central password name as a reference (`central_password_ref`), never the credential value,
+/// so there is nothing sensitive to encrypt for those profiles.
 fn export_requires_encryption(profiles: &[Profile]) -> bool {
     profiles.iter().any(|p| p.auth_method == "password")
 }
@@ -2266,6 +2461,8 @@ struct CreateProfileInput {
     group_path: Option<String>, // v0.7.0+: Semantic path to group
     #[serde(default)]
     display_order: Option<i32>,
+    #[serde(default)]
+    central_password_id: Option<String>, // v0.9.0+: ID of linked CentralPassword
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -2282,6 +2479,7 @@ impl std::fmt::Debug for CreateProfileInput {
             .field("password", &"[REDACTED]")
             .field("group_path", &self.group_path)
             .field("display_order", &self.display_order)
+            .field("central_password_id", &self.central_password_id)
             .finish()
     }
 }
@@ -2316,6 +2514,20 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
 
     let id = Uuid::new_v4().to_string();
 
+    // Resolve central_password_id: only relevant for "central_password" auth method
+    let central_password_id = if profile.auth_method == "central_password" {
+        let cp_id = profile.central_password_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "A central password must be selected".to_string())?;
+        // Verify the central password exists
+        db.get_central_password_by_id(&cp_id)
+            .map_err(|e| format!("Failed to verify central password: {}", e))?
+            .ok_or_else(|| "Selected central password not found".to_string())?;
+        Some(cp_id)
+    } else {
+        None
+    };
+
     let new_profile = Profile {
         id: id.clone(),
         name: profile.name,
@@ -2326,6 +2538,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
         group_path: profile.group_path,
+        central_password_id,
     };
 
     db.create_profile(&new_profile)
@@ -2345,7 +2558,7 @@ fn create_profile(db: State<Database>, profile: CreateProfileInput) -> Result<St
         ).map_err(|e| format!("Failed to set display_order: {}", e))?;
     }
 
-    // Store password in keychain if provided
+    // Store individual password in keychain if provided (not used for central_password auth)
     if profile.auth_method == "password" {
         if let Some(password) = profile.password {
             if !password.is_empty() {
@@ -2370,6 +2583,8 @@ struct UpdateProfileInput {
     key_path: Option<String>,
     password: Option<String>,
     group_path: Option<String>, // v0.7.0+: Semantic path to group
+    #[serde(default)]
+    central_password_id: Option<String>, // v0.9.0+: ID of linked CentralPassword
 }
 
 // SECURITY: Custom Debug implementation to redact password field
@@ -2386,6 +2601,7 @@ impl std::fmt::Debug for UpdateProfileInput {
             .field("key_path", &self.key_path)
             .field("password", &"[REDACTED]")
             .field("group_path", &self.group_path)
+            .field("central_password_id", &self.central_password_id)
             .finish()
     }
 }
@@ -2418,6 +2634,20 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         }
     }
 
+    // Resolve central_password_id: only relevant for "central_password" auth method
+    let central_password_id = if profile.auth_method == "central_password" {
+        let cp_id = profile.central_password_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "A central password must be selected".to_string())?;
+        // Verify the central password exists
+        db.get_central_password_by_id(&cp_id)
+            .map_err(|e| format!("Failed to verify central password: {}", e))?
+            .ok_or_else(|| "Selected central password not found".to_string())?;
+        Some(cp_id)
+    } else {
+        None
+    };
+
     let updated_profile = Profile {
         id: profile.id.clone(),
         name: profile.name,
@@ -2428,20 +2658,23 @@ fn update_profile(db: State<Database>, profile: UpdateProfileInput) -> Result<()
         auth_method: profile.auth_method.clone(),
         key_path: profile.key_path,
         group_path: profile.group_path,
+        central_password_id,
     };
 
     db.update_profile(&updated_profile)
         .map_err(|e| format!("Failed to update profile: {}", e))?;
 
-    // Update password in keychain if provided
+    // Manage individual keychain entry based on auth method
     if profile.auth_method == "password" {
+        // Update individual password in keychain if a new one was provided
         if let Some(password) = profile.password {
             if !password.is_empty() {
                 store_password(&profile.id, &password)?;
             }
         }
     } else {
-        // Try to delete password from keychain if auth method changed (ignore errors if no password exists)
+        // Auth method changed away from individual password — remove keychain entry
+        // (ignore errors if no password exists; central_password auth uses a different key)
         let _ = delete_password(&profile.id);
     }
 
@@ -2944,11 +3177,21 @@ fn export_profiles(db: State<Database>, include_passwords: bool, encryption_pass
         // Fetch tags for the profile
         let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
 
+        // Resolve central password name for portable reference (v0.9.0+)
+        let central_password_ref = if profile.auth_method == "central_password" {
+            profile.central_password_id.as_deref()
+                .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+                .map(|cp| cp.name)
+        } else {
+            None
+        };
+
         export_profiles.push(ProfileExport {
             profile: profile.clone(),  // Use profile directly - group_path is already semantic
             password,
             metadata,
             tags,
+            central_password_ref,
         });
     }
 
@@ -3097,6 +3340,16 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
     for profile_export in import_data.profiles {
         let mut profile = profile_export.profile;
 
+        // Handle central_password_ref: resolve to local ID, or create empty shell (v0.9.0+)
+        if let Some(ref cp_name) = profile_export.central_password_ref {
+            let cp_id = resolve_or_create_central_password_for_import(&db, cp_name)?;
+            profile.central_password_id = Some(cp_id);
+            profile.auth_method = "central_password".to_string();
+        } else {
+            // Clear any exported central_password_id — UUIDs are machine-specific
+            profile.central_password_id = None;
+        }
+
         // SECURITY: Validate all profile fields to prevent injection attacks
         validate_profile_fields(&profile)
             .map_err(|e| format!("Invalid profile '{}': {}", profile.name, e))?;
@@ -3108,7 +3361,7 @@ fn import_profiles(db: State<Database>, data: String, encryption_password: Optio
         db.create_profile(&profile)
             .map_err(|e| format!("Failed to import profile '{}': {}", profile.name, e))?;
 
-        // Store password if it exists
+        // Store password if it exists (individual password auth only — central passwords have no per-profile value)
         if let Some(password) = profile_export.password {
             if !password.is_empty() {
                 store_password(&profile.id, &password)?;
@@ -3224,11 +3477,21 @@ fn export_profile(db: State<Database>, profile_id: String, include_password: boo
     let tags = db.get_profile_tags(&profile_id)
         .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
+    // Resolve central password name for portable reference (v0.9.0+)
+    let central_password_ref = if profile.auth_method == "central_password" {
+        profile.central_password_id.as_deref()
+            .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+            .map(|cp| cp.name)
+    } else {
+        None
+    };
+
     let profile_export = ProfileExportDetailed {
         profile: profile.clone(),  // Use profile directly - group_path is already semantic
         password,
         metadata,
         tags,
+        central_password_ref,
     };
 
     let export_data = SingleProfileExportData {
@@ -3303,11 +3566,21 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
             let profile_tags = db.get_profile_tags(&profile.id)
                 .map_err(|e| format!("Failed to get profile tags: {}", e))?;
 
+            // Resolve central password name for portable reference (v0.9.0+)
+            let central_password_ref = if profile.auth_method == "central_password" {
+                profile.central_password_id.as_deref()
+                    .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+                    .map(|cp| cp.name)
+            } else {
+                None
+            };
+
             profile_exports.push(ProfileExportDetailed {
                 profile,  // Use profile directly - group_path is already semantic
                 password,
                 metadata,
                 tags: profile_tags,
+                central_password_ref,
             });
         }
 
@@ -3366,6 +3639,37 @@ fn export_group(db: State<Database>, group_id: String, include_passwords: bool, 
             }
         }
     }
+}
+
+// Helper function for import: look up central password by name, or create an empty shell if not found (v0.9.0+)
+fn resolve_or_create_central_password_for_import(db: &Database, name: &str) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() || name.len() > 64 {
+        return Err(format!("Invalid central password name in import: name must be 1–64 characters"));
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')')) {
+        return Err("Invalid central password name in import: name contains invalid characters".to_string());
+    }
+
+    if let Some(cp) = db.get_central_password_by_name(name)
+        .map_err(|e| format!("Failed to look up central password '{}': {}", name, e))?
+    {
+        return Ok(cp.id);
+    }
+
+    // Not found — create an empty shell; keychain entry will be set by the user via the CP manager
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = CentralPassword {
+        id: Uuid::new_v4().to_string(),
+        name: name.to_string(),
+        description: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    db.create_central_password(&cp)
+        .map_err(|e| format!("Failed to create central password '{}': {}", name, e))?;
+
+    Ok(cp.id)
 }
 
 // Helper function to create profile_metadata and profile_tags
@@ -3449,6 +3753,16 @@ fn import_profile(
 
     // Set target group_path (overriding the imported value)
     profile.group_path = target_group_path.clone();
+
+    // Handle central_password_ref: resolve to local ID, or create empty shell (v0.9.0+)
+    if let Some(ref cp_name) = profile_export.central_password_ref {
+        let cp_id = resolve_or_create_central_password_for_import(&db, cp_name)?;
+        profile.central_password_id = Some(cp_id);
+        profile.auth_method = "central_password".to_string();
+    } else {
+        // Clear any exported central_password_id — UUIDs are machine-specific
+        profile.central_password_id = None;
+    }
 
     // SECURITY: Validate all profile fields to prevent injection attacks
     validate_profile_fields(&profile)
@@ -3591,6 +3905,16 @@ fn import_group(
 
             // Set group_path
             profile.group_path = Some(actual_path.clone());
+
+            // Handle central_password_ref: resolve to local ID, or create empty shell (v0.9.0+)
+            if let Some(ref cp_name) = profile_export.central_password_ref {
+                let cp_id = resolve_or_create_central_password_for_import(db, cp_name)?;
+                profile.central_password_id = Some(cp_id);
+                profile.auth_method = "central_password".to_string();
+            } else {
+                // Clear any exported central_password_id — UUIDs are machine-specific
+                profile.central_password_id = None;
+            }
 
             // SECURITY: Validate all profile fields to prevent injection attacks
             validate_profile_fields(&profile)
@@ -3788,11 +4112,21 @@ fn export_settings(
             // Fetch tags for the profile
             let tags = db.get_profile_tags(&profile.id).unwrap_or_default();
 
+            // Resolve central password name for portable reference (v0.9.0+)
+            let central_password_ref = if profile.auth_method == "central_password" {
+                profile.central_password_id.as_deref()
+                    .and_then(|cp_id| db.get_central_password_by_id(cp_id).ok().flatten())
+                    .map(|cp| cp.name)
+            } else {
+                None
+            };
+
             profile_exports.push(ProfileExport {
                 profile,  // Use profile directly - group_path is already semantic
                 password,
                 metadata,
                 tags,
+                central_password_ref,
             });
         }
 
@@ -4225,6 +4559,30 @@ struct CreateTagInput {
     color: String,
 }
 
+#[derive(Deserialize)]
+struct CreateCentralPasswordInput {
+    name: String,
+    description: Option<String>,
+    password: String,
+}
+
+impl std::fmt::Debug for CreateCentralPasswordInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CreateCentralPasswordInput")
+            .field("name", &self.name)
+            .field("description", &self.description)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateCentralPasswordInput {
+    id: String,
+    name: String,
+    description: Option<String>,
+}
+
 #[tauri::command]
 fn create_tag(db: State<Database>, input: CreateTagInput) -> Result<String, String> {
     // Validate tag name
@@ -4302,6 +4660,180 @@ fn remove_profile_tag(db: State<Database>, profile_id: String, tag_id: String) -
 fn set_profile_tags(db: State<Database>, profile_id: String, tag_ids: Vec<String>) -> Result<(), String> {
     db.set_profile_tags_db(&profile_id, &tag_ids)
         .map_err(|e| format!("Failed to set tags: {}", e))
+}
+
+// Central Password Commands
+
+#[tauri::command]
+fn get_central_passwords(db: State<Database>) -> Result<Vec<CentralPassword>, String> {
+    db.get_all_central_passwords()
+        .map_err(|e| format!("Failed to get central passwords: {}", e))
+}
+
+#[tauri::command]
+fn create_central_password(
+    db: State<Database>,
+    input: CreateCentralPasswordInput,
+) -> Result<String, String> {
+    let name = input.name.trim().to_string();
+
+    if name.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("Name must be 64 characters or less".to_string());
+    }
+    // Alphanumeric + spaces + - _ ( )
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')')) {
+        return Err(
+            "Name can only contain letters, numbers, spaces, hyphens, underscores, and parentheses"
+                .to_string(),
+        );
+    }
+    if let Some(ref desc) = input.description {
+        validate_description(desc)?;
+    }
+    if input.password.is_empty() {
+        return Err("Password cannot be empty".to_string());
+    }
+
+    // Check name uniqueness
+    if db
+        .get_central_password_by_name(&name)
+        .map_err(|e| format!("Failed to check name: {}", e))?
+        .is_some()
+    {
+        return Err("A central password with this name already exists".to_string());
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = CentralPassword {
+        id: id.clone(),
+        name,
+        description: input.description,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    db.create_central_password(&cp)
+        .map_err(|e| format!("Failed to create central password: {}", e))?;
+
+    let keychain_key = format!("central-{}", id);
+    if let Err(e) = store_password(&keychain_key, &input.password) {
+        // Roll back the DB record so the CP doesn't appear with no usable password
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        let _ = conn.execute("DELETE FROM central_passwords WHERE id = ?1", [&id]);
+        return Err(format!("Failed to store password in keychain: {}", e));
+    }
+
+    Ok(id)
+}
+
+#[tauri::command]
+fn update_central_password(
+    db: State<Database>,
+    input: UpdateCentralPasswordInput,
+) -> Result<(), String> {
+    let name = input.name.trim().to_string();
+
+    if name.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("Name must be 64 characters or less".to_string());
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')')) {
+        return Err(
+            "Name can only contain letters, numbers, spaces, hyphens, underscores, and parentheses"
+                .to_string(),
+        );
+    }
+    if let Some(ref desc) = input.description {
+        validate_description(desc)?;
+    }
+
+    // Check name uniqueness (allow keeping own name)
+    if let Some(existing) = db
+        .get_central_password_by_name(&name)
+        .map_err(|e| format!("Failed to check name: {}", e))?
+    {
+        if existing.id != input.id {
+            return Err("A central password with this name already exists".to_string());
+        }
+    }
+
+    db.update_central_password_meta(&input.id, &name, input.description.as_deref())
+        .map_err(|e| format!("Failed to update central password: {}", e))
+}
+
+#[tauri::command]
+fn update_central_password_value(
+    db: State<Database>,
+    central_password_id: String,
+    password: String,
+) -> Result<(), String> {
+    if password.is_empty() {
+        return Err("Password cannot be empty".to_string());
+    }
+    // Verify the CP exists before touching the keychain
+    db.get_central_password_by_id(&central_password_id)
+        .map_err(|e| format!("Failed to verify central password: {}", e))?
+        .ok_or_else(|| "Central password not found".to_string())?;
+    let keychain_key = format!("central-{}", central_password_id);
+    store_password(&keychain_key, &password)
+        .map_err(|e| format!("Failed to update password in keychain: {}", e))
+}
+
+#[tauri::command]
+fn get_central_password_value(
+    db: State<Database>,
+    central_password_id: String,
+) -> Result<String, String> {
+    // Verify the CP exists before touching the keychain
+    db.get_central_password_by_id(&central_password_id)
+        .map_err(|e| format!("Failed to verify central password: {}", e))?
+        .ok_or_else(|| "Central password not found".to_string())?;
+    let keychain_key = format!("central-{}", central_password_id);
+    get_password(&keychain_key)
+        .map_err(|_| "No password stored for this central password".to_string())
+}
+
+#[tauri::command]
+fn delete_central_password(
+    db: State<Database>,
+    central_password_id: String,
+) -> Result<usize, String> {
+    // Revert all linked profiles to keyboard-interactive auth
+    let reverted = db
+        .revert_profiles_central_password(&central_password_id)
+        .map_err(|e| format!("Failed to revert profiles: {}", e))?;
+
+    // Remove keychain entry (ignore if already absent)
+    let keychain_key = format!("central-{}", central_password_id);
+    let _ = delete_password(&keychain_key);
+
+    // Delete the DB record
+    {
+        let conn = db.conn.lock().expect("Database lock poisoned");
+        conn.execute(
+            "DELETE FROM central_passwords WHERE id = ?1",
+            [&central_password_id],
+        )
+        .map_err(|e| format!("Failed to delete central password: {}", e))?;
+    }
+
+    Ok(reverted)
+}
+
+#[tauri::command]
+fn get_profiles_using_central_password(
+    db: State<Database>,
+    central_password_id: String,
+) -> Result<Vec<String>, String> {
+    db.get_profiles_by_central_password_id(&central_password_id)
+        .map(|profiles| profiles.into_iter().map(|p| p.name).collect())
+        .map_err(|e| format!("Failed to get profiles: {}", e))
 }
 
 #[tauri::command]
@@ -4877,11 +5409,117 @@ fn escape_bash_double_quote(s: &str) -> String {
      .replace('`', "\\`")
 }
 
+// Holds the paths of temporary askpass files created for password-auth connections
+struct AskpassSetup {
+    askpass_script_path: std::path::PathBuf,
+    pwd_file_path: std::path::PathBuf,
+}
+
+// Creates a temporary password file and askpass script for SSH_ASKPASS mechanism.
+// The password file is written with restricted permissions (0600 on Unix).
+// The askpass script simply cats the password file to stdout when invoked by SSH.
+fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
+    let temp_dir = std::env::temp_dir();
+    let uuid = Uuid::new_v4();
+
+    // Write password to temp file with restricted permissions.
+    // On Unix, the file is created atomically with mode 0o600 (no intermediate world-readable
+    // state). On Windows, icacls restricts access after creation; failure is treated as an error
+    // and the file is removed to avoid leaving it with default permissions.
+    let pwd_file_path = temp_dir.join(format!("spm-pwd-{}", uuid));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&pwd_file_path)
+            .map_err(|e| format!("Failed to create temporary password file: {}", e))?;
+        file.write_all(password.as_bytes())
+            .map_err(|e| format!("Failed to write password file: {}", e))?;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::fs;
+        use std::process::Command;
+        fs::write(&pwd_file_path, password)
+            .map_err(|e| format!("Failed to create temporary password file: {}", e))?;
+        // Restrict file to current user only via icacls
+        let path_str = pwd_file_path.to_string_lossy().to_string();
+        let username = std::env::var("USERNAME").map_err(|_| {
+            let _ = fs::remove_file(&pwd_file_path);
+            "Failed to get current username for file permission setup".to_string()
+        })?;
+        if username.is_empty() {
+            let _ = fs::remove_file(&pwd_file_path);
+            return Err("Failed to get current username for file permission setup".to_string());
+        }
+        // Remove inherited permissions, then grant current user full control only
+        let status = Command::new("icacls")
+            .args([&path_str, "/inheritance:r", "/grant:r", &format!("{}:F", username)])
+            .output()
+            .map_err(|e| {
+                let _ = fs::remove_file(&pwd_file_path);
+                format!("Failed to run icacls: {}", e)
+            })?;
+        if !status.status.success() {
+            let _ = fs::remove_file(&pwd_file_path);
+            return Err("Failed to restrict password file permissions (icacls failed)".to_string());
+        }
+    }
+
+    // Write platform-specific askpass script atomically with restricted permissions
+    #[cfg(unix)]
+    let askpass_script_path = {
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::io::Write;
+        let script_path = temp_dir.join(format!("spm-askpass-{}.sh", uuid));
+        let pwd_path_escaped = shell_escape(&pwd_file_path.to_string_lossy());
+        let script_content = format!("#!/bin/sh\ncat {}\n", pwd_path_escaped);
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o700)
+            .open(&script_path)
+            .map_err(|e| format!("Failed to create askpass script: {}", e))?;
+        file.write_all(script_content.as_bytes())
+            .map_err(|e| format!("Failed to write askpass script: {}", e))?;
+        script_path
+    };
+
+    #[cfg(windows)]
+    let askpass_script_path = {
+        let script_path = temp_dir.join(format!("spm-askpass-{}.bat", uuid));
+        let pwd_path_str = pwd_file_path.to_string_lossy().to_string();
+        let script_content = format!("@echo off\r\ntype \"{}\"\r\n", pwd_path_str);
+        fs::write(&script_path, &script_content)
+            .map_err(|e| format!("Failed to create askpass script: {}", e))?;
+        script_path
+    };
+
+    Ok(AskpassSetup { askpass_script_path, pwd_file_path })
+}
+
+// Spawns a background thread to securely delete askpass temp files after a delay.
+// The 10s delay ensures SSH has had time to invoke the script and read the password.
+fn schedule_askpass_cleanup(setup: AskpassSetup) {
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        delete_file_with_overwrite(&setup.pwd_file_path);
+        delete_file_with_overwrite(&setup.askpass_script_path);
+    });
+}
+
 #[cfg(target_os = "macos")]
 fn launch_macos_custom_terminal(
     custom_path: &str,
     ssh_args: &[String],
     profile_name: &str,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
     use std::fs;
@@ -4893,14 +5531,24 @@ fn launch_macos_custom_terminal(
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
 
+    let askpass_env = if let Some(setup) = askpass_setup {
+        format!(
+            "export SSH_ASKPASS={}\nexport SSH_ASKPASS_REQUIRE=force\n",
+            shell_escape(&setup.askpass_script_path.to_string_lossy())
+        )
+    } else {
+        String::new()
+    };
+
     let script_content = format!(
         "#!/bin/bash\n\
          echo \"Connecting to {}...\"\n\
-         ssh {}\n\
+         {}ssh {}\n\
          echo \"\"\n\
          echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
          exec bash\n",
         escape_bash_double_quote(profile_name),
+        askpass_env,
         ssh_args.iter()
             .map(|arg| shell_escape(arg))
             .collect::<Vec<_>>()
@@ -4971,6 +5619,7 @@ fn delete_file_with_overwrite(path: &std::path::Path) {
 fn launch_macos_default_terminal(
     ssh_args: &[String],
     use_tabs: bool,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
@@ -4978,8 +5627,16 @@ fn launch_macos_default_terminal(
         .map(|arg| shell_escape(arg))
         .collect();
 
-    // Build command with auto-close
-    let ssh_cmd_no_exit = format!("ssh {}", escaped_args.join(" "));
+    // Build command with auto-close; prefix env vars inline for password auth
+    let ssh_cmd_no_exit = if let Some(setup) = askpass_setup {
+        format!(
+            "SSH_ASKPASS={} SSH_ASKPASS_REQUIRE=force ssh {}",
+            shell_escape(&setup.askpass_script_path.to_string_lossy()),
+            escaped_args.join(" ")
+        )
+    } else {
+        format!("ssh {}", escaped_args.join(" "))
+    };
     let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
     let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
     let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
@@ -5032,29 +5689,47 @@ fn launch_macos_default_terminal(
 }
 
 #[cfg(target_os = "windows")]
-fn launch_windows_cmd(ssh_args: &[String]) -> Result<(), String> {
+fn launch_windows_cmd(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>) -> Result<(), String> {
     use std::process::Command;
 
-    // Build SSH command with explicit exit to ensure auto-close
-    let mut full_command = vec!["ssh".to_string()];
-    full_command.extend(ssh_args.iter().cloned());
-    full_command.push("&".to_string());
-    full_command.push("exit".to_string());
+    if let Some(setup) = askpass_setup {
+        // Inline set chain — no temp file needed for cmd.exe
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let compound = format!(
+            "set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+            askpass_path,
+            ssh_args.join(" ")
+        );
+        Command::new("cmd")
+            .arg("/c")
+            .arg("start")
+            .arg("cmd")
+            .arg("/c")
+            .arg(&compound)
+            .spawn()
+            .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+    } else {
+        // Build SSH command with explicit exit to ensure auto-close
+        let mut full_command = vec!["ssh".to_string()];
+        full_command.extend(ssh_args.iter().cloned());
+        full_command.push("&".to_string());
+        full_command.push("exit".to_string());
 
-    Command::new("cmd")
-        .arg("/c")
-        .arg("start")
-        .arg("cmd")
-        .arg("/c")
-        .args(&full_command)
-        .spawn()
-        .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+        Command::new("cmd")
+            .arg("/c")
+            .arg("start")
+            .arg("cmd")
+            .arg("/c")
+            .args(&full_command)
+            .spawn()
+            .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+    }
 
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
-fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
+fn launch_windows_powershell(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>) -> Result<(), String> {
     use std::process::Command;
 
     // SECURITY: Use Base64-encoded command to avoid complex shell escaping issues
@@ -5072,8 +5747,18 @@ fn launch_windows_powershell(ssh_args: &[String]) -> Result<(), String> {
         })
         .collect();
 
-    // Create PowerShell command that builds argument array and invokes ssh
-    let ps_command = format!("& {} | Out-Null; exit", args_quoted.join(" "));
+    // Create PowerShell command; prepend env var assignments for password auth
+    let ps_command = if let Some(setup) = askpass_setup {
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let askpass_path_escaped = askpass_path.replace('\'', "''");
+        format!(
+            "$env:SSH_ASKPASS = '{}'; $env:SSH_ASKPASS_REQUIRE = 'force'; & {} | Out-Null; exit",
+            askpass_path_escaped,
+            args_quoted.join(" ")
+        )
+    } else {
+        format!("& {} | Out-Null; exit", args_quoted.join(" "))
+    };
 
     // Convert to UTF-16LE and Base64 encode (required by PowerShell -EncodedCommand)
     let utf16_bytes: Vec<u16> = ps_command.encode_utf16().collect();
@@ -5101,25 +5786,49 @@ fn launch_windows_terminal(
     ssh_args: &[String],
     profile_name: &str,
     use_tabs: bool,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
-    let mut cmd = Command::new("wt");
+    if let Some(setup) = askpass_setup {
+        // Cannot inject env vars via wt command-line args — use a temp .bat script
+        // Known limitation: AppLocker/WDAC environments blocking %TEMP% .bat execution
+        // will fail; users should switch to cmd or PowerShell in settings.
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let script_content = format!(
+            "@echo off\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            askpass_path,
+            ssh_args.join(" ")
+        );
+        create_file_windows_secure(&script_path, &script_content)?;
 
-    if use_tabs {
-        // Use -w last to target the most recently used window, nt for new-tab
-        cmd.arg("-w").arg("last").arg("nt");
+        let mut cmd = Command::new("wt");
+        if use_tabs { cmd.arg("-w").arg("last").arg("nt"); } else { cmd.arg("-w").arg("new"); }
+        cmd.arg("--title")
+            .arg(profile_name)
+            .arg("cmd")
+            .arg("/c")
+            .arg(&script_path)
+            .spawn()
+            .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
+
+        let script_path_cleanup = script_path.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            delete_file_with_overwrite(&script_path_cleanup);
+        });
     } else {
-        // Use -w new to create a new window
-        cmd.arg("-w").arg("new");
+        let mut cmd = Command::new("wt");
+        if use_tabs { cmd.arg("-w").arg("last").arg("nt"); } else { cmd.arg("-w").arg("new"); }
+        cmd.arg("--title")
+            .arg(profile_name)
+            .arg("ssh")
+            .args(ssh_args)
+            .spawn()
+            .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
     }
-
-    cmd.arg("--title")
-        .arg(profile_name)
-        .arg("ssh")
-        .args(ssh_args)
-        .spawn()
-        .map_err(|_| "Windows Terminal (wt.exe) not found. Please install Windows Terminal or select a different terminal.".to_string())?;
 
     Ok(())
 }
@@ -5129,6 +5838,7 @@ fn launch_windows_custom_terminal(
     custom_path: &str,
     ssh_args: &[String],
     profile_name: &str,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
@@ -5154,10 +5864,20 @@ fn launch_windows_custom_terminal(
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
 
+    let askpass_env = if let Some(setup) = askpass_setup {
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        format!(
+            "set \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\n",
+            askpass_path
+        )
+    } else {
+        String::new()
+    };
+
     let script_content = format!(
         "@echo off\r\n\
          echo Connecting to {}...\r\n\
-         ssh {}\r\n\
+         {}ssh {}\r\n\
          if errorlevel 1 (\r\n\
              echo.\r\n\
              echo Connection failed. Press any key to close...\r\n\
@@ -5167,6 +5887,7 @@ fn launch_windows_custom_terminal(
              echo Connection closed.\r\n\
          )\r\n",
         escape_batch_echo(profile_name),
+        askpass_env,
         ssh_args.iter()
             .map(|arg| escape_batch_arg(arg))
             .collect::<Vec<_>>()
@@ -5202,41 +5923,65 @@ fn launch_windows_default_terminal(
     ssh_args: &[String],
     profile_name: &str,
     use_tabs: bool,
+    askpass_setup: Option<&AskpassSetup>,
 ) -> Result<(), String> {
     use std::process::Command;
 
-    // Try Windows Terminal first
-    let mut wt_cmd = Command::new("wt");
+    if let Some(setup) = askpass_setup {
+        // Password auth: wt uses a temp .bat script; cmd fallback uses inline set chain
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
+        let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let ssh_args_str = ssh_args.join(" ");
+        let script_content = format!(
+            "@echo off\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            askpass_path, ssh_args_str
+        );
+        create_file_windows_secure(&script_path, &script_content)?;
 
-    if use_tabs {
-        // Use -w last to target the most recently used window, nt for new-tab
-        wt_cmd.arg("-w").arg("last").arg("nt");
+        let mut wt_cmd = Command::new("wt");
+        if use_tabs { wt_cmd.arg("-w").arg("last").arg("nt"); } else { wt_cmd.arg("-w").arg("new"); }
+        wt_cmd.arg("--title").arg(profile_name).arg("cmd").arg("/c").arg(&script_path);
+
+        match wt_cmd.spawn() {
+            Ok(_) => {}
+            Err(_) => {
+                // Fall back to cmd.exe with inline set chain
+                let compound = format!(
+                    "set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+                    askpass_path, ssh_args_str
+                );
+                Command::new("cmd")
+                    .arg("/c").arg("start").arg("cmd").arg("/c").arg(&compound)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            }
+        }
+
+        let script_path_cleanup = script_path.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            delete_file_with_overwrite(&script_path_cleanup);
+        });
     } else {
-        // Use -w new to create a new window
-        wt_cmd.arg("-w").arg("new");
-    }
+        // Non-password: try Windows Terminal first, fall back to cmd.exe
+        let mut wt_cmd = Command::new("wt");
+        if use_tabs { wt_cmd.arg("-w").arg("last").arg("nt"); } else { wt_cmd.arg("-w").arg("new"); }
+        wt_cmd.arg("--title").arg(profile_name).arg("ssh").args(ssh_args);
 
-    wt_cmd.arg("--title")
-        .arg(profile_name)
-        .arg("ssh")
-        .args(ssh_args);
-
-    match wt_cmd.spawn() {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            // Fall back to cmd.exe
-            Command::new("cmd")
-                .arg("/c")
-                .arg("start")
-                .arg("cmd")
-                .arg("/c")
-                .arg("ssh")
-                .args(ssh_args)
-                .spawn()
-                .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-            Ok(())
+        match wt_cmd.spawn() {
+            Ok(_) => {}
+            Err(_) => {
+                Command::new("cmd")
+                    .arg("/c").arg("start").arg("cmd").arg("/c")
+                    .arg("ssh").args(ssh_args)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
+            }
         }
     }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -5262,6 +6007,36 @@ fn connect_ssh(
     // Build SSH arguments
     let ssh_args = build_ssh_args(&profile)?;
 
+    // Retrieve password and create askpass temp files if this is a password-auth profile
+    let askpass_setup = if profile.auth_method == "password" || profile.auth_method == "central_password" {
+        let keychain_key = if profile.auth_method == "central_password" {
+            match profile.central_password_id {
+                Some(ref cp_id) => format!("central-{}", cp_id),
+                None => return Err(
+                    "This profile is set to use a central password but none is assigned. \
+                     Edit the profile to select a central password.".to_string()
+                ),
+            }
+        } else {
+            profile_id.clone()
+        };
+        let mut password = get_password(&keychain_key).map_err(|_| {
+            "No password stored for this profile. Edit the profile to set a password, \
+             or switch to a different authentication method.".to_string()
+        })?;
+        if password.is_empty() {
+            return Err(
+                "No password stored for this profile. Edit the profile to set a password, \
+                 or switch to a different authentication method.".to_string()
+            );
+        }
+        let setup = create_askpass_setup(&password)?;
+        password.zeroize();
+        Some(setup)
+    } else {
+        None
+    };
+
     // Get terminal preference (default to "default")
     let terminal_pref = terminal_preference.unwrap_or_else(|| "default".to_string());
     let use_tabs = use_tabs_in_terminal.unwrap_or(true);
@@ -5273,13 +6048,13 @@ fn connect_ssh(
         match terminal_pref.as_str() {
             "custom" => {
                 if let Some(custom_path) = custom_terminal_path {
-                    launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
+                    launch_macos_custom_terminal(&custom_path, &ssh_args, &profile.name, askpass_setup.as_ref())?;
                 } else {
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
             "default" | _ => {
-                launch_macos_default_terminal(&ssh_args, use_tabs)?;
+                launch_macos_default_terminal(&ssh_args, use_tabs, askpass_setup.as_ref())?;
             }
         }
 
@@ -5294,17 +6069,17 @@ fn connect_ssh(
     #[cfg(target_os = "windows")]
     {
         match terminal_pref.as_str() {
-            "cmd" => launch_windows_cmd(&ssh_args)?,
-            "powershell" => launch_windows_powershell(&ssh_args)?,
-            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs)?,
+            "cmd" => launch_windows_cmd(&ssh_args, askpass_setup.as_ref())?,
+            "powershell" => launch_windows_powershell(&ssh_args, askpass_setup.as_ref())?,
+            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
             "custom" => {
                 if let Some(custom_path) = custom_terminal_path {
-                    launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name)?;
+                    launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name, askpass_setup.as_ref())?;
                 } else {
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
-            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs)?,
+            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
         }
 
         // Minimize app window if enabled
@@ -5313,6 +6088,11 @@ fn connect_ssh(
                 let _ = window.minimize();
             }
         }
+    }
+
+    // Schedule secure cleanup of askpass temp files (10s delay)
+    if let Some(setup) = askpass_setup {
+        schedule_askpass_cleanup(setup);
     }
 
     // Record connection
@@ -5507,6 +6287,13 @@ pub fn run() {
             add_profile_tag,
             remove_profile_tag,
             set_profile_tags,
+            get_central_passwords,
+            create_central_password,
+            update_central_password,
+            update_central_password_value,
+            get_central_password_value,
+            delete_central_password,
+            get_profiles_using_central_password,
             create_terminal_session,
             write_to_terminal,
             resize_terminal,
@@ -5534,5 +6321,6 @@ mod tests {
     mod connections;
     mod settings;
     mod migrations;
-    mod integration;  // Phase 8C: Integration tests for multi-step workflows
+    mod integration;         // Phase 8C: Integration tests for multi-step workflows
+    mod central_passwords;   // v0.9.0: Central passwords DB layer tests
 }

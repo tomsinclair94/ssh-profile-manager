@@ -1,6 +1,6 @@
 [package]
 name = "ssh-profile-manager"
-version = "0.8.0"
+version = "0.9.0"
 description = "SSH Profile Manager - A lightweight SSH client"
 authors = ["you"]
 license = "GPL-3.0"

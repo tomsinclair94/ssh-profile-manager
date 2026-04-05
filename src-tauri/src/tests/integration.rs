@@ -3,7 +3,7 @@
 use super::helpers::*;
 use crate::{
     decrypt_import_if_encrypted, detect_encrypted_export, encrypt_data,
-    ProfileExportDetailed, GroupExportDetailed,
+    CentralPassword, ProfileExportDetailed, GroupExportDetailed,
 };
 
 // ============================================================================
@@ -46,6 +46,7 @@ fn test_export_import_profile_roundtrip_encrypted() {
         metadata,
         tags: tags_list,
         password: Some("stored_password".to_string()), // Simulated keyring retrieval
+        central_password_ref: None,
     };
 
     let json = serde_json::to_string(&export_data).unwrap();
@@ -161,6 +162,7 @@ fn test_export_import_group_roundtrip_with_subgroups() {
         metadata: db.get_profile_metadata(&profile2.id).unwrap(),
         tags: vec![],
         password: None,
+        central_password_ref: None,
     }];
 
     let child_export = GroupExportDetailed {
@@ -174,6 +176,7 @@ fn test_export_import_group_roundtrip_with_subgroups() {
         metadata: db.get_profile_metadata(&profile1.id).unwrap(),
         tags: vec![],
         password: None,
+        central_password_ref: None,
     }];
 
     let parent_export = GroupExportDetailed {
@@ -675,12 +678,14 @@ fn test_encrypted_group_export_with_password_profiles() {
             metadata: db.get_profile_metadata(&profile1.id).unwrap(),
             tags: vec![],
             password: None,
+            central_password_ref: None,
         },
         ProfileExportDetailed {
             profile: profile2.clone(),
             metadata: db.get_profile_metadata(&profile2.id).unwrap(),
             tags: vec![],
             password: Some("stored_password".to_string()),
+            central_password_ref: None,
         },
     ];
 
@@ -733,6 +738,7 @@ fn test_import_with_invalid_encryption_password() {
         metadata: None,
         tags: vec![],
         password: Some("test_pass".to_string()),
+        central_password_ref: None,
     };
 
     let json = serde_json::to_string(&export).unwrap();
@@ -766,6 +772,7 @@ fn test_tag_auto_creation_on_import() {
         metadata: None,
         tags: vec![tag1.clone(), tag2.clone()],
         password: None,
+        central_password_ref: None,
     };
 
     // Import into new database
@@ -1094,4 +1101,146 @@ fn test_deep_nesting_performance() {
     );
 
     println!("✓ Created 50 profiles at depth 3 in {:?}", duration);
+}
+
+// ============================================================================
+// Central Password Workflows (v0.9.0)
+// ============================================================================
+
+#[test]
+fn test_central_password_full_workflow() {
+    // Validates the DB operations across the full CP lifecycle.
+    // Keychain reads/writes are handled by the Tauri command layer and are
+    // simulated here with hardcoded strings, matching the pattern used in the
+    // export/import round-trip tests above.
+    let db = create_test_db();
+
+    // Step 1: Create a central password (keychain write simulated — not called here)
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = CentralPassword {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: "Bastion Host".to_string(),
+        description: Some("Shared jump host credentials".to_string()),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    db.create_central_password(&cp).unwrap();
+
+    // Step 2: Link two profiles to the central password
+    let mut p1 = make_test_profile("Web Server", None);
+    let mut p2 = make_test_profile("DB Server", None);
+    p1.auth_method = "central_password".to_string();
+    p1.central_password_id = Some(cp.id.clone());
+    p2.auth_method = "central_password".to_string();
+    p2.central_password_id = Some(cp.id.clone());
+    db.create_profile(&p1).unwrap();
+    db.create_profile(&p2).unwrap();
+
+    // Step 3: Verify both profiles are linked
+    let linked = db.get_profiles_by_central_password_id(&cp.id).unwrap();
+    assert_eq!(linked.len(), 2);
+
+    // Step 4: Update CP metadata (simulating user renaming it)
+    db.update_central_password_meta(&cp.id, "Bastion Host (Updated)", Some("New description")).unwrap();
+    let updated_cp = db.get_central_password_by_id(&cp.id).unwrap().unwrap();
+    assert_eq!(updated_cp.name, "Bastion Host (Updated)");
+
+    // Step 5: Delete — revert linked profiles then confirm revert count
+    // (Keychain entry deletion is handled by the Tauri command layer)
+    let reverted = db.revert_profiles_central_password(&cp.id).unwrap();
+    assert_eq!(reverted, 2);
+
+    // Verify profiles reverted to keyboard-interactive auth
+    let profile1 = db.get_profile_by_id(&p1.id).unwrap().unwrap();
+    let profile2 = db.get_profile_by_id(&p2.id).unwrap().unwrap();
+    assert_eq!(profile1.auth_method, "none");
+    assert_eq!(profile2.auth_method, "none");
+    assert!(profile1.central_password_id.is_none());
+    assert!(profile2.central_password_id.is_none());
+}
+
+#[test]
+fn test_export_import_central_password_ref() {
+    // Validates that central_password_ref round-trips through export/import:
+    // - Export includes the CP name as a portable reference (no password value)
+    // - Import re-links to an existing CP matched by name
+    // - Import creates an empty shell CP when the name is not found
+    // Keychain operations are handled by the Tauri command layer and are
+    // simulated here with hardcoded strings.
+    let db = create_test_db();
+
+    // Create a central password and a linked profile
+    let now = chrono::Utc::now().to_rfc3339();
+    let cp = CentralPassword {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: "AD Password".to_string(),
+        description: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    db.create_central_password(&cp).unwrap();
+
+    let mut profile = make_test_profile("Domain Controller", None);
+    profile.auth_method = "central_password".to_string();
+    profile.central_password_id = Some(cp.id.clone());
+    db.create_profile(&profile).unwrap();
+
+    // Simulate export: store CP name as a portable ref (no password value exported)
+    let metadata = db.get_profile_metadata(&profile.id).unwrap();
+    let export_data = ProfileExportDetailed {
+        profile: profile.clone(),
+        metadata,
+        tags: vec![],
+        password: None, // CP profiles never export a password value
+        central_password_ref: Some(cp.name.clone()),
+    };
+    let json = serde_json::to_string(&export_data).unwrap();
+
+    // --- Import on a fresh database that already has a matching CP ---
+    let db2 = create_test_db();
+    let now2 = chrono::Utc::now().to_rfc3339();
+    let existing_cp = CentralPassword {
+        id: uuid::Uuid::new_v4().to_string(), // Different ID (machine-specific)
+        name: "AD Password".to_string(),
+        description: None,
+        created_at: now2.clone(),
+        updated_at: now2,
+    };
+    db2.create_central_password(&existing_cp).unwrap();
+
+    let import_data: ProfileExportDetailed = serde_json::from_str(&json).unwrap();
+
+    // Verify central_password_ref is present in the export
+    assert_eq!(import_data.central_password_ref, Some("AD Password".to_string()));
+    assert!(import_data.password.is_none());
+
+    // Simulate the import resolver: look up by name → returns existing CP id
+    let resolved_id = db2
+        .get_central_password_by_name(import_data.central_password_ref.as_deref().unwrap())
+        .unwrap()
+        .map(|c| c.id);
+    assert_eq!(resolved_id, Some(existing_cp.id.clone()));
+
+    // --- Import on a second fresh database with no matching CP ---
+    let db3 = create_test_db();
+
+    // Simulate the import resolver: name not found → create an empty shell
+    let cp_name = import_data.central_password_ref.as_deref().unwrap();
+    let not_found = db3.get_central_password_by_name(cp_name).unwrap();
+    assert!(not_found.is_none());
+
+    let now3 = chrono::Utc::now().to_rfc3339();
+    let shell_cp = CentralPassword {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: cp_name.to_string(),
+        description: None,
+        created_at: now3.clone(),
+        updated_at: now3,
+    };
+    db3.create_central_password(&shell_cp).unwrap();
+
+    // Verify the shell CP was created and can be looked up by name
+    let found_shell = db3.get_central_password_by_name(cp_name).unwrap();
+    assert!(found_shell.is_some());
+    assert_eq!(found_shell.unwrap().name, "AD Password");
 }

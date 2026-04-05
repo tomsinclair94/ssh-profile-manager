@@ -23,8 +23,16 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.8.0 (2026-02-27) ✅
-**Next Release:** TBD
+**Latest Release:** v0.9.0 (2026-04-05) ✅
+**Next:** v0.10.0 (planned features TBD)
+
+**v0.9.0 Features (Released - 2026-04-05):**
+- ✅ SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
+- ✅ Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
+- ✅ Export/Import — `central_password_ref` field on all export/import paths
+- ✅ Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode, bulk select/delete with checkboxes, `P` shortcut
+- ✅ Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
+- ✅ 163 automated tests; functional GUI + migration testing complete; 0 CRITICAL/HIGH after review
 
 **v0.8.0 Features (Released - 2026-02-27):**
 - ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
@@ -108,14 +116,14 @@ git commit -m "Bump version to X.X.X for dev branch"
 **Dev Branch (`vX.X.X-dev`):**
 1. **VERSION ALREADY BUMPED** (see Version Management above)
 2. Develop features/fixes (with tests for all new features)
-3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 142 tests must pass)
+3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 163 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
 5. Code review (`voltagent-qa-sec:code-reviewer` agent)
 6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
 7. Security review (`voltagent-infra:security-engineer` agent)
 8. Fix CRITICAL/HIGH/MEDIUM issues
 9. **RE-RUN AUTOMATED TESTS** after fixes: `cargo test --lib` (ensure no regressions)
-10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-manual-gui-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
+10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
 11. Fix any GUI bugs found during manual testing
 12. **RUN MIGRATION TESTS** (if database migrations present): Open version-specific plan `plans/vX.X.X-migration-testing.md` and complete all migration validation tests (~1.5 hours total)
 13. Fix any migration issues found during testing
@@ -223,6 +231,17 @@ get_profile_tags(profile_id: String)
 set_profile_tags(profile_id: String, tag_ids: Vec<String>)
 add_profile_tag(profile_id: String, tag_id: String)
 remove_profile_tag(profile_id: String, tag_id: String)
+```
+
+**Central Passwords (v0.9.0):**
+```rust
+get_central_passwords() // Returns Vec<CentralPassword>
+create_central_password(input: CreateCentralPasswordInput) // name + description + password; stores in keychain as "central-{id}"; returns new id
+update_central_password(input: UpdateCentralPasswordInput) // name + description only
+update_central_password_value(central_password_id: String, password: String) // updates keychain entry
+get_central_password_value(central_password_id: String) // retrieves from keychain (show button)
+delete_central_password(central_password_id: String) // reverts linked profiles → removes keychain → deletes row; returns revert count
+get_profiles_using_central_password(central_password_id: String) // Returns Vec<String> of profile names
 ```
 
 **Settings & Export/Import:**
@@ -339,13 +358,15 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Help modal accessible with `?` key
 - Platform-aware (Cmd on macOS, Ctrl on Windows/Linux)
 
-**Password Authentication Limitations:**
-- Passwords stored securely in system keychain for reference and export purposes
-- **IMPORTANT:** Stored passwords are NOT automatically passed to SSH during connection
-- Users must manually enter passwords when prompted by SSH in the terminal
-- Automatic password passing would require additional tools (e.g., `sshpass`) which introduce security risks
-- For automated connections, SSH key authentication is strongly recommended
-- Future versions may implement SSH agent integration for improved password handling
+**Password Authentication (v0.9.0+):**
+- Passwords stored securely in system keychain
+- Passed automatically to SSH via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force` — no manual entry required
+- `connect_ssh` creates a temp password file (`0600`) + askpass script (`0700`); both securely deleted after 10s
+- Injection strategy varies by terminal: inline env vars (macOS default, cmd, PowerShell), script prepend (macOS custom, Windows custom), temp `.bat` + `cmd /c` (Windows Terminal, Windows default wt path)
+- If no password stored, a clear error toast is shown directing the user to edit the profile
+- Central Passwords (shared credentials for multiple profiles) — backend complete (Phase 2), UI complete (Phase 4)
+- Central Passwords manager: key-icon toolbar button + `P` shortcut; modal with create/edit form at top (Edit populates form, fetches password), list with Show/Edit/Delete actions, bulk select/delete with checkboxes
+- SSH key authentication remains recommended for automated/scripted connections
 
 ## Database Schema
 ```sql
@@ -356,9 +377,18 @@ CREATE TABLE profiles (
     host TEXT NOT NULL,
     port INTEGER NOT NULL DEFAULT 22,
     username TEXT NOT NULL,
-    auth_method TEXT NOT NULL DEFAULT 'key',
+    auth_method TEXT NOT NULL DEFAULT 'key',  -- "key", "password", "central_password", or "none"
     key_path TEXT,
-    group_path TEXT  -- Semantic hierarchical path (e.g., "Work/Production")
+    group_path TEXT,  -- Semantic hierarchical path (e.g., "Work/Production")
+    central_password_id TEXT  -- v0.9.0+: FK to central_passwords.id (no ON DELETE constraint)
+);
+
+CREATE TABLE central_passwords (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE groups (
@@ -406,9 +436,12 @@ CREATE TABLE user_settings (key TEXT PRIMARY KEY, value TEXT);
 **Important Notes:**
 - All profiles automatically receive default metadata on creation (icon='server', is_favorite=false, display_order=0)
 - Migration 4 backfills metadata for existing profiles and creates hierarchical group structure
+- Migration 5 adds `central_passwords` table and `central_password_id` column to `profiles` (schema version 5)
 - Groups use semantic paths (e.g., "Work/Production") for hierarchy, max 3 levels deep
 - Profile names are unique within parent group only (allows "Server1" in multiple groups)
 - Tag names must be unique globally (case-sensitive)
+- Central password keychain key format: `"central-{uuid}"` (same service `"ssh-profile-manager"`, distinct from profile keys)
+- Deletion of a central password reverts all linked profiles to `auth_method='none'` (keyboard-interactive)
 
 **Database Location:** `~/Library/Application Support/ssh-profile-manager/profiles.db` (macOS)
 **Keychain:** System keychain (service: "ssh-profile-manager")
@@ -435,20 +468,21 @@ All backend tests are located in `src-tauri/src/tests/` with a modular structure
 ```
 src-tauri/src/tests/
 ├── helpers.rs        # Shared test utilities
-├── encryption.rs     # 38 tests - AES-256-GCM encryption
-├── validation.rs     # 27 tests - Input validation
-├── profiles.rs       # 16 tests - Profile CRUD + move + reorder
-├── groups.rs         # 11 tests - Hierarchical groups + move + reorder
-├── tags.rs           #  9 tests - Tag system
-├── connections.rs    #  5 tests - Recent connections
-├── settings.rs       #  3 tests - User settings
-├── migrations.rs     #  5 tests - Schema migrations
-└── integration.rs    # 22 tests - Multi-step workflows
+├── encryption.rs          # 38 tests - AES-256-GCM encryption
+├── validation.rs          # 27 tests - Input validation
+├── profiles.rs            # 17 tests - Profile CRUD + move + reorder + CP linkage
+├── groups.rs              # 11 tests - Hierarchical groups + move + reorder
+├── tags.rs                #  9 tests - Tag system
+├── connections.rs         #  5 tests - Recent connections
+├── settings.rs            #  3 tests - User settings
+├── migrations.rs          #  6 tests - Schema migrations (incl. migration 5)
+├── central_passwords.rs   # 17 tests - Central passwords DB layer (v0.9.0)
+└── integration.rs         # 24 tests - Multi-step workflows (incl. 2 CP workflows)
 
-Total: 142 tests (all must pass before release)
+Total: 163 tests (all must pass before release)
 ```
 
-**Integration tests (integration.rs):** 22 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
+**Integration tests (integration.rs):** 24 comprehensive tests validating multi-step workflows including export/import round-trips, group operations (rename/move cascades), duplicate detection, tag auto-creation, full backup/restore, central password lifecycle, and performance benchmarks. These catch issues in transaction boundaries, cascading updates, and command orchestration that unit tests miss.
 
 **Test helpers (helpers.rs):** Shared utilities (`create_test_db()`, `make_test_profile()`, `make_test_group()`, `make_test_tag()`) used across all test modules. All tests use in-memory databases for isolation.
 
@@ -503,7 +537,7 @@ fn test_feature_success() {
 
 ### Test Philosophy
 
-- **Fast:** In-memory databases, no I/O, no network (~41s for 142 tests)
+- **Fast:** In-memory databases, no I/O, no network (~41s for 163 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
 - **Comprehensive:** Unit tests + 22 integration tests covering all backend logic
@@ -513,14 +547,14 @@ fn test_feature_success() {
 Before creating a release PR:
 
 **Automated Tests:**
-- [ ] Run `cargo test --lib` → All 142 tests pass
+- [ ] Run `cargo test --lib` → All 163 tests pass
 - [ ] New features have corresponding automated tests
 - [ ] Tests run in <45 seconds
 - [ ] No warnings from test compilation
 - [ ] CI/CD tests pass on both macOS and Windows
 
 **Manual GUI Tests:**
-- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-manual-gui-test-results.md`
+- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-test-results.md`
 - [ ] Complete macOS testing section (~2-3 hours)
 - [ ] Complete Windows testing section (~45 minutes)
 - [ ] Document test results (fill in summary, issues fixed, observations)
@@ -542,7 +576,7 @@ Before creating a release PR:
 ## Manual GUI Testing
 
 **Template:** `plans/templates/manual-gui-test-plan-template.md`
-**Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md`
+**Results:** `plans/test-results/vX.X.X-test-results.md`
 
 **Purpose:** Comprehensive manual testing of all GUI/frontend functionality before each major release.
 
@@ -554,7 +588,7 @@ Before creating a release PR:
 
 **Test Results Storage:**
 - **Template:** `plans/templates/manual-gui-test-plan-template.md` (never modified, always blank)
-- **Completed Results:** `plans/test-results/vX.X.X-manual-gui-test-results.md` (one per release)
+- **Completed Results:** `plans/test-results/vX.X.X-test-results.md` (one per release)
 - **Version Prefix:** Use `vX.X.X-` prefix for chronological sorting
 
 ## Migration Testing
