@@ -12,7 +12,7 @@
 - [ ] **rand 0.8.5 → 0.10.0** — `thread_rng()` removed; update 2 call sites in encryption code to `rand::rng()`
 - [ ] **sha2 0.10.9 → 0.11.0 + hmac 0.12.1 → 0.13.0** — RustCrypto ecosystem split (`digest 0.10` → `0.11`); must update sha2, hmac, pbkdf2, and aes-gcm together to resolve version conflict
 - [ ] **rusqlite 0.32.1 → 0.39.0** — 7 major versions; audit breaking API changes at all call sites before updating
-- [ ] **GitHub Actions: actions/checkout@v4 → v5** — Node.js 20 deprecated on runners from June 2026; update in all 4 workflow files (`auto-tag.yml`, `release.yml`, `security-audit.yml`, `pr-checks.yml`)
+- [x] **GitHub Actions: actions/checkout@v4 → v5** — Node.js 20 deprecated on runners from June 2026; update in all 4 workflow files (`auto-tag.yml`, `release.yml`, `security-audit.yml`, `pr-checks.yml`)
 - [ ] Run `cargo update` + verify build
 - [ ] Re-run all automated tests (163 must pass)
 
