@@ -6784,9 +6784,24 @@ async function checkForUpdates(silent = false) {
         const updateInfo = await invoke('check_for_updates');
 
         if (updateInfo.update_available) {
-            // Update available
-            const message = `A new version is available!\n\nCurrent: v${updateInfo.current_version}\nLatest: v${updateInfo.latest_version}\n\nWould you like to download it?`;
-            const shouldDownload = await customConfirm(message, {
+            // Update available — build a DOM fragment for proper formatting
+            const messageEl = document.createDocumentFragment();
+            const question = document.createElement('div');
+            question.textContent = 'A new version is available. Would you like to download it?';
+            const versions = document.createElement('div');
+            versions.style.marginTop = '8px';
+            const currentLine = document.createElement('div');
+            currentLine.className = 'profile-name';
+            currentLine.style.color = 'inherit';
+            currentLine.textContent = `Current: v${updateInfo.current_version}`;
+            const latestLine = document.createElement('div');
+            latestLine.className = 'profile-name';
+            latestLine.textContent = `New: v${updateInfo.latest_version}`;
+            versions.appendChild(currentLine);
+            versions.appendChild(latestLine);
+            messageEl.appendChild(question);
+            messageEl.appendChild(versions);
+            const shouldDownload = await customConfirm(messageEl, {
                 title: 'Update Available',
                 okText: 'Download',
                 cancelText: 'Later',

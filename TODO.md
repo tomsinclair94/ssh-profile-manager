@@ -8,6 +8,7 @@
 
 ### Work Items
 
+- [x] **Update available modal** — version info crammed onto one line; reformat so current/latest versions are clearly presented on separate lines with better visual hierarchy
 - [ ] **rand 0.8.5 → 0.10.0** — `thread_rng()` removed; update 2 call sites in encryption code to `rand::rng()`
 - [ ] **sha2 0.10.9 → 0.11.0 + hmac 0.12.1 → 0.13.0** — RustCrypto ecosystem split (`digest 0.10` → `0.11`); must update sha2, hmac, pbkdf2, and aes-gcm together to resolve version conflict
 - [ ] **rusqlite 0.32.1 → 0.39.0** — 7 major versions; audit breaking API changes at all call sites before updating
