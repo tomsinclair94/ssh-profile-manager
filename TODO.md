@@ -73,6 +73,24 @@ See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customizatio
 
 ---
 
+## Deferred Upgrades
+
+These upgrades are blocked on upstream crates reaching stable release. **Check at the start of every new dev branch** before adding to that version's work items.
+
+### RustCrypto ecosystem (sha2 / hmac / pbkdf2 / aes-gcm)
+All four must move together due to the `digest 0.10 → 0.11` type split. Cannot do a partial upgrade.
+
+| Crate | Current | Target | Status |
+|---|---|---|---|
+| sha2 | 0.10.9 | 0.11.0 | Stable ✅ — ready |
+| hmac | 0.12.1 | 0.13.0 | Stable ✅ — ready |
+| pbkdf2 | 0.12.2 | 0.13.0 | `0.13.0-rc.10` as of 2026-04-07 — **blocked** |
+| aes-gcm | 0.10.3 | 0.11.0 | `0.11.0-rc.3` as of 2026-04-07 — **blocked** |
+
+No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish stable releases, update all four in `Cargo.toml` together and verify the API call sites in `lib.rs` (`pbkdf2_hmac::<Sha256>`, `Hmac<Sha256>`, `Aes256Gcm`).
+
+---
+
 ## Known Issues
 
 ### macOS Code Signing
