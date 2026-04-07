@@ -6,13 +6,24 @@
 **Branch:** `v0.9.2-dev`
 **Focus:** Windows SSH password auth fixes
 
+### Debugging Setup (do this first)
+
+- [ ] **Get the branch onto the Windows VM** — clone/pull `v0.9.2-dev` and set up the dev environment:
+  1. Install prerequisites: [Rust](https://rustup.rs), [Bun](https://bun.sh), [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (MSVC toolchain + Windows SDK)
+  2. `git clone https://github.com/tomsinclair94/ssh-profile-manager.git && cd ssh-profile-manager && git checkout v0.9.2-dev`
+  3. `bun install`
+  4. `bun run dev` — keep the terminal window open; `[DEBUG]` log lines from the Rust backend will appear here
+  5. Right-click inside the app → Inspect (or Ctrl+Shift+I) for frontend devtools
+  6. Set up a test profile with password auth pointing at a known SSH host
+  7. Try connecting with each terminal type (Windows Terminal, CMD, PowerShell) and capture all `[DEBUG]` output from the `bun run dev` terminal
+
 ### Work Items
 
-- [ ] **Windows Terminal: Access Denied** — SSH cannot invoke `spm-askpass.exe` when launched via Windows Terminal. Currently a `.bat` file is used for env var injection (`wt cmd /c <bat>`), which runs SSH with `SSH_ASKPASS` set. SSH invokes `spm-askpass.exe` but receives Access Denied. Likely a path-with-spaces or CreateProcess quoting issue. Investigate and fix.
+- [ ] **Windows Terminal: Access Denied** — SSH cannot invoke `spm-askpass.exe` when launched via Windows Terminal. Currently a `.bat` file is used for env var injection (`wt cmd /c <bat>`), which runs SSH with `SSH_ASKPASS` set. SSH then invokes `spm-askpass.exe` but receives Access Denied. Debug output will show exact paths — check for spaces, quoting issues.
 
-- [ ] **CMD: Password not passed** — CMD opens, closes, then reopens as if `SSH_ASKPASS` was never set. SSH may be ignoring the env var or the inline `set &` chain is not persisting across the `start cmd /c` subprocess boundary. Investigate env var inheritance in the nested `cmd /c start cmd /c` launch chain.
+- [ ] **CMD: Password not passed** — CMD opens, closes, then reopens as if `SSH_ASKPASS` was never set. Possible cause: env vars set via inline `set &` chain may not survive the `cmd /c start cmd /c` double-subprocess boundary. Debug output will show the exact compound command being constructed.
 
-- [ ] **PowerShell (proxy/multi-step auth): `spm-askpass: failed to read password file: os error 2`** — PowerShell correctly passes the password (2FA succeeds), but when the proxy requests additional prompts (e.g. reason for login), SSH invokes `spm-askpass.exe` again after the 10s cleanup has already deleted the password file. Need to extend cleanup delay or keep the file alive until the SSH process exits.
+- [ ] **PowerShell (proxy/multi-step auth): `spm-askpass: failed to read password file: os error 2`** — Password correctly passed for initial auth (2FA succeeds), but proxy then requests additional prompts (e.g. reason for login). SSH invokes `spm-askpass.exe` again but the 10s cleanup has already deleted the password file. Fix: tie password file lifetime to the SSH process rather than a fixed timeout.
 
 ### Release Checklist
 

@@ -5502,6 +5502,10 @@ fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
         let exe_dir = exe_path.parent()
             .ok_or_else(|| "Failed to determine application directory".to_string())?;
         let helper = exe_dir.join("spm-askpass.exe");
+        println!("[DEBUG setup_askpass] exe_dir: {:?}", exe_dir);
+        println!("[DEBUG setup_askpass] helper path: {:?}", helper);
+        println!("[DEBUG setup_askpass] helper exists: {}", helper.exists());
+        println!("[DEBUG setup_askpass] pwd_file: {:?}", pwd_file_path);
         if !helper.exists() {
             return Err(
                 "SSH password helper (spm-askpass.exe) not found alongside the application. \
@@ -5717,6 +5721,9 @@ fn launch_windows_cmd(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>)
             askpass_path,
             ssh_args.join(" ")
         );
+        println!("[DEBUG launch_windows_cmd] askpass_path: {}", askpass_path);
+        println!("[DEBUG launch_windows_cmd] pwd_path: {}", pwd_path);
+        println!("[DEBUG launch_windows_cmd] compound command: {}", compound);
         Command::new("cmd")
             .arg("/c")
             .arg("start")
@@ -5780,6 +5787,8 @@ fn launch_windows_powershell(ssh_args: &[String], askpass_setup: Option<&Askpass
         format!("& {} | Out-Null; exit", args_quoted.join(" "))
     };
 
+    println!("[DEBUG launch_windows_powershell] ps_command: {}", ps_command);
+
     // Convert to UTF-16LE and Base64 encode (required by PowerShell -EncodedCommand)
     let utf16_bytes: Vec<u16> = ps_command.encode_utf16().collect();
     let bytes: Vec<u8> = utf16_bytes.iter()
@@ -5824,6 +5833,10 @@ fn launch_windows_terminal(
             askpass_path,
             ssh_args.join(" ")
         );
+        println!("[DEBUG launch_windows_terminal] askpass_path: {}", askpass_path);
+        println!("[DEBUG launch_windows_terminal] pwd_path: {}", pwd_path);
+        println!("[DEBUG launch_windows_terminal] bat script path: {:?}", script_path);
+        println!("[DEBUG launch_windows_terminal] bat script content:\n{}", script_content);
         create_file_windows_secure(&script_path, &script_content)?;
 
         let mut cmd = Command::new("wt");
