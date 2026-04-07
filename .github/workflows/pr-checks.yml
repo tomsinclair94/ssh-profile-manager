@@ -72,10 +72,12 @@ jobs:
         if: steps.filter.outputs.code == 'true'
         run: bun install --frozen-lockfile
 
-      - name: Build spm-askpass helper (Windows only)
+      - name: Create spm-askpass stub (Windows only)
         if: steps.filter.outputs.code == 'true' && matrix.platform == 'windows-latest'
-        working-directory: src-tauri
-        run: cargo build --bin spm-askpass --release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/target/release | Out-Null
+          New-Item -ItemType File -Force -Path src-tauri/target/release/spm-askpass.exe | Out-Null
 
       - name: Cargo check
         if: steps.filter.outputs.code == 'true'
