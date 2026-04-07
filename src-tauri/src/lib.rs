@@ -5491,14 +5491,24 @@ fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
         script_path
     };
 
+    // On Windows, SSH cannot CreateProcess a .bat file (returns ERROR_ACCESS_DENIED).
+    // Use the bundled spm-askpass.exe helper instead — a real executable that SSH can invoke.
+    // It reads SPM_PASSWORD_FILE (set in the terminal launch command) and writes the
+    // password to stdout for SSH to consume.
     #[cfg(windows)]
     let askpass_script_path = {
-        let script_path = temp_dir.join(format!("spm-askpass-{}.bat", uuid));
-        let pwd_path_str = pwd_file_path.to_string_lossy().to_string();
-        let script_content = format!("@echo off\r\ntype \"{}\"\r\n", pwd_path_str);
-        fs::write(&script_path, &script_content)
-            .map_err(|e| format!("Failed to create askpass script: {}", e))?;
-        script_path
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to find application path: {}", e))?;
+        let exe_dir = exe_path.parent()
+            .ok_or_else(|| "Failed to determine application directory".to_string())?;
+        let helper = exe_dir.join("spm-askpass.exe");
+        if !helper.exists() {
+            return Err(
+                "SSH password helper (spm-askpass.exe) not found alongside the application. \
+                The application may need to be reinstalled.".to_string()
+            );
+        }
+        helper
     };
 
     Ok(AskpassSetup { askpass_script_path, pwd_file_path })
@@ -5510,6 +5520,9 @@ fn schedule_askpass_cleanup(setup: AskpassSetup) {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(10));
         delete_file_with_overwrite(&setup.pwd_file_path);
+        // On Unix, askpass_script_path is a temp .sh script — delete it.
+        // On Windows, askpass_script_path is the bundled spm-askpass.exe — do NOT delete it.
+        #[cfg(unix)]
         delete_file_with_overwrite(&setup.askpass_script_path);
     });
 }
@@ -5693,10 +5706,14 @@ fn launch_windows_cmd(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>)
     use std::process::Command;
 
     if let Some(setup) = askpass_setup {
-        // Inline set chain — no temp file needed for cmd.exe
+        // Inline set chain — no temp file needed for cmd.exe.
+        // SSH_ASKPASS points to spm-askpass.exe (a real exe, not a .bat).
+        // SPM_PASSWORD_FILE tells the helper where to read the password from.
         let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let pwd_path = setup.pwd_file_path.to_string_lossy();
         let compound = format!(
-            "set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+            "set \"SPM_PASSWORD_FILE={}\"& set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+            pwd_path,
             askpass_path,
             ssh_args.join(" ")
         );
@@ -5751,8 +5768,11 @@ fn launch_windows_powershell(ssh_args: &[String], askpass_setup: Option<&Askpass
     let ps_command = if let Some(setup) = askpass_setup {
         let askpass_path = setup.askpass_script_path.to_string_lossy();
         let askpass_path_escaped = askpass_path.replace('\'', "''");
+        let pwd_path = setup.pwd_file_path.to_string_lossy();
+        let pwd_path_escaped = pwd_path.replace('\'', "''");
         format!(
-            "$env:SSH_ASKPASS = '{}'; $env:SSH_ASKPASS_REQUIRE = 'force'; & {} | Out-Null; exit",
+            "$env:SPM_PASSWORD_FILE = '{}'; $env:SSH_ASKPASS = '{}'; $env:SSH_ASKPASS_REQUIRE = 'force'; & {} | Out-Null; exit",
+            pwd_path_escaped,
             askpass_path_escaped,
             args_quoted.join(" ")
         )
@@ -5791,14 +5811,16 @@ fn launch_windows_terminal(
     use std::process::Command;
 
     if let Some(setup) = askpass_setup {
-        // Cannot inject env vars via wt command-line args — use a temp .bat script
-        // Known limitation: AppLocker/WDAC environments blocking %TEMP% .bat execution
-        // will fail; users should switch to cmd or PowerShell in settings.
+        // Cannot inject env vars via wt command-line args — use a temp .bat script.
+        // SSH_ASKPASS points to spm-askpass.exe (a real exe, not a .bat).
+        // SPM_PASSWORD_FILE tells the helper where to read the password from.
         let temp_dir = std::env::temp_dir();
         let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
         let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let pwd_path = setup.pwd_file_path.to_string_lossy();
         let script_content = format!(
-            "@echo off\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            "@echo off\r\nset \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            pwd_path,
             askpass_path,
             ssh_args.join(" ")
         );
@@ -5866,8 +5888,10 @@ fn launch_windows_custom_terminal(
 
     let askpass_env = if let Some(setup) = askpass_setup {
         let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let pwd_path = setup.pwd_file_path.to_string_lossy();
         format!(
-            "set \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\n",
+            "set \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\n",
+            pwd_path,
             askpass_path
         )
     } else {
@@ -5928,14 +5952,17 @@ fn launch_windows_default_terminal(
     use std::process::Command;
 
     if let Some(setup) = askpass_setup {
-        // Password auth: wt uses a temp .bat script; cmd fallback uses inline set chain
+        // Password auth: wt uses a temp .bat script; cmd fallback uses inline set chain.
+        // SSH_ASKPASS points to spm-askpass.exe (a real exe, not a .bat).
+        // SPM_PASSWORD_FILE tells the helper where to read the password from.
         let temp_dir = std::env::temp_dir();
         let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
         let askpass_path = setup.askpass_script_path.to_string_lossy();
+        let pwd_path = setup.pwd_file_path.to_string_lossy();
         let ssh_args_str = ssh_args.join(" ");
         let script_content = format!(
-            "@echo off\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
-            askpass_path, ssh_args_str
+            "@echo off\r\nset \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            pwd_path, askpass_path, ssh_args_str
         );
         create_file_windows_secure(&script_path, &script_content)?;
 
@@ -5948,8 +5975,8 @@ fn launch_windows_default_terminal(
             Err(_) => {
                 // Fall back to cmd.exe with inline set chain
                 let compound = format!(
-                    "set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
-                    askpass_path, ssh_args_str
+                    "set \"SPM_PASSWORD_FILE={}\"& set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
+                    pwd_path, askpass_path, ssh_args_str
                 );
                 Command::new("cmd")
                     .arg("/c").arg("start").arg("cmd").arg("/c").arg(&compound)

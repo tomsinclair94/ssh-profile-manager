@@ -9,6 +9,7 @@
 ### Work Items
 
 - [x] **Update available modal** — version info crammed onto one line; reformat so current/latest versions are clearly presented on separate lines with better visual hierarchy
+- [x] **Windows password auth: Access Denied** — Windows OpenSSH cannot `CreateProcess` a `.bat` file (SSH_ASKPASS); replaced temp `.bat` askpass script with bundled `spm-askpass.exe` helper; affects all Windows terminal types
 - [x] **rand 0.8.5 → 0.10.0** — `thread_rng()` removed; update 2 call sites in encryption code to `rand::rng()`
 - [ ] **sha2 0.10.9 → 0.11.0 + hmac 0.12.1 → 0.13.0** — RustCrypto ecosystem split (`digest 0.10` → `0.11`); must update sha2, hmac, pbkdf2, and aes-gcm together; **blocked** — pbkdf2 is on `0.13.0-rc.10` and aes-gcm on `0.11.0-rc.3` (both still RC as of 2026-04-07); no current conflict or vulnerability, revisit once both reach stable release
 - [x] **rusqlite 0.32.1 → 0.39.0** — 7 major versions; audit breaking API changes at all call sites before updating
