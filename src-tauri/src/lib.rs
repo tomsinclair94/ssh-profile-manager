@@ -2274,14 +2274,14 @@ fn encrypt_data(plaintext: &str, password: &str) -> Result<EncryptedExport, Stri
 
     // Generate random salt
     let mut salt = [0u8; SALT_SIZE];
-    rand::Rng::fill(&mut rand::thread_rng(), &mut salt);
+    rand::fill(&mut salt);
 
     // Derive encryption key from password
     let mut key = derive_key(password, &salt)?;
 
     // Generate random nonce (IV)
     let mut nonce_bytes = [0u8; NONCE_SIZE];
-    rand::Rng::fill(&mut rand::thread_rng(), &mut nonce_bytes);
+    rand::fill(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     // Create cipher
