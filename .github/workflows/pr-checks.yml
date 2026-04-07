@@ -98,6 +98,8 @@ jobs:
       - name: Build verification
         if: steps.filter.outputs.code == 'true'
         run: bun run build
+        env:
+          TAURI_CONFIG: '{"bundle":{"resources":[]}}'
 
       - name: Build summary
         if: steps.filter.outputs.code == 'true' && success()
