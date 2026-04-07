@@ -53,9 +53,20 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.9.1';
+const CURRENT_APP_VERSION = '0.9.2';
 
 const VERSION_CHANGELOG = {
+    '0.9.2': {
+        title: 'Windows SSH Fixes',
+        subtitle: 'Fixes SSH password authentication across all Windows terminal types',
+        highlights: [
+            { header: 'Bug Fixes' },
+            'Fixed SSH password authentication in Windows Terminal and Command Prompt',
+            'Fixed proxy/multi-step authentication — subsequent prompts no longer fail after 2FA',
+        ],
+        releaseDate: 'TBD',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.2'
+    },
     '0.9.1': {
         title: 'Windows SSH Fix & Dependency Updates',
         subtitle: 'Fixes SSH password authentication on Windows; updates key dependencies',

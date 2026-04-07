@@ -1,21 +1,18 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.1 — In Development
+## Current Version: v0.9.2 — In Development
 
-**Latest Release:** v0.9.0 (2026-04-05) ✅
-**Branch:** `v0.9.1-dev`
-**Focus:** Dependency updates + GitHub Actions maintenance
+**Latest Release:** v0.9.1 (2026-04-07) ✅
+**Branch:** `v0.9.2-dev`
+**Focus:** Windows SSH password auth fixes
 
 ### Work Items
 
-- [x] **Update available modal** — version info crammed onto one line; reformat so current/latest versions are clearly presented on separate lines with better visual hierarchy
-- [x] **Windows password auth: Access Denied** — Windows OpenSSH cannot `CreateProcess` a `.bat` file (SSH_ASKPASS); replaced temp `.bat` askpass script with bundled `spm-askpass.exe` helper; affects all Windows terminal types
-- [x] **rand 0.8.5 → 0.10.0** — `thread_rng()` removed; update 2 call sites in encryption code to `rand::rng()`
-- [ ] **sha2 0.10.9 → 0.11.0 + hmac 0.12.1 → 0.13.0** — RustCrypto ecosystem split (`digest 0.10` → `0.11`); must update sha2, hmac, pbkdf2, and aes-gcm together; **blocked** — pbkdf2 is on `0.13.0-rc.10` and aes-gcm on `0.11.0-rc.3` (both still RC as of 2026-04-07); no current conflict or vulnerability, revisit once both reach stable release
-- [x] **rusqlite 0.32.1 → 0.39.0** — 7 major versions; audit breaking API changes at all call sites before updating
-- [x] **GitHub Actions: actions/checkout@v4 → v5** — Node.js 20 deprecated on runners from June 2026; update in all 4 workflow files (`auto-tag.yml`, `release.yml`, `security-audit.yml`, `pr-checks.yml`)
-- [x] Run `cargo update` + verify build
-- [x] Re-run all automated tests (163 must pass)
+- [ ] **Windows Terminal: Access Denied** — SSH cannot invoke `spm-askpass.exe` when launched via Windows Terminal. Currently a `.bat` file is used for env var injection (`wt cmd /c <bat>`), which runs SSH with `SSH_ASKPASS` set. SSH invokes `spm-askpass.exe` but receives Access Denied. Likely a path-with-spaces or CreateProcess quoting issue. Investigate and fix.
+
+- [ ] **CMD: Password not passed** — CMD opens, closes, then reopens as if `SSH_ASKPASS` was never set. SSH may be ignoring the env var or the inline `set &` chain is not persisting across the `start cmd /c` subprocess boundary. Investigate env var inheritance in the nested `cmd /c start cmd /c` launch chain.
+
+- [ ] **PowerShell (proxy/multi-step auth): `spm-askpass: failed to read password file: os error 2`** — PowerShell correctly passes the password (2FA succeeds), but when the proxy requests additional prompts (e.g. reason for login), SSH invokes `spm-askpass.exe` again after the 10s cleanup has already deleted the password file. Need to extend cleanup delay or keep the file alive until the SSH process exits.
 
 ### Release Checklist
 
@@ -25,12 +22,12 @@
 - [ ] Security review (voltagent-infra:security-engineer)
 - [ ] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
 - [ ] Re-run automated tests after fixes
-- [x] Update `CHANGELOG.md` — full Fixed entry
-- [x] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
-- [x] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
+- [ ] Update `CHANGELOG.md` — full Fixed entry
+- [ ] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
+- [ ] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
 - [ ] Commit & push
 - [ ] Create PR → `main` with `--label "bug"`
-- [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.1`
+- [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.2`
 
 ---
 
@@ -46,7 +43,7 @@
 ## Roadmap
 
 ```
-... → v0.9.0 ✅ → v0.9.1 → v0.10.0 → ... → v1.0.0
+... → v0.9.1 ✅ → v0.9.2 → v0.10.0 → ... → v1.0.0
 ```
 
 ---
@@ -101,6 +98,14 @@ No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish st
 ---
 
 ## Archive
+
+### v0.9.1 - Released 2026-04-07 ✅
+**Focus:** Windows Fix & Dependency Updates
+- Windows SSH password auth Access Denied — replaced temp `.bat` askpass with bundled `spm-askpass.exe` workspace crate; bundled via `externalBin` (avoids tauri-build `canonicalize()` Windows CI bug)
+- Update available modal — current/new version numbers on separate lines
+- What's New splash — shows all versions skipped since last update (multi-version upgrade support)
+- rand 0.8 → 0.10, rusqlite 0.32 → 0.39; GitHub Actions Node.js 20 deprecation fixed
+- 163 automated tests; 0 CRITICAL/HIGH after security review
 
 ### v0.9.0 - Released 2026-04-05 ✅
 **Focus:** SSH Password Auth & Central Passwords
