@@ -80,6 +80,13 @@ jobs:
         working-directory: src-tauri
         run: cargo build --package spm-askpass --release
 
+      - name: Stage spm-askpass for bundling (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources
+          cp src-tauri/target/release/spm-askpass.exe src-tauri/resources/spm-askpass.exe
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6
         env:
