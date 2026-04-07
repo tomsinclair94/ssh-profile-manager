@@ -75,12 +75,10 @@ jobs:
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create spm-askpass stub (Windows only)
+      - name: Build spm-askpass helper (Windows only)
         if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path src-tauri/target/release | Out-Null
-          New-Item -ItemType File -Force -Path src-tauri/target/release/spm-askpass.exe | Out-Null
+        working-directory: src-tauri
+        run: cargo build --package spm-askpass --release
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6
