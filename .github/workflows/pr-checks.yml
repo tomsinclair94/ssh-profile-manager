@@ -97,7 +97,7 @@ jobs:
 
       - name: Build verification
         if: steps.filter.outputs.code == 'true'
-        run: bun run build
+        run: bunx tauri build --no-bundle
         env:
           TAURI_CONFIG: '{"bundle":{"resources":[]}}'
 
@@ -107,4 +107,4 @@ jobs:
           echo "All checks passed on ${{ matrix.platform }}"
           echo "- cargo check: passed"
           echo "- cargo test: passed"
-          echo "- build: successful"
+          echo "- build (no-bundle): successful"
