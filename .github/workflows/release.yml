@@ -80,12 +80,15 @@ jobs:
         working-directory: src-tauri
         run: cargo build --package spm-askpass --release
 
-      - name: Stage spm-askpass for bundling (Windows only)
+      - name: Set spm-askpass bundle resource path (Windows only)
         if: matrix.platform == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p src-tauri/resources
-          cp src-tauri/target/release/spm-askpass.exe src-tauri/resources/spm-askpass.exe
+          # tauri-build calls canonicalize() on relative resource paths, which fails
+          # on Windows CI (os error 3) even when the file exists. Absolute paths work.
+          $askpassPath = "${{ github.workspace }}\src-tauri\target\release\spm-askpass.exe" -replace '\\', '/'
+          $tauriConfig = '{"bundle":{"resources":{"' + $askpassPath + '":"."}}}'
+          "TAURI_CONFIG=$tauriConfig" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6

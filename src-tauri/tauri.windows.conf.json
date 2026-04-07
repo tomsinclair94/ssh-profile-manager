@@ -1,7 +1,1 @@
-{
-  "bundle": {
-    "resources": {
-      "resources/spm-askpass.exe": "."
-    }
-  }
-}
+{}
