@@ -81,11 +81,17 @@ jobs:
         if: steps.filter.outputs.code == 'true'
         working-directory: src-tauri
         run: cargo check --target ${{ matrix.target }}
+        env:
+          # Skip resource path validation during type checking — spm-askpass.exe
+          # is only needed for bundling, not for cargo check/test
+          TAURI_CONFIG: '{"bundle":{"resources":{}}}'
 
       - name: Cargo test
         if: steps.filter.outputs.code == 'true'
         working-directory: src-tauri
         run: cargo test --target ${{ matrix.target }}
+        env:
+          TAURI_CONFIG: '{"bundle":{"resources":{}}}'
 
       - name: Build verification
         if: steps.filter.outputs.code == 'true'
