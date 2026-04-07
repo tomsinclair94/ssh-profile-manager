@@ -74,6 +74,7 @@ Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-mana
 ## Security Review History
 
 This project undergoes regular security reviews:
+- **v0.9.1:** Patch release — security review scoped to new code only (0 CRITICAL, 0 HIGH, 0 MEDIUM); Windows `spm-askpass.exe` helper assessed as net security improvement over previous temp `.bat` approach (bundled exe in admin-protected install dir vs. user-writable `%TEMP%`). Dependency audit: 0 vulnerabilities.
 - **v0.9.0:** Feature release — code review (1 CRITICAL, 4 HIGH, 6 MEDIUM — all resolved) + security review (0 CRITICAL, 1 HIGH, 5 MEDIUM — all resolved); key fixes: TOCTOU-safe temp file creation, password zeroization after use, DB existence checks before keychain access, custom `Debug` impl redacting passwords, input validation on central password descriptions and import paths. Dependency audit (`cargo audit`): 0 vulnerabilities; 19 Linux-only GTK3 warnings (pre-existing, not applicable to macOS/Windows targets).
 - **v0.8.0:** Feature release — code review (0 CRITICAL, 0 HIGH after fixes) + security review (0 CRITICAL, 0 HIGH, 1 MEDIUM, 3 LOW — all resolved)
 - **v0.7.1:** Patch release — no security-specific findings; 4 UI/UX bug fixes only

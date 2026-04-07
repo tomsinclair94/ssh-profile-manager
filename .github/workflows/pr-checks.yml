@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check for code changes
         uses: dorny/paths-filter@v4
@@ -72,19 +72,34 @@ jobs:
         if: steps.filter.outputs.code == 'true'
         run: bun install --frozen-lockfile
 
+      - name: Build spm-askpass helper (Windows only)
+        if: steps.filter.outputs.code == 'true' && matrix.platform == 'windows-latest'
+        working-directory: src-tauri
+        run: cargo build --package spm-askpass --release
+
       - name: Cargo check
         if: steps.filter.outputs.code == 'true'
         working-directory: src-tauri
         run: cargo check --target ${{ matrix.target }}
+        env:
+          # Skip resource path validation during type checking — spm-askpass.exe
+          # is only needed for bundling, not for cargo check/test.
+          # Must use [] (array) not {} (object): JSON Merge Patch merges objects
+          # rather than replacing them, so {} would leave existing entries intact.
+          TAURI_CONFIG: '{"bundle":{"resources":[]}}'
 
       - name: Cargo test
         if: steps.filter.outputs.code == 'true'
         working-directory: src-tauri
         run: cargo test --target ${{ matrix.target }}
+        env:
+          TAURI_CONFIG: '{"bundle":{"resources":[]}}'
 
       - name: Build verification
         if: steps.filter.outputs.code == 'true'
-        run: bun run build
+        run: bunx tauri build --no-bundle
+        env:
+          TAURI_CONFIG: '{"bundle":{"resources":[]}}'
 
       - name: Build summary
         if: steps.filter.outputs.code == 'true' && success()
@@ -92,4 +107,4 @@ jobs:
           echo "All checks passed on ${{ matrix.platform }}"
           echo "- cargo check: passed"
           echo "- cargo test: passed"
-          echo "- build: successful"
+          echo "- build (no-bundle): successful"

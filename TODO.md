@@ -1,39 +1,36 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.0 — Release In Progress
+## Current Version: v0.9.1 — In Development
 
-**Latest Release:** v0.8.0 (2026-02-27) ✅
-**Branch:** `v0.9.0-dev`
-**Focus:** SSH Password Auth & Central Passwords
+**Latest Release:** v0.9.0 (2026-04-05) ✅
+**Branch:** `v0.9.1-dev`
+**Focus:** Dependency updates + GitHub Actions maintenance
 
-### Phase Progress
-- [x] Phase 1: SSH_ASKPASS Infrastructure — passwords now passed automatically via SSH_ASKPASS mechanism ✅
-- [x] Phase 2: Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands, Profile struct updated ✅
-- [x] Phase 3: Export/Import for Central Passwords — central_password_ref field on all export/import paths ✅
-- [x] Phase 4: Central Passwords Manager UI — modal, toolbar button (key icon), `P` shortcut, form-based edit mode, bulk select/delete with checkboxes ✅
-- [x] Phase 5: Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate ✅
-- [x] Phase 6: Tests — `central_passwords.rs` (17 tests) + 2 integration + 1 profiles test; 163 total ✅
-- [x] Phase 7: Functional GUI Testing — test plan created, macOS execution complete, 4 bugs fixed ✅
+### Work Items
 
-See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.
+- [x] **Update available modal** — version info crammed onto one line; reformat so current/latest versions are clearly presented on separate lines with better visual hierarchy
+- [x] **Windows password auth: Access Denied** — Windows OpenSSH cannot `CreateProcess` a `.bat` file (SSH_ASKPASS); replaced temp `.bat` askpass script with bundled `spm-askpass.exe` helper; affects all Windows terminal types
+- [x] **rand 0.8.5 → 0.10.0** — `thread_rng()` removed; update 2 call sites in encryption code to `rand::rng()`
+- [ ] **sha2 0.10.9 → 0.11.0 + hmac 0.12.1 → 0.13.0** — RustCrypto ecosystem split (`digest 0.10` → `0.11`); must update sha2, hmac, pbkdf2, and aes-gcm together; **blocked** — pbkdf2 is on `0.13.0-rc.10` and aes-gcm on `0.11.0-rc.3` (both still RC as of 2026-04-07); no current conflict or vulnerability, revisit once both reach stable release
+- [x] **rusqlite 0.32.1 → 0.39.0** — 7 major versions; audit breaking API changes at all call sites before updating
+- [x] **GitHub Actions: actions/checkout@v4 → v5** — Node.js 20 deprecated on runners from June 2026; update in all 4 workflow files (`auto-tag.yml`, `release.yml`, `security-audit.yml`, `pr-checks.yml`)
+- [x] Run `cargo update` + verify build
+- [x] Re-run all automated tests (163 must pass)
 
-### Release Checklist (picking up 2026-04-05)
+### Release Checklist
 
-- [x] All 163 automated tests pass (`cargo test --lib`)
-- [x] Developer tools disabled (`tauri.conf.json`)
-- [x] Code review (voltagent-qa-sec:code-reviewer) — see `plans/v0.9.0-review-results.md`
-- [x] Security review (voltagent-infra:security-engineer) — see `plans/v0.9.0-review-results.md`
-- [x] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
-- [x] Re-run automated tests after fixes — 163/163 passed ✅
-- [x] Run manual GUI + migration tests → `plans/test-results/v0.9.0-test-results.md`
-- [x] Fix any bugs found
-- [x] Update `CHANGELOG.md` — full Added/Changed/Fixed entry
-- [x] Update `dist/main.js` `VERSION_CHANGELOG` — 5–7 highlights for in-app splash
-- [ ] Update `README.md` — add screenshot for Central Passwords Manager (new in v0.9.0)
+- [ ] All automated tests pass (`cargo test --lib`)
+- [ ] Developer tools disabled (`tauri.conf.json`)
+- [ ] Code review (voltagent-qa-sec:code-reviewer)
+- [ ] Security review (voltagent-infra:security-engineer)
+- [ ] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
+- [ ] Re-run automated tests after fixes
+- [x] Update `CHANGELOG.md` — full Fixed entry
+- [x] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
 - [x] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
 - [ ] Commit & push
-- [ ] Create PR → `main` with `--label "enhancement"`
-- [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.0`
+- [ ] Create PR → `main` with `--label "bug"`
+- [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.1`
 
 ---
 
@@ -49,63 +46,49 @@ See `plans/v0.9.0-ssh-password-auth-and-central-passwords.md` for full plan.
 ## Roadmap
 
 ```
-v0.7.0 ✅ → v0.7.1 ✅ → v0.8.0 ✅ → ... → v1.0.0
+... → v0.9.0 ✅ → v0.9.1 → v0.10.0 → ... → v1.0.0
 ```
 
 ---
 
 ## Planned Features
 
-### Multi-Tab System
-**Status:** Planned
-**Focus:** App-level tabs, pop-out windows
-**Dependency:** None
+See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customization.md` for detailed plans.
 
-See `plans/feature-multi-tab-system.md` for detailed plan.
-
-### Terminal Customisation
-**Status:** Planned
-**Focus:** Fonts, colour schemes, accessibility
-**Dependency:** Multi-tab system should be complete first (per-tab customisation requires tab infrastructure)
-
-See `plans/feature-terminal-customization.md` for detailed plan.
+### Feature Backlog
+- Tag hierarchy
+- SFTP support
+- Port forwarding
+- Jump hosts
+- SSH config modification
+- Multi-Tab System — app-level tabs and pop-out windows
+- Terminal Customisation — fonts, colour schemes, accessibility
+- Audit logging for security events
 
 ### v1.0.0 - Major Refactoring Sprint
 **Status:** Planned (after all feature releases)
 **Focus:** 40-50% complexity reduction, stable release
 
-**Key Refactoring Tasks:**
-- **Modularise Backend (M-13):** Split `lib.rs` (5190 lines) into modules:
-  - `db.rs` (~700 lines) - Database operations
-  - `validation.rs` (~200 lines) - Input validation
-  - `crypto.rs` (~200 lines) - Encryption/decryption
-  - `export_import.rs` (~900 lines) - Export/import logic
-  - `terminal.rs` (~500 lines) - Terminal session management
-  - `ssh.rs` (~300 lines) - SSH connection logic
-  - Improves maintainability, reduces merge conflicts, enables parallel development
-
-- **Modularise Frontend (M-14):** Refactor `main.js` (10,771 lines) with ES modules + bundler:
-  - Use esbuild or Vite for module bundling
-  - Split into logical modules (profiles, groups, tags, settings, modals, etc.)
-  - Improves code organisation, enables tree-shaking, faster dev rebuilds
-
-- **Additional Optimisation:** Apply deferred performance improvements (M-5, L-1 done, others remaining)
+- Modularise backend: split `lib.rs` (~6300 lines) into `db.rs`, `validation.rs`, `crypto.rs`, `export_import.rs`, `terminal.rs`, `ssh.rs`
+- Modularise frontend: split `main.js` (~10,800 lines) with ES modules + esbuild or Vite bundler
 
 ---
 
-## Feature Backlog
+## Deferred Upgrades
 
-### Medium Priority
-- Audit logging for security events (connections, exports, settings changes, failed auth attempts)
-- SFTP support
-- Port forwarding
-- Jump hosts
+These upgrades are blocked on upstream crates reaching stable release. **Check at the start of every new dev branch** before adding to that version's work items.
 
-### Low Priority
-- Cloud sync
-- SSH config import
-- Custom icon upload
-- Tag hierarchy
+### RustCrypto ecosystem (sha2 / hmac / pbkdf2 / aes-gcm)
+All four must move together due to the `digest 0.10 → 0.11` type split. Cannot do a partial upgrade.
+
+| Crate | Current | Target | Status |
+|---|---|---|---|
+| sha2 | 0.10.9 | 0.11.0 | Stable ✅ — ready |
+| hmac | 0.12.1 | 0.13.0 | Stable ✅ — ready |
+| pbkdf2 | 0.12.2 | 0.13.0 | `0.13.0-rc.10` as of 2026-04-07 — **blocked** |
+| aes-gcm | 0.10.3 | 0.11.0 | `0.11.0-rc.3` as of 2026-04-07 — **blocked** |
+
+No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish stable releases, update all four in `Cargo.toml` together and verify the API call sites in `lib.rs` (`pbkdf2_hmac::<Sha256>`, `Hmac<Sha256>`, `Aes256Gcm`).
 
 ---
 
@@ -119,33 +102,19 @@ See `plans/feature-terminal-customization.md` for detailed plan.
 
 ## Archive
 
+### v0.9.0 - Released 2026-04-05 ✅
+**Focus:** SSH Password Auth & Central Passwords
+- Central Passwords Manager — shared credentials across multiple profiles; rotate once, all linked profiles update
+- SSH_ASKPASS integration — keychain passwords passed to SSH automatically; no interactive prompt
+- Central Password auth method in profile editor with searchable picker
+- Export/import support for central password references
+- 163 automated tests; 0 CRITICAL/HIGH after code + security review
+
 ### v0.8.0 - Released 2026-02-27 ✅
 **Focus:** Profile & Group Moving + Custom Sort Order
-- Move Profile & Move Group modals — reorganise without deleting and recreating
-- Drag profiles between groups — instant move with 5-second undo toast
-- Custom sort order — drag to reorder profiles and groups; persists across restarts
-- Padlock button — session-only toggle for drag reordering
+- Move Profile & Move Group modals, drag between groups with 5s undo
+- Custom sort order with drag-to-reorder; padlock button to enable
 - Expand Card Actions — optional 6-button layout per profile card
-- macOS: "open in new tab" silent failure now surfaces actionable error toast
-- 142 automated tests (16 profile + 11 group + 22 integration + others)
-
-### v0.7.1 - Released 2026-02-20 ✅
-**Focus:** Bug fixes
-- Parent Group dropdown flickering fixed
-- Group modal stuck at expanded size fixed
-- Version splash screen reappearing on app reload fixed
-- Compact view card layout polished
-
-### v0.7.0 - Released 2026-02-19 ✅
-**Focus:** Hierarchical groups, encrypted exports, favourites, icons, tags
-- Hierarchical group system with sub-groups (up to 3 levels)
-- Individual profile/group export/import with duplicate detection
-- Encrypted exports with AES-256-GCM and PBKDF2 key derivation
-- Favourites system for profiles with virtual Favourites group
-- Profile icon picker with 40+ Lucide icons
-- Tag system with colour-coding and `tag:` search filtering
-- 30+ keyboard shortcuts with help modal
-- Settings Export/Import renamed to Backup/Restore
-- 135 automated tests (107 unit + 22 integration + 6 additional from Phase 8E)
+- 142 automated tests
 
 See `CHANGELOG.md` for full release history.

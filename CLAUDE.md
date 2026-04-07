@@ -23,8 +23,15 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.9.0 (2026-04-05) ✅
+**Latest Release:** v0.9.1 (2026-04-07) ✅
 **Next:** v0.10.0 (planned features TBD)
+
+**v0.9.1 Fixes (Released - 2026-04-07):**
+- ✅ Windows SSH password auth — replaced temp `.bat` askpass script with bundled `spm-askpass.exe` helper (fixes Access Denied error)
+- ✅ Update available modal — current/new version numbers shown on separate lines
+- ✅ "What's New" splash — now shows all versions skipped since last update (multi-version upgrade support)
+- ✅ Dependencies — rand 0.8 → 0.10, rusqlite 0.32 → 0.39; GitHub Actions updated
+- ✅ 163 automated tests; 0 CRITICAL/HIGH after security review
 
 **v0.9.0 Features (Released - 2026-04-05):**
 - ✅ SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
@@ -327,7 +334,7 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Version-specific migrations use "less than" checks (handles skipped versions)
 - Two-phase: `checkAndPerformMigration()` (early, before data load) + `performPostLoadMigration()` (optional, for UI updates)
 - See detailed inline documentation in `dist/main.js` around line ~1920 for adding new migrations
-- Version splash screen automatically shows changelog on version changes
+- Version splash screen shows all versions skipped since `lastSplashVersion` (multi-version upgrade support); always includes current version so manual opens via the version link are never blank
 
 **Tag System (v0.7.0):**
 - Tags stored in separate `tags` table with many-to-many relationship

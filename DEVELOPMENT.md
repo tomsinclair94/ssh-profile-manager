@@ -52,7 +52,7 @@
    ```
 
 4. **Prepare for Release** - Before creating PR, ensure:
-   - ✅ **All tests passing** (`cargo test --lib` - 163 tests must pass)
+   - ✅ **All tests passing** (`cargo test --lib` - 163 tests must pass; add `default-run = "ssh-profile-manager"` to `Cargo.toml` `[package]` if multiple `[[bin]]` targets exist)
    - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
    - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed

@@ -5,6 +5,17 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-04-07
+
+### Fixed
+- **Windows SSH password authentication** — SSH could not invoke the `.bat` askpass script (`CreateProcess` returns `ERROR_ACCESS_DENIED`); replaced the per-connection temp `.bat` file with a bundled `spm-askpass.exe` helper that SSH can execute directly
+- **Update available notification** — current and new version numbers are now shown on separate lines with clear labels; previously crammed onto one line
+
+### Changed
+- **"What's New" splash screen** now shows all versions skipped since the last update; users upgrading across multiple versions (e.g. v0.8.0 → v0.9.1) see a combined view with each version's highlights in clearly labelled sections
+- Updated rand `0.8 → 0.10` and rusqlite `0.32 → 0.39` to latest stable versions
+- Updated GitHub Actions workflows (`actions/checkout@v4 → v5`) to address Node.js 20 deprecation on runners
+
 ## [0.9.0] - 2026-04-05
 
 ### Added
