@@ -80,6 +80,15 @@ jobs:
         working-directory: src-tauri
         run: cargo build --package spm-askpass --release
 
+      - name: Stage spm-askpass as externalBin sidecar (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Tauri externalBin looks for binaries/<name>-<target-triple>.exe
+          # copy_binaries uses fs::copy (no canonicalize), bypassing the Windows CI os error 3 bug.
+          New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
+          Copy-Item "src-tauri\target\release\spm-askpass.exe" "src-tauri\binaries\spm-askpass-x86_64-pc-windows-msvc.exe"
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6
         env:

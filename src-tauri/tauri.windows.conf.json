@@ -1,7 +1,5 @@
 {
   "bundle": {
-    "resources": {
-      "target/release/spm-askpass.exe": "."
-    }
+    "externalBin": ["binaries/spm-askpass"]
   }
 }
