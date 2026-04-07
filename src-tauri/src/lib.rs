@@ -1485,7 +1485,7 @@ impl Database {
     // Recent connections methods
     fn get_recent_connections(&self, limit: Option<usize>) -> SqlResult<Vec<RecentConnection>> {
         let conn = self.conn.lock().expect("Database lock poisoned");
-        let limit_val = limit.unwrap_or(5).min(20); // Max 20, default 5
+        let limit_val = limit.unwrap_or(5).min(20) as i64; // Max 20, default 5
 
         let mut stmt = conn.prepare(
             "SELECT rc.id, rc.profile_id, p.name, p.username, p.host, p.port, rc.connected_at
