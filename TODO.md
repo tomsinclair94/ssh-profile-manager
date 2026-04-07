@@ -14,8 +14,8 @@
 - [ ] **sha2 0.10.9 → 0.11.0 + hmac 0.12.1 → 0.13.0** — RustCrypto ecosystem split (`digest 0.10` → `0.11`); must update sha2, hmac, pbkdf2, and aes-gcm together; **blocked** — pbkdf2 is on `0.13.0-rc.10` and aes-gcm on `0.11.0-rc.3` (both still RC as of 2026-04-07); no current conflict or vulnerability, revisit once both reach stable release
 - [x] **rusqlite 0.32.1 → 0.39.0** — 7 major versions; audit breaking API changes at all call sites before updating
 - [x] **GitHub Actions: actions/checkout@v4 → v5** — Node.js 20 deprecated on runners from June 2026; update in all 4 workflow files (`auto-tag.yml`, `release.yml`, `security-audit.yml`, `pr-checks.yml`)
-- [ ] Run `cargo update` + verify build
-- [ ] Re-run all automated tests (163 must pass)
+- [x] Run `cargo update` + verify build
+- [x] Re-run all automated tests (163 must pass)
 
 ### Release Checklist
 
@@ -25,9 +25,9 @@
 - [ ] Security review (voltagent-infra:security-engineer)
 - [ ] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
 - [ ] Re-run automated tests after fixes
-- [ ] Update `CHANGELOG.md` — full Fixed entry
-- [ ] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
-- [ ] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
+- [x] Update `CHANGELOG.md` — full Fixed entry
+- [x] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
+- [x] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
 - [ ] Commit & push
 - [ ] Create PR → `main` with `--label "bug"`
 - [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.1`

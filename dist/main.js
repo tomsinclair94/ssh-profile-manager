@@ -57,14 +57,19 @@ const CURRENT_APP_VERSION = '0.9.1';
 
 const VERSION_CHANGELOG = {
     '0.9.1': {
-        title: 'Dependency Updates',
-        subtitle: 'Maintenance release with updated dependencies',
+        title: 'Windows SSH Fix & Dependency Updates',
+        subtitle: 'Fixes SSH password authentication on Windows; updates key dependencies',
         highlights: [
+            { header: 'Bug Fixes' },
+            'Fixed Windows SSH password authentication failing with an Access Denied error',
+            'Fixed update available notification to clearly show current and new version numbers on separate lines',
+            { header: 'Improvements' },
+            'What\'s New splash now shows all versions skipped since your last update — no more missing release notes when upgrading across multiple versions',
             { header: 'Maintenance' },
-            'Updated rand, rusqlite, sha2, and hmac to latest major versions',
-            'No new features or user-facing changes'
+            'Updated key dependencies: rand 0.8 → 0.10, rusqlite 0.32 → 0.39',
+            'Updated GitHub Actions workflows to address Node.js 20 deprecation'
         ],
-        releaseDate: '',
+        releaseDate: '7 April 2026',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.1'
     },
     '0.9.0': {
@@ -3221,79 +3226,128 @@ function markVersionSplashShown(dontShowAgain) {
 }
 
 /**
- * Populate the version splash screen with changelog data
- * @param {string} version - The version to display (e.g., '0.7.0')
+ * Compare two semver strings numerically.
+ * Returns negative if a < b, positive if a > b, 0 if equal.
  */
-function populateVersionSplash(version) {
-    const changelog = VERSION_CHANGELOG[version];
+function compareVersions(a, b) {
+    const pa = a.split('.').map(Number);
+    const pb = b.split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+        const diff = (pa[i] || 0) - (pb[i] || 0);
+        if (diff !== 0) return diff;
+    }
+    return 0;
+}
 
-    if (!changelog) {
-        debug.warn(`No changelog data found for version ${version}`);
+/**
+ * Populate the version splash screen with changelog data for all versions
+ * newer than lastSeenVersion, newest first.
+ * @param {string|null} lastSeenVersion - Last version the user saw the splash for, or null on first launch
+ */
+function populateVersionSplash(lastSeenVersion) {
+    const currentChangelog = VERSION_CHANGELOG[CURRENT_APP_VERSION];
+
+    if (!currentChangelog) {
+        debug.warn(`No changelog data found for version ${CURRENT_APP_VERSION}`);
         return false;
     }
 
-    // Set title and subtitle
+    // Set modal header — always shows current version and its release date
     const titleElement = document.getElementById('version-splash-title');
-    const subtitleElement = document.getElementById('version-splash-subtitle');
     const descriptionElement = document.getElementById('version-splash-description');
 
     if (titleElement) {
-        titleElement.textContent = `What's New in v${version}`;
+        titleElement.textContent = `What's New in v${CURRENT_APP_VERSION}`;
     }
-
-    if (subtitleElement) {
-        subtitleElement.textContent = changelog.subtitle || changelog.title;
-    }
-
     if (descriptionElement) {
-        descriptionElement.textContent = `Released on ${changelog.releaseDate}`;
+        descriptionElement.textContent = currentChangelog.releaseDate
+            ? `Released on ${currentChangelog.releaseDate}`
+            : '';
     }
 
-    // Populate highlights list — supports plain strings and {header: '...'} section dividers
+    // Collect unseen versions — all VERSION_CHANGELOG keys newer than lastSeenVersion.
+    // On first launch (null), only show current version to avoid a wall of historical entries.
+    // Always include current version so manual opens (version link click) are never blank.
+    const allVersions = Object.keys(VERSION_CHANGELOG);
+    const unseenVersions = lastSeenVersion
+        ? allVersions.filter(v => compareVersions(v, lastSeenVersion) > 0)
+        : [CURRENT_APP_VERSION];
+    if (!unseenVersions.includes(CURRENT_APP_VERSION)) {
+        unseenVersions.push(CURRENT_APP_VERSION);
+    }
+    unseenVersions.sort((a, b) => compareVersions(b, a)); // newest first
+
+    // Populate body — one section per unseen version, with dividers between them
     const highlightsSection = document.getElementById('version-splash-highlights-section');
     if (highlightsSection) {
-        highlightsSection.innerHTML = ''; // Clear existing content
+        highlightsSection.innerHTML = '';
 
-        let currentUl = document.createElement('ul');
-        currentUl.className = 'version-splash-highlights';
-        highlightsSection.appendChild(currentUl);
+        unseenVersions.forEach((version, index) => {
+            const changelog = VERSION_CHANGELOG[version];
+            if (!changelog) return;
 
-        changelog.highlights.forEach(highlight => {
-            if (highlight && typeof highlight === 'object' && highlight.header) {
-                const h4 = document.createElement('h4');
-                h4.textContent = highlight.header;
-                highlightsSection.appendChild(h4);
-                currentUl = document.createElement('ul');
-                currentUl.className = 'version-splash-highlights';
-                highlightsSection.appendChild(currentUl);
-            } else {
-                const li = document.createElement('li');
-                li.textContent = highlight;
-                currentUl.appendChild(li);
+            // Section heading: "v0.9.1 — Dependency Updates"
+            const sectionTitle = document.createElement('h3');
+            sectionTitle.className = 'version-splash-section-title';
+            sectionTitle.textContent = `v${version} \u2014 ${changelog.title}`;
+            highlightsSection.appendChild(sectionTitle);
+
+            // Muted subtitle
+            if (changelog.subtitle) {
+                const subtitle = document.createElement('p');
+                subtitle.className = 'version-splash-section-subtitle';
+                subtitle.textContent = changelog.subtitle;
+                highlightsSection.appendChild(subtitle);
+            }
+
+            // Highlights — supports plain strings and {header: '...'} sub-section dividers
+            let currentUl = document.createElement('ul');
+            currentUl.className = 'version-splash-highlights';
+            highlightsSection.appendChild(currentUl);
+
+            changelog.highlights.forEach(highlight => {
+                if (highlight && typeof highlight === 'object' && highlight.header) {
+                    const h4 = document.createElement('h4');
+                    h4.textContent = highlight.header;
+                    highlightsSection.appendChild(h4);
+                    currentUl = document.createElement('ul');
+                    currentUl.className = 'version-splash-highlights';
+                    highlightsSection.appendChild(currentUl);
+                } else {
+                    const li = document.createElement('li');
+                    li.textContent = highlight;
+                    currentUl.appendChild(li);
+                }
+            });
+
+            // Divider between sections (not after the last one)
+            if (index < unseenVersions.length - 1) {
+                const divider = document.createElement('hr');
+                divider.className = 'version-splash-section-divider';
+                highlightsSection.appendChild(divider);
             }
         });
     }
 
-    // Set GitHub link
+    // GitHub link points to current version's release
     if (versionSplashGithubLink) {
-        versionSplashGithubLink.href = changelog.githubUrl;
+        versionSplashGithubLink.href = currentChangelog.githubUrl;
     }
 
-    debug.log(`Version splash populated for ${version}`);
+    debug.log(`Version splash populated: ${unseenVersions.length} version(s) since ${lastSeenVersion || 'first launch'}`);
     return true;
 }
 
 /**
  * Show the version splash screen modal
- * @param {string} version - The version to display (e.g., '0.7.0')
  */
-function showVersionSplashScreen(version) {
-    // Populate with changelog data
-    const populated = populateVersionSplash(version);
+function showVersionSplashScreen() {
+    const lastSeenVersion = localStorage.getItem('lastSplashVersion');
+    const populated = populateVersionSplash(lastSeenVersion);
 
     if (!populated) {
         // If no changelog data, open GitHub URL directly
-        const changelog = VERSION_CHANGELOG[version];
+        const changelog = VERSION_CHANGELOG[CURRENT_APP_VERSION];
         if (changelog && changelog.githubUrl) {
             shell.open(changelog.githubUrl);
         }
@@ -3317,7 +3371,7 @@ function showVersionSplashScreen(version) {
         versionSplashGithubLink.focus();
     }
 
-    debug.log(`Version splash screen shown for ${version}`);
+    debug.log(`Version splash screen shown for ${CURRENT_APP_VERSION}`);
 }
 
 /**
@@ -3345,7 +3399,7 @@ function checkAndShowVersionSplash() {
     if (shouldShowVersionSplash()) {
         // Wait 500ms after migration toast to show splash
         setTimeout(() => {
-            showVersionSplashScreen(CURRENT_APP_VERSION);
+            showVersionSplashScreen();
         }, 500);
     }
 }
@@ -5462,7 +5516,7 @@ function setupEventListeners() {
     if (versionLink) {
         versionLink.addEventListener('click', (e) => {
             e.preventDefault();
-            showVersionSplashScreen(CURRENT_APP_VERSION);
+            showVersionSplashScreen();
         });
     }
 
@@ -5470,7 +5524,7 @@ function setupEventListeners() {
     if (mainVersionLink) {
         mainVersionLink.addEventListener('click', (e) => {
             e.preventDefault();
-            showVersionSplashScreen(CURRENT_APP_VERSION);
+            showVersionSplashScreen();
         });
     }
 

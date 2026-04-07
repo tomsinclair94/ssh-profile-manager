@@ -3326,7 +3326,7 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
     justify-content: space-between;
     align-items: baseline;
     gap: 16px;
-    margin-bottom: 12px;
+    margin-bottom: 0;
 }
 
 .version-splash-title-row h2 {
@@ -3346,13 +3346,6 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
     flex-shrink: 0;
 }
 
-#version-splash-intro h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-color);
-}
-
 /* Body - Scrollable content */
 .version-splash-body {
     flex: 1;
@@ -3361,6 +3354,28 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
     min-height: 0; /* Important for flex scrolling */
 }
 
+/* Per-version section heading (title + subtitle) in scrollable body */
+.version-splash-section-title {
+    margin: 0 0 4px 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.version-splash-section-subtitle {
+    margin: 0 0 12px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.version-splash-section-divider {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 20px 0;
+}
+
+/* Sub-headers within a version's highlights (e.g. "Fixed", "Added") */
 #version-splash-highlights-section h4 {
     margin: 0 0 12px 0;
     font-size: 16px;
