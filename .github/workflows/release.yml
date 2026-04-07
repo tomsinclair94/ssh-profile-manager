@@ -80,15 +80,14 @@ jobs:
         working-directory: src-tauri
         run: cargo build --package spm-askpass --release
 
-      - name: Set spm-askpass bundle resource path (Windows only)
+      - name: Stage spm-askpass as externalBin sidecar (Windows only)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          # tauri-build calls canonicalize() on relative resource paths, which fails
-          # on Windows CI (os error 3) even when the file exists. Absolute paths work.
-          $askpassPath = "${{ github.workspace }}\src-tauri\target\release\spm-askpass.exe" -replace '\\', '/'
-          $tauriConfig = '{"bundle":{"resources":{"' + $askpassPath + '":"."}}}'
-          "TAURI_CONFIG=$tauriConfig" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # Tauri externalBin looks for binaries/<name>-<target-triple>.exe
+          # copy_binaries uses fs::copy (no canonicalize), bypassing the Windows CI os error 3 bug.
+          New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
+          Copy-Item "src-tauri\target\release\spm-askpass.exe" "src-tauri\binaries\spm-askpass-x86_64-pc-windows-msvc.exe"
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6
