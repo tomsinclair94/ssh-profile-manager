@@ -3,42 +3,82 @@
 ## Current Version: v0.9.2 — In Development
 
 **Latest Release:** v0.9.1 (2026-04-07) ✅
-**Branch:** `v0.9.2-dev`
-**Focus:** Windows SSH password auth fixes
+**Branch:** `v0.9.2-dev` (Windows dev complete; continuing on Mac)
+**Focus:** Windows SSH password auth fixes + in-app failure toast
 
-### Debugging Setup (do this first)
-
-- [ ] **Get the branch onto the Windows VM** — clone/pull `v0.9.2-dev` and set up the dev environment:
-  1. Install prerequisites: [Rust](https://rustup.rs), [Bun](https://bun.sh), [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (MSVC toolchain + Windows SDK)
-  2. `git clone https://github.com/tomsinclair94/ssh-profile-manager.git && cd ssh-profile-manager && git checkout v0.9.2-dev`
-  3. `bun install`
-  4. `bun run dev` — keep the terminal window open; `[DEBUG]` log lines from the Rust backend will appear here
-  5. Right-click inside the app → Inspect (or Ctrl+Shift+I) for frontend devtools
-  6. Set up a test profile with password auth pointing at a known SSH host
-  7. Try connecting with each terminal type (Windows Terminal, CMD, PowerShell) and capture all `[DEBUG]` output from the `bun run dev` terminal
+---
 
 ### Work Items
 
-- [ ] **Windows Terminal: Access Denied** — SSH cannot invoke `spm-askpass.exe` when launched via Windows Terminal. Currently a `.bat` file is used for env var injection (`wt cmd /c <bat>`), which runs SSH with `SSH_ASKPASS` set. SSH then invokes `spm-askpass.exe` but receives Access Denied. Debug output will show exact paths — check for spaces, quoting issues.
+#### Bug 1: Windows Terminal — ✅ Tested (good/bad password both working via CMD-in-WT)
+- Same bat file approach as CMD used (`wt cmd /c <bat>`)
+- Root cause of detection failure: bat file deleted after 5s — same race condition as CMD; fixed with 90s cleanup delay
+- Applied `SSHCODE=%ERRORLEVEL%` pattern (replaces `if errorlevel 1`)
+- Tab closes automatically on exit (user's WT "close on exit" setting)
+- Note: tested as "CMD via Windows Terminal" (CMD is the default shell in WT for this user)
 
-- [ ] **CMD: Password not passed** — CMD opens, closes, then reopens as if `SSH_ASKPASS` was never set. Possible cause: env vars set via inline `set &` chain may not survive the `cmd /c start cmd /c` double-subprocess boundary. Debug output will show the exact compound command being constructed.
+#### Bug 2: CMD — ✅ Tested (good/bad password both working)
+- Root cause: broken `set_file_permissions_windows` (DENY ACL locked out current user from their own files) — fixed with `icacls /inheritance:r /grant:r USERNAME:F`
+- Env var injection: replaced inline compound command with temp bat file (avoids quoting mangling through `cmd → start → cmd` chain)
+- DB file was also locked by the broken ACL — fixed by always re-applying permissions on init
 
-- [ ] **PowerShell (proxy/multi-step auth): `spm-askpass: failed to read password file: os error 2`** — Password correctly passed for initial auth (2FA succeeds), but proxy then requests additional prompts (e.g. reason for login). SSH invokes `spm-askpass.exe` again but the 10s cleanup has already deleted the password file. Fix: tie password file lifetime to the SSH process rather than a fixed timeout.
+#### Bug 3: PowerShell — ✅ Tested (good/bad password working; proxy untested)
+- Root cause of silent failure: `| Out-Null` was piping SSH stdout to nothing, preventing PTY allocation — SSH launched but produced no output and appeared to hang
+- Fix: removed `| Out-Null` from both the askpass and non-askpass PS command variants
+- Earlier fixes still in place: `SSH_ASKPASS_REQUIRE=force`, spm-askpass state machine, `NumberOfPasswordPrompts=1`
+- Proxy multi-step auth still untested (requires work proxy setup)
+
+#### In-app SSH failure toast — ✅ Tested (CMD, WT, PowerShell)
+Goal: when wrong password causes the terminal to close silently, pop an error toast in the app.
+
+**Mechanism:**
+- bat/PS script sets `SPM_STATUS_FILE=<path>` and writes `FAIL` or `OK` after SSH exits
+- Background monitoring thread polls for the status file every 2s for up to 60s
+- On `FAIL`: restores window (unminimize/show/focus) then emits `ssh-connection-failed` event
+- On `OK`: stops early (clean session close, no toast)
+- Frontend listener calls `showToast(event.payload, TOAST_DURATION_LONG, 'error')`
+- Toast message includes profile name on second line: `"Edit the profile 'NAME' to update the password."`
+
+**Key fixes:**
+- bat file cleanup delay: 5s → 90s (cmd.exe re-reads the file after SSH exits; 5s was a race condition)
+- `SSHCODE=%ERRORLEVEL%` pattern applied to CMD and WT launchers (captures exit code before any subsequent command resets it)
+- Monitor timeout: 30s → 60s (covers slow proxy auth, 2FA, typed reason fields)
+- PowerShell: removed `| Out-Null` which was breaking PTY allocation
+
+**Before release:**
+- [x] Removed all `[DEBUG ...]` println! statements and `spm-bat-debug.txt` instrumentation from `launch_windows_cmd`
+- [x] Applied `SSHCODE=%ERRORLEVEL%` + `OK`/`FAIL` writes + 90s cleanup to default and custom bat launchers
+- [x] Removed `launch_windows_default_terminal`; Windows terminal selector now shows WT as default, no "Default" option
+- [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
+- [ ] Test proxy multi-step auth at work (CMD, PowerShell, Windows Terminal)
+
+---
 
 ### Release Checklist
 
+- [x] Resolve toast debug — root cause was bat file deleted (5s) before cmd.exe re-read it post-SSH; fixed with 90s cleanup delay
+- [x] Test CMD with good and bad passwords — confirmed working, toast fires on failure, app restores from minimised
+- [x] Test Windows Terminal with good and bad passwords — confirmed working (CMD-in-WT)
+- [x] Test PowerShell with good and bad passwords — confirmed working after removing `| Out-Null`
+- [x] Removed all `[DEBUG ...]` println! statements and `spm-bat-debug.txt` instrumentation from `lib.rs`
+- [x] Applied `SSHCODE=%ERRORLEVEL%` + `OK`/`FAIL` writes + 90s cleanup to all Windows bat launchers
+- [x] Removed `launch_windows_default_terminal`; Windows terminal selector now shows WT as default, no "Default" option
+- [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
+- [ ] Re-test SSH connections on macOS — confirm no regressions from Windows-side changes
+- [ ] Update `CHANGELOG.md` — full Fixed entry
+- [ ] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
 - [ ] All automated tests pass (`cargo test --lib`)
 - [ ] Developer tools disabled (`tauri.conf.json`)
 - [ ] Code review (voltagent-qa-sec:code-reviewer)
 - [ ] Security review (voltagent-infra:security-engineer)
 - [ ] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
 - [ ] Re-run automated tests after fixes
-- [ ] Update `CHANGELOG.md` — full Fixed entry
-- [ ] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
 - [ ] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
 - [ ] Commit & push
 - [ ] Create PR → `main` with `--label "bug"`
 - [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.2`
+
+**Note — proxy multi-step auth:** All three terminal types are expected to work based on the spm-askpass state machine design, but confirmation requires the work proxy/2FA environment. Testing to be done before or after release; any issues will be addressed in a v0.9.3 patch.
 
 ---
 
