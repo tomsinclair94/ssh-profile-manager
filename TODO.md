@@ -85,15 +85,15 @@ Goal: when wrong password causes the terminal to close silently, pop an error to
 - [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
 - [x] macOS askpass script upgraded to state machine (fail-fast on retry, relay non-password prompts to TTY)
 - [x] macOS failure toast implemented — status file + polling thread, same mechanism as Windows
-- [ ] Test macOS connections — good password, bad password, key auth (see macOS parity section above)
-- [ ] Update `CHANGELOG.md` — full Fixed entry
-- [ ] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
-- [ ] All automated tests pass (`cargo test --lib`)
-- [ ] Developer tools disabled (`tauri.conf.json`)
-- [ ] Code review (voltagent-qa-sec:code-reviewer)
-- [ ] Security review (voltagent-infra:security-engineer)
-- [ ] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
-- [ ] Re-run automated tests after fixes
+- [x] Test macOS connections — good password, bad password, key auth (see macOS parity section above)
+- [x] Update `CHANGELOG.md` — full Fixed entry
+- [x] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
+- [x] All automated tests pass (`cargo test --lib`)
+- [x] Developer tools disabled (`tauri.conf.json`)
+- [x] Code review (voltagent-qa-sec:code-reviewer)
+- [x] Security review (voltagent-infra:security-engineer)
+- [x] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
+- [x] Re-run automated tests after fixes
 - [ ] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
 - [ ] Commit & push
 - [ ] Create PR → `main` with `--label "bug"`
@@ -115,7 +115,7 @@ Goal: when wrong password causes the terminal to close silently, pop an error to
 ## Roadmap
 
 ```
-... → v0.9.1 ✅ → v0.9.2 → v0.10.0 → ... → v1.0.0
+... → v0.9.1 ✅ → v0.9.2 → v0.9.3 → v0.10.0 → ... → v1.0.0
 ```
 
 ---
@@ -123,6 +123,17 @@ Goal: when wrong password causes the terminal to close silently, pop an error to
 ## Planned Features
 
 See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customization.md` for detailed plans.
+
+### v0.9.3 - Planned
+
+**Focus:** SSH connection failure detection for key and no-auth profiles
+
+- **Key auth failure toast** — expand polling/status mechanism to `auth_method = 'key'`; if the key is rejected (SSH exits non-zero), surface a toast: "SSH key not permitted — check the key is authorised on the server. Edit the profile to update the key path."
+- **None/interactive auth failure toast** — expand to `auth_method = 'none'`; if the user fails keyboard-interactive auth (too many attempts, SSH exits non-zero), surface a generic toast: "SSH connection failed — the server closed the connection."
+- Both use the same status file + polling thread mechanism already in place for password auth; the main change is spawning the monitor thread and writing OK/FAIL in the terminal script for non-password profiles
+- **Windows password file world-readable window** — refactor `create_file_windows_secure` to write content only after icacls has been applied (create empty → icacls → write content), eliminating the brief window where the file exists with default permissions before ACL restriction
+
+---
 
 ### Feature Backlog
 - Tag hierarchy

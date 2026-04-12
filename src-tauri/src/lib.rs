@@ -125,16 +125,26 @@ fn create_file_windows_secure(path: &std::path::Path, content: &str) -> Result<(
 // for the "Everyone" and "Users" groups also denies the current user (who is a member
 // of both), making the file unreadable by its own creator. The icacls /inheritance:r
 // approach correctly removes inherited ACEs without denying the owner.
+//
+// whoami is used instead of %USERNAME% to get the fully-qualified account name
+// (e.g. DOMAIN\tom on domain-joined machines). %USERNAME% returns only the bare
+// username which can be ambiguous on domain machines, causing icacls to fail or
+// grant permissions to the wrong principal.
 #[cfg(target_os = "windows")]
 fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
     use std::process::Command;
 
     let path_str = path.to_string_lossy().to_string();
-    let username = std::env::var("USERNAME")
-        .map_err(|_| "Failed to get current username for file permission setup".to_string())?;
+
+    // Use whoami to get the fully-qualified current user (e.g. DOMAIN\tom or COMPUTER\tom)
+    let whoami_output = Command::new("whoami")
+        .output()
+        .map_err(|e| format!("Failed to run whoami: {}", e))?;
+    let username = String::from_utf8_lossy(&whoami_output.stdout).trim().to_string();
     if username.is_empty() {
         return Err("Failed to get current username for file permission setup".to_string());
     }
+
     // Remove inherited permissions, grant only the current user Full Control
     let status = Command::new("icacls")
         .args([&path_str, "/inheritance:r", "/grant:r", &format!("{}:F", username)])
@@ -5378,6 +5388,13 @@ fn applescript_escape(s: &str) -> String {
      .replace('`', "\\`")
 }
 
+// Helper function: Escape a single argument for inclusion in a Windows batch file.
+// Wraps the argument in double quotes and escapes any embedded double quotes by doubling them.
+#[cfg(target_os = "windows")]
+fn escape_batch_arg(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
+
 // Helper function: Escape strings for bash double-quote context
 #[cfg(target_os = "macos")]
 fn escape_bash_double_quote(s: &str) -> String {
@@ -5541,7 +5558,6 @@ fn schedule_askpass_cleanup(setup: AskpassSetup) {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(30));
         delete_file_with_overwrite(&setup.pwd_file_path);
-        delete_file_with_overwrite(&setup.status_file_path);
         // On Unix, askpass_script_path is a temp .sh script — delete it.
         // On Windows, askpass_script_path is the bundled spm-askpass.exe — do NOT delete it.
         #[cfg(unix)]
@@ -5688,12 +5704,12 @@ fn launch_macos_default_terminal(
     let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
     // For password auth, write OK/FAIL to the status file immediately after SSH exits.
     // The background polling thread reads this to emit an in-app toast on auth failure.
-    // Use && / || rather than $? so we avoid shell variable expansion — applescript_escape()
-    // would mangle any $ characters in the string before it reaches the shell.
+    // Use `if cmd; then ... else ... fi` rather than $? — applescript_escape() escapes $
+    // to \$, which would prevent shell variable expansion if $? were used directly.
     let ssh_with_close = if let Some(setup) = askpass_setup {
         let status_path_escaped = shell_escape(&setup.status_file_path.to_string_lossy());
         format!(
-            "{} && printf OK > {} || printf FAIL > {} ; {}",
+            "if {}; then printf OK > {}; else printf FAIL > {}; fi ; {}",
             ssh_cmd_no_exit, status_path_escaped, status_path_escaped, close_command
         )
     } else {
@@ -5774,7 +5790,8 @@ fn launch_windows_cmd(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>)
              ssh {}\r\n\
              set \"SSHCODE=%ERRORLEVEL%\"\r\n\
              if \"%SSHCODE%\"==\"0\" (echo OK>\"%SPM_STATUS_FILE%\") else (echo FAIL>\"%SPM_STATUS_FILE%\")\r\n",
-            pwd_path, askpass_path, status_path, ssh_args.join(" ")
+            pwd_path, askpass_path, status_path,
+            ssh_args.iter().map(|arg| escape_batch_arg(arg)).collect::<Vec<_>>().join(" ")
         );
         create_file_windows_secure(&script_path, &script_content)?;
 
@@ -5900,7 +5917,7 @@ fn launch_windows_terminal(
             pwd_path,
             askpass_path,
             status_path,
-            ssh_args.join(" ")
+            ssh_args.iter().map(|arg| escape_batch_arg(arg)).collect::<Vec<_>>().join(" ")
         );
         create_file_windows_secure(&script_path, &script_content)?;
 
@@ -5948,7 +5965,7 @@ fn launch_windows_custom_terminal(
     // Re-validate path (TOCTOU protection)
     let validated_path = validate_terminal_path(custom_path)?;
 
-    // Helper functions for batch escaping
+    // Helper function for batch echo escaping (caret-escapes shell metacharacters)
     fn escape_batch_echo(s: &str) -> String {
         s.replace('^', "^^")
          .replace('&', "^&")
@@ -5957,10 +5974,6 @@ fn launch_windows_custom_terminal(
          .replace('>', "^>")
          .replace('%', "%%")
          .replace('!', "^!")
-    }
-
-    fn escape_batch_arg(s: &str) -> String {
-        format!("\"{}\"", s.replace('"', "\"\""))
     }
 
     // Create temporary script
