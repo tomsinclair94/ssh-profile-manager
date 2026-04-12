@@ -5,6 +5,19 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-04-12
+
+### Fixed
+- **Windows SSH password authentication (CMD)** — incorrect Windows ACL setup created a DENY entry that locked the current user out of their own temp files, including the database file on first launch; fixed by correctly setting `icacls` inheritance and explicit user grants
+- **Windows SSH password authentication (CMD)** — `SSH_ASKPASS` env vars were silently dropped when passed as inline compounds through the `cmd → start → cmd` launch chain; replaced with a temp bat file that sets variables directly in the correct process
+- **Windows SSH password authentication (PowerShell)** — `| Out-Null` appended to the SSH invocation was piping stdout to nothing and preventing PTY allocation; SSH appeared to launch but produced no visible output or response
+- **SSH askpass helper (all platforms)** — upgraded to a file-existence state machine: delivers the stored password on the first call, fails fast on password-retry prompts to prevent silent retry loops, and relays non-password prompts (proxy 2FA challenges, reason fields) to the terminal for interactive input
+- **In-app SSH authentication failure toast (Windows + macOS)** — when SSH exits with a non-zero code (e.g. wrong password), the app now restores from minimised, shows a clear error toast naming the affected profile, and directs the user to edit it; previously the terminal closed silently with no feedback in the app
+
+### Changed
+- **Windows terminal selector** — removed the generic "Default" option; Windows Terminal is now shown explicitly as the first and default option (pre-installed on Windows 11 since 22H2, October 2022); existing users with "Default" are automatically migrated to "Windows Terminal" on first launch
+- **macOS terminal selector** — renamed "Default (Terminal.app)" to "Terminal" for consistency with Windows naming; existing users with "Default" are automatically migrated to "Terminal" on first launch
+
 ## [0.9.1] - 2026-04-07
 
 ### Fixed

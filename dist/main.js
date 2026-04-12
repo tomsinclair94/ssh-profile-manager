@@ -57,14 +57,18 @@ const CURRENT_APP_VERSION = '0.9.2';
 
 const VERSION_CHANGELOG = {
     '0.9.2': {
-        title: 'Windows SSH Fixes',
-        subtitle: 'Fixes SSH password authentication across all Windows terminal types',
+        title: 'SSH Auth Fixes — Windows & macOS',
+        subtitle: 'Fixes SSH password authentication failures and adds in-app error feedback on both platforms',
         highlights: [
             { header: 'Bug Fixes' },
-            'Fixed SSH password authentication in Windows Terminal and Command Prompt',
-            'Fixed proxy/multi-step authentication — subsequent prompts no longer fail after 2FA',
+            'Fixed SSH password auth failing silently in Windows CMD (broken ACL on temp files) and PowerShell (| Out-Null blocking PTY allocation)',
+            'In-app failure toast — when a wrong password causes the terminal to close silently, the app restores from minimised and shows a clear error toast naming the affected profile (Windows + macOS)',
+            'SSH askpass upgraded to a state machine: fails fast on bad passwords to prevent retry loops, and relays proxy 2FA / reason-field prompts to the terminal for interactive input',
+            { header: 'Improvements' },
+            'Windows terminal selector — "Default" replaced with explicit "Windows Terminal"; existing users migrated automatically',
+            'macOS terminal selector — "Default (Terminal.app)" renamed to "Terminal" for consistency',
         ],
-        releaseDate: 'TBD',
+        releaseDate: '2026-04-12',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.2'
     },
     '0.9.1': {
