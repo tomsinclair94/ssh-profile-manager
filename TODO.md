@@ -3,8 +3,8 @@
 ## Current Version: v0.9.2 — In Development
 
 **Latest Release:** v0.9.1 (2026-04-07) ✅
-**Branch:** `v0.9.2-dev` (Windows dev complete; continuing on Mac)
-**Focus:** Windows SSH password auth fixes + in-app failure toast
+**Branch:** `v0.9.2-dev` (Windows dev complete; macOS parity implemented, needs testing)
+**Focus:** Windows SSH password auth fixes + in-app failure toast; macOS parity
 
 ---
 
@@ -52,6 +52,25 @@ Goal: when wrong password causes the terminal to close silently, pop an error to
 - [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
 - [ ] Test proxy multi-step auth at work (CMD, PowerShell, Windows Terminal)
 
+#### macOS parity — ✅ Implemented, needs testing
+
+**Same mechanism as Windows, adapted for macOS:**
+- `launch_macos_default_terminal`: after SSH exits, writes OK/FAIL via `&&`/`||` before the auto-close osascript (uses `&&`/`||` rather than `$?` variable — `applescript_escape()` would mangle `$` in the inline string)
+- `launch_macos_custom_terminal`: script captures `SPMCODE=$?` after SSH exits, writes OK/FAIL to status file
+- Background polling thread (60s, 2s interval) emits `ssh-connection-failed` event on FAIL — same as Windows
+- Frontend toast listener already handles this event (shared between platforms)
+- macOS askpass `.sh` script upgraded to full state machine:
+  - First call: delivers password, deletes pwd file
+  - Subsequent call with password/passphrase prompt → exits 1 (fail fast, no retry)
+  - Subsequent call with non-password prompt → relays to `/dev/tty` (proxy 2FA, reason field, etc.)
+
+**Needs testing (macOS):**
+- [ ] Test Terminal.app (default) — good password (connects cleanly, tab auto-closes)
+- [ ] Test Terminal.app (default) — bad password (tab auto-closes, toast fires)
+- [ ] Test custom terminal (e.g. iTerm2) — good password
+- [ ] Test custom terminal (e.g. iTerm2) — bad password (toast fires)
+- [ ] Confirm no regression on key-auth and no-auth profiles
+
 ---
 
 ### Release Checklist
@@ -64,7 +83,9 @@ Goal: when wrong password causes the terminal to close silently, pop an error to
 - [x] Applied `SSHCODE=%ERRORLEVEL%` + `OK`/`FAIL` writes + 90s cleanup to all Windows bat launchers
 - [x] Removed `launch_windows_default_terminal`; Windows terminal selector now shows WT as default, no "Default" option
 - [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
-- [ ] Re-test SSH connections on macOS — confirm no regressions from Windows-side changes
+- [x] macOS askpass script upgraded to state machine (fail-fast on retry, relay non-password prompts to TTY)
+- [x] macOS failure toast implemented — status file + polling thread, same mechanism as Windows
+- [ ] Test macOS connections — good password, bad password, key auth (see macOS parity section above)
 - [ ] Update `CHANGELOG.md` — full Fixed entry
 - [ ] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
 - [ ] All automated tests pass (`cargo test --lib`)

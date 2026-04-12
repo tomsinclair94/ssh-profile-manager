@@ -5462,7 +5462,43 @@ fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
         use std::io::Write;
         let script_path = temp_dir.join(format!("spm-askpass-{}.sh", uuid));
         let pwd_path_escaped = shell_escape(&pwd_file_path.to_string_lossy());
-        let script_content = format!("#!/bin/sh\ncat {}\n", pwd_path_escaped);
+        // State machine — mirrors spm-askpass.exe behaviour on Windows:
+        //
+        //   Password file EXISTS (first invocation):
+        //     Deliver the stored password and delete the file.
+        //
+        //   File GONE + non-password prompt (proxy follow-up challenges):
+        //     Relay the prompt to /dev/tty so the user can type a response
+        //     (reason for access, MFA token, etc.).
+        //
+        //   File GONE + password/passphrase prompt (wrong-password retry):
+        //     Exit non-zero immediately — fail fast rather than re-submitting
+        //     the stored password or leaving the user with an interactive prompt.
+        //
+        // SSH_ASKPASS_REQUIRE=force + NumberOfPasswordPrompts=1 ensure this
+        // script is always called for auth prompts and SSH retries only once.
+        let script_content = format!(
+            "#!/bin/sh\n\
+             if [ -f {0} ]; then\n\
+             \tpassword=$(cat {0})\n\
+             \trm -f {0}\n\
+             \tprintf '%s' \"$password\"\n\
+             else\n\
+             \tPROMPT=\"$1\"\n\
+             \tcase \"$(printf '%s' \"$PROMPT\" | tr '[:upper:]' '[:lower:]')\" in\n\
+             \t\t*password*|*passphrase*)\n\
+             \t\t\tprintf 'spm-askpass: stored password rejected; aborting\\n' >&2\n\
+             \t\t\texit 1\n\
+             \t\t\t;;\n\
+             \t\t*)\n\
+             \t\t\tprintf '%s' \"$PROMPT\" > /dev/tty\n\
+             \t\t\tread -r SPM_INPUT < /dev/tty\n\
+             \t\t\tprintf '%s' \"$SPM_INPUT\"\n\
+             \t\t\t;;\n\
+             \tesac\n\
+             fi\n",
+            pwd_path_escaped
+        );
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -5530,29 +5566,42 @@ fn launch_macos_custom_terminal(
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
 
-    let askpass_env = if let Some(setup) = askpass_setup {
+    let ssh_args_escaped = ssh_args.iter()
+        .map(|arg| shell_escape(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let script_content = if let Some(setup) = askpass_setup {
+        let status_path_escaped = shell_escape(&setup.status_file_path.to_string_lossy());
         format!(
-            "export SSH_ASKPASS={}\nexport SSH_ASKPASS_REQUIRE=force\n",
-            shell_escape(&setup.askpass_script_path.to_string_lossy())
+            "#!/bin/bash\n\
+             echo \"Connecting to {}...\"\n\
+             export SSH_ASKPASS={}\n\
+             export SSH_ASKPASS_REQUIRE=force\n\
+             ssh {}\n\
+             SPMCODE=$?\n\
+             if [ \"$SPMCODE\" = \"0\" ]; then printf OK > {}; else printf FAIL > {}; fi\n\
+             echo \"\"\n\
+             echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+             exec bash\n",
+            escape_bash_double_quote(profile_name),
+            shell_escape(&setup.askpass_script_path.to_string_lossy()),
+            ssh_args_escaped,
+            status_path_escaped,
+            status_path_escaped
         )
     } else {
-        String::new()
+        format!(
+            "#!/bin/bash\n\
+             echo \"Connecting to {}...\"\n\
+             ssh {}\n\
+             echo \"\"\n\
+             echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+             exec bash\n",
+            escape_bash_double_quote(profile_name),
+            ssh_args_escaped
+        )
     };
-
-    let script_content = format!(
-        "#!/bin/bash\n\
-         echo \"Connecting to {}...\"\n\
-         {}ssh {}\n\
-         echo \"\"\n\
-         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
-         exec bash\n",
-        escape_bash_double_quote(profile_name),
-        askpass_env,
-        ssh_args.iter()
-            .map(|arg| shell_escape(arg))
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
 
     // Write and make executable
     fs::write(&script_path, script_content)
@@ -5637,7 +5686,19 @@ fn launch_macos_default_terminal(
         format!("ssh {}", escaped_args.join(" "))
     };
     let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
-    let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
+    // For password auth, write OK/FAIL to the status file immediately after SSH exits.
+    // The background polling thread reads this to emit an in-app toast on auth failure.
+    // Use && / || rather than $? so we avoid shell variable expansion — applescript_escape()
+    // would mangle any $ characters in the string before it reaches the shell.
+    let ssh_with_close = if let Some(setup) = askpass_setup {
+        let status_path_escaped = shell_escape(&setup.status_file_path.to_string_lossy());
+        format!(
+            "{} && printf OK > {} || printf FAIL > {} ; {}",
+            ssh_cmd_no_exit, status_path_escaped, status_path_escaped, close_command
+        )
+    } else {
+        format!("{} ; {}", ssh_cmd_no_exit, close_command)
+    };
     let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
 
     let applescript = if use_tabs {
@@ -6089,10 +6150,46 @@ fn connect_ssh(
         }
     }
 
-    // On Windows: poll for the status file written by the terminal script on SSH auth failure.
+    // Poll for the status file written by the terminal script after SSH exits.
     // The monitoring thread runs for up to 60s; if the file appears, emit an in-app toast.
     // 60s covers slow proxy auth (2FA + typed reason) that may exceed 30s.
-    // The thread stops early if the bat writes OK (clean session close) or FAIL (auth failure).
+    // The thread stops early on OK (clean session close) or FAIL (auth failure).
+    #[cfg(target_os = "macos")]
+    if let Some(ref setup) = askpass_setup {
+        let status_path = setup.status_file_path.clone();
+        let app_handle_poll = app_handle.clone();
+        let profile_name_poll = profile.name.clone();
+        std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                if std::time::Instant::now() >= deadline {
+                    let _ = std::fs::remove_file(&status_path);
+                    break;
+                }
+                if status_path.exists() {
+                    let content = std::fs::read_to_string(&status_path).unwrap_or_default();
+                    let _ = std::fs::remove_file(&status_path);
+                    if content.trim() == "FAIL" {
+                        if let Some(win) = app_handle_poll.get_webview_window("main") {
+                            let _ = win.unminimize();
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                        let message = format!(
+                            "SSH authentication failed — the stored password was rejected.\n\
+                             Edit the profile '{}' to update the password.",
+                            profile_name_poll
+                        );
+                        let _ = app_handle_poll.emit("ssh-connection-failed", message);
+                    }
+                    // Stop polling for both FAIL and OK
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
+    }
+
     #[cfg(target_os = "windows")]
     if let Some(ref setup) = askpass_setup {
         let status_path = setup.status_file_path.clone();
