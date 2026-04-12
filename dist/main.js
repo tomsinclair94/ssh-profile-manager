@@ -53,9 +53,24 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.9.1';
+const CURRENT_APP_VERSION = '0.9.2';
 
 const VERSION_CHANGELOG = {
+    '0.9.2': {
+        title: 'SSH Auth Fixes — Windows & macOS',
+        subtitle: 'Fixes SSH password authentication failures and adds in-app error feedback on both platforms',
+        highlights: [
+            { header: 'Bug Fixes' },
+            'Fixed SSH password auth failing silently in Windows CMD (broken ACL on temp files) and PowerShell (| Out-Null blocking PTY allocation)',
+            'In-app failure toast — when a wrong password causes the terminal to close silently, the app restores from minimised and shows a clear error toast naming the affected profile (Windows + macOS)',
+            'SSH askpass upgraded to a state machine: fails fast on bad passwords to prevent retry loops, and relays proxy 2FA / reason-field prompts to the terminal for interactive input',
+            { header: 'Improvements' },
+            'Windows terminal selector — "Default" replaced with explicit "Windows Terminal"; existing users migrated automatically',
+            'macOS terminal selector — "Default (Terminal.app)" renamed to "Terminal" for consistency',
+        ],
+        releaseDate: '2026-04-12',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.2'
+    },
     '0.9.1': {
         title: 'Windows SSH Fix & Dependency Updates',
         subtitle: 'Fixes SSH password authentication on Windows; updates key dependencies',
@@ -2738,6 +2753,12 @@ async function init() {
         showToast('Successfully migrated from v0.6.5!', TOAST_DURATION_LONG, 'success');
     });
 
+    // Listen for SSH authentication failure (Windows password auth — terminal window closes
+    // too quickly to read the error, so surface it as an in-app toast instead)
+    window.__TAURI__.event.listen('ssh-connection-failed', (event) => {
+        showToast(event.payload, TOAST_DURATION_LONG, 'error');
+    });
+
     // Get DOM elements
     profilesList = document.getElementById('profiles-list');
     searchInput = document.getElementById('search-input');
@@ -3103,11 +3124,19 @@ function checkAndPerformMigration() {
         localStorage.removeItem('collapsedGroups');
     }
 
-    // EXAMPLE: Future v0.8.0 migration
-    // if (lastMigrationVersion && lastMigrationVersion < '0.8.0') {
-    //     debug.log(`Running ${lastMigrationVersion} → v0.8.0 migration...`);
-    //     // Add migration logic here (clear old keys, transform data, etc.)
-    // }
+    // v0.9.x → v0.9.2: Migrate terminal preference 'default' to explicit value per platform.
+    // Windows: 'default' → 'windows_terminal' (Windows Terminal is now the explicit default on Windows 11).
+    // macOS: 'default' → 'terminal' (Terminal.app is now listed as 'terminal' for consistency with Windows naming).
+    if (lastMigrationVersion && lastMigrationVersion < '0.9.2') {
+        if (getOS() === 'windows' && localStorage.getItem('terminalPreference') === 'default') {
+            debug.log(`Running ${lastMigrationVersion} → v0.9.2 migration: terminalPreference default → windows_terminal`);
+            localStorage.setItem('terminalPreference', 'windows_terminal');
+        }
+        if (getOS() === 'macos' && localStorage.getItem('terminalPreference') === 'default') {
+            debug.log(`Running ${lastMigrationVersion} → v0.9.2 migration: terminalPreference default → terminal`);
+            localStorage.setItem('terminalPreference', 'terminal');
+        }
+    }
 
     // Mark migration as complete for current version
     localStorage.setItem(MIGRATION_VERSION_KEY, CURRENT_APP_VERSION);
@@ -6645,7 +6674,7 @@ function revertSettingsUI() {
     const validTerminalOptions = Array.from(terminalSelect.options).map(opt => opt.value);
     terminalSelect.value = validTerminalOptions.includes(originalSettingsValues.terminalPreference)
         ? originalSettingsValues.terminalPreference
-        : 'default';
+        : (terminalSelect.options[0]?.value || 'default');
 
     // Validate custom terminal path - must be string, can be empty
     customTerminalPath.value = typeof originalSettingsValues.customTerminalPath === 'string'
@@ -7427,25 +7456,27 @@ function populateTerminalOptions() {
     // Find the help text that follows the use-tabs checkbox
     const terminalSection = document.getElementById('use-tabs-in-terminal-check')?.closest('.settings-section');
     const helpText = terminalSection?.querySelector('p.settings-help');
+    const defaultLabel = document.getElementById('terminal-select-default');
 
     if (os === 'macos') {
         terminalSelect.innerHTML = `
-            <option value="default">Default (Terminal.app)</option>
+            <option value="terminal">Terminal</option>
             <option value="custom">Custom Terminal (unsupported)</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
+        if (defaultLabel) defaultLabel.textContent = '(Default: Terminal)';
         if (helpText) {
             helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).<br>When minimise is enabled, the app will minimise after launching a connection.</em>';
         }
     } else if (os === 'windows') {
         terminalSelect.innerHTML = `
-            <option value="default">Default (System Default)</option>
+            <option value="windows_terminal">Windows Terminal</option>
             <option value="cmd">Command Prompt</option>
             <option value="powershell">PowerShell</option>
-            <option value="windows_terminal">Windows Terminal</option>
             <option value="custom">Custom Terminal (unsupported)</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
+        if (defaultLabel) defaultLabel.textContent = '(Default: Windows Terminal)';
         if (helpText) {
             helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows. <strong>Note:</strong> Windows Terminal tabs remain open after SSH exits. To enable auto-close, configure "closeOnExit" in Windows Terminal settings.</em>';
         }
@@ -7454,6 +7485,7 @@ function populateTerminalOptions() {
         terminalSelect.innerHTML = `
             <option value="default">Default Terminal</option>
         `;
+        if (defaultLabel) defaultLabel.textContent = '(Default: System Default)';
         if (helpText) {
             helpText.textContent = 'Choose which terminal application to use when connecting to SSH profiles.';
         }
@@ -7461,7 +7493,8 @@ function populateTerminalOptions() {
 }
 
 async function loadTerminalPreference() {
-    const savedPreference = localStorage.getItem('terminalPreference') || 'default';
+    const platformDefault = terminalSelect.options[0]?.value || 'default';
+    const savedPreference = localStorage.getItem('terminalPreference') || platformDefault;
     const savedCustomPath = localStorage.getItem('customTerminalPath') || '';
 
     // If custom terminal was selected, validate the path still exists and is valid
@@ -7473,16 +7506,18 @@ async function loadTerminalPreference() {
             terminalSelect.value = savedPreference;
             customTerminalPath.value = savedCustomPath;
         } catch (error) {
-            // Path is no longer valid, fall back to default
+            // Path is no longer valid, fall back to platform default
             debug.warn('Saved custom terminal path is no longer valid:', error);
-            terminalSelect.value = 'default';
+            terminalSelect.value = platformDefault;
             customTerminalPath.value = '';
-            localStorage.setItem('terminalPreference', 'default');
+            localStorage.setItem('terminalPreference', platformDefault);
             localStorage.removeItem('customTerminalPath');
             showToast('Custom terminal path is no longer valid. Switched to default terminal.', TOAST_DURATION_LONG, 'info');
         }
     } else {
-        terminalSelect.value = savedPreference;
+        // If saved value not in options (e.g. 'default' on Windows after migration), use platform default
+        const validOptions = Array.from(terminalSelect.options).map(o => o.value);
+        terminalSelect.value = validOptions.includes(savedPreference) ? savedPreference : platformDefault;
         customTerminalPath.value = savedCustomPath;
     }
 
@@ -9159,14 +9194,18 @@ async function restoreSettings(file) {
         // Restore OS-specific settings if present (backend filters cross-platform backups)
         if (result.settings_os_specific && result.settings_os_specific.terminal_preference) {
             // Validate terminal preference based on OS (must be string and in whitelist)
+            const isWindows = getOS() === 'windows';
             const validTerminalPrefs = getOS() === 'macos'
-                ? ['default', 'custom', 'embedded']
-                : ['default', 'cmd', 'powershell', 'windows_terminal', 'custom', 'embedded'];
+                ? ['terminal', 'custom', 'embedded', 'default']
+                : ['windows_terminal', 'cmd', 'powershell', 'custom', 'embedded', 'default'];
 
-            const termPref = (typeof result.settings_os_specific.terminal_preference === 'string'
+            let termPref = (typeof result.settings_os_specific.terminal_preference === 'string'
                 && validTerminalPrefs.includes(result.settings_os_specific.terminal_preference))
                 ? result.settings_os_specific.terminal_preference
-                : 'default';
+                : (isWindows ? 'windows_terminal' : 'terminal');
+            // Migrate legacy 'default' to explicit platform value
+            if (isWindows && termPref === 'default') termPref = 'windows_terminal';
+            if (!isWindows && termPref === 'default') termPref = 'terminal';
             localStorage.setItem('terminalPreference', termPref);
 
             // Restore use_tabs_in_terminal if present (default to true if not specified)
@@ -9178,7 +9217,7 @@ async function restoreSettings(file) {
             localStorage.setItem('minimizeOnLaunch', minimizeOnLaunch.toString());
         } else {
             // No OS-specific settings in backup (different OS or old format) - use defaults
-            localStorage.setItem('terminalPreference', 'default');
+            localStorage.setItem('terminalPreference', getOS() === 'windows' ? 'windows_terminal' : 'default');
             localStorage.setItem('useTabsInTerminal', 'true');
             localStorage.setItem('minimizeOnLaunch', 'true');
         }
@@ -9349,7 +9388,7 @@ async function resetSettings() {
         localStorage.setItem('includePasswords', 'true');
         localStorage.setItem('filteredGroups', '[]');
         localStorage.setItem('collapsedGroups', '[]');
-        localStorage.setItem('terminalPreference', 'default');
+        localStorage.setItem('terminalPreference', getOS() === 'windows' ? 'windows_terminal' : 'default');
         localStorage.setItem('customTerminalPath', '');
         localStorage.setItem('recentConnectionsLimit', '5');
         localStorage.setItem('expandedCardActionsEnabled', 'false');

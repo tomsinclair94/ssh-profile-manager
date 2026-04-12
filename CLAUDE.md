@@ -23,50 +23,19 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.9.1 (2026-04-07) ✅
-**Next:** v0.10.0 (planned features TBD)
+**Latest Release:** v0.9.2 (2026-04-12) ✅
+**Next:** v0.9.3 (planned — key/none auth failure toasts, Windows password file ACL refactor)
 
-**v0.9.1 Fixes (Released - 2026-04-07):**
-- ✅ Windows SSH password auth — replaced temp `.bat` askpass script with bundled `spm-askpass.exe` helper (fixes Access Denied error)
-- ✅ Update available modal — current/new version numbers shown on separate lines
-- ✅ "What's New" splash — now shows all versions skipped since last update (multi-version upgrade support)
-- ✅ Dependencies — rand 0.8 → 0.10, rusqlite 0.32 → 0.39; GitHub Actions updated
-- ✅ 163 automated tests; 0 CRITICAL/HIGH after security review
+**v0.9.2 Fixes (Released - 2026-04-12):**
+- ✅ Windows CMD — broken ACL on temp files (windows_acl DENY approach replaced with icacls /inheritance:r); env var quoting mangling fixed with temp bat file approach
+- ✅ Windows PowerShell — `| Out-Null` removed (was blocking PTY allocation, causing silent hang)
+- ✅ In-app failure toast — status file + background polling thread on Windows and macOS; app restores from minimised on bad password
+- ✅ spm-askpass state machine (Windows + macOS) — fail-fast on bad password retry; relay proxy/2FA prompts to terminal for interactive input
+- ✅ Windows terminal selector — "Default" replaced with explicit "Windows Terminal"; v0.9.2 migration for existing users
+- ✅ macOS terminal selector — "Default (Terminal.app)" renamed to "Terminal" for consistency
+- ✅ 163 automated tests; 0 CRITICAL/HIGH after code + security review
 
-**v0.9.0 Features (Released - 2026-04-05):**
-- ✅ SSH_ASKPASS Infrastructure — passwords passed automatically via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`
-- ✅ Central Passwords Backend — migration 5, structs, DB methods, 7 Tauri commands
-- ✅ Export/Import — `central_password_ref` field on all export/import paths
-- ✅ Central Passwords Manager UI — key-icon toolbar button, modal, form-based edit mode, bulk select/delete with checkboxes, `P` shortcut
-- ✅ Profile Modal Updates — `central_password` option in auth dropdown, searchable CP picker, save/load/duplicate/validate
-- ✅ 163 automated tests; functional GUI + migration testing complete; 0 CRITICAL/HIGH after review
-
-**v0.8.0 Features (Released - 2026-02-27):**
-- ✅ macOS "open in new tab" — surfaces actionable error when Terminal automation is blocked
-- ✅ Move Profile & Move Group — modal + backend (`move_profile` command, shared move modal, menu items)
-- ✅ Padlock button (session-only) — toolbar toggle for drag reordering; resets to locked on app relaunch
-- ✅ Drag profile between groups — drop onto group headers or directly to a position within a group; 5s undo toast
-- ✅ Custom sort order — drag-to-reorder profiles/groups; cross-group drag+position; "Reset to A-Z"; global reset
-- ✅ Expand Card Actions setting — optional 6-button layout per profile card
-- ✅ 142 automated tests; macOS manual GUI tests (144/144 passed); 0 CRITICAL/HIGH after review
-
-**v0.7.1 Fixes (Released - 2026-02-20):**
-- ✅ Parent Group dropdown no longer flickers and disappears when opened
-- ✅ Group modal no longer gets stuck at an expanded size after closing
-- ✅ "What's New" splash screen no longer reappears on app reload
-- ✅ Compact view: improved card layout for standard and favourite profile cards
-
-**v0.7.0 Features (Released - 2026-02-19):**
-- ✅ Hierarchical group system with sub-groups (up to 3 levels, semantic paths)
-- ✅ Individual profile/group export/import with duplicate detection
-- ✅ Favourites system for profiles with virtual group display
-- ✅ Icon picker with 40+ Lucide icons (inline SVG, CSP-compliant)
-- ✅ Tag system with colour-coding, search filtering, and multi-select management
-- ✅ Comprehensive keyboard shortcuts (30+ shortcuts with help modal)
-- ✅ Settings renamed: Backup/Restore (instead of Export/Import)
-- ✅ Enhanced UI polish: tooltips, animations, responsive layouts
-- ✅ Encrypted exports with AES-256-GCM and PBKDF2 key derivation
-- ✅ 135 automated tests; comprehensive manual GUI and migration testing
+See `CHANGELOG.md` for full release history.
 
 ## Branch Naming Conventions
 
@@ -125,9 +94,9 @@ git commit -m "Bump version to X.X.X for dev branch"
 2. Develop features/fixes (with tests for all new features)
 3. **RUN ALL AUTOMATED TESTS** before code reviews: `cargo test --lib` (all 163 tests must pass)
 4. **DISABLE DEVELOPER TOOLS** before code reviews: `src-tauri/tauri.conf.json` (line ~19: `"devtools": false`)
-5. Code review (`voltagent-qa-sec:code-reviewer` agent)
-6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) - optional, skip if not needed
-7. Security review (`voltagent-infra:security-engineer` agent)
+5. Code review (`voltagent-qa-sec:code-reviewer` agent) — **scope to branch changes only** (`git diff main...HEAD`), not the entire codebase; pass the diff directly to the agent to minimise token usage. Only review the full codebase if explicitly requested.
+6. Refactor (`voltagent-dev-exp:refactoring-specialist` agent) — **optional, only run if explicitly requested**. If running, **scope to branch changes only** (same diff as code review); pass the diff directly to the agent. Only review the full codebase if explicitly requested.
+7. Security review (`voltagent-infra:security-engineer` agent) — **scope to branch changes only** (same diff as code review); pass the diff directly to the agent. Only review the full codebase if explicitly requested.
 8. Fix CRITICAL/HIGH/MEDIUM issues
 9. **RE-RUN AUTOMATED TESTS** after fixes: `cargo test --lib` (ensure no regressions)
 10. **RUN MANUAL GUI TESTS**: Copy template from `plans/templates/manual-gui-test-plan-template.md` to `plans/test-results/vX.X.X-test-results.md` and complete all tests (macOS + Windows, ~3-4 hours total)
@@ -365,11 +334,13 @@ Update: `SettingsData` struct (Rust) + `export/import_settings` commands + `back
 - Help modal accessible with `?` key
 - Platform-aware (Cmd on macOS, Ctrl on Windows/Linux)
 
-**Password Authentication (v0.9.0+):**
+**Password Authentication (v0.9.0+, updated v0.9.2):**
 - Passwords stored securely in system keychain
 - Passed automatically to SSH via `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force` — no manual entry required
-- `connect_ssh` creates a temp password file (`0600`) + askpass script (`0700`); both securely deleted after 10s
-- Injection strategy varies by terminal: inline env vars (macOS default, cmd, PowerShell), script prepend (macOS custom, Windows custom), temp `.bat` + `cmd /c` (Windows Terminal, Windows default wt path)
+- `connect_ssh` creates a temp password file (`0600` Unix / `icacls` Windows) + askpass script; password file deleted after first read by askpass; scripts cleaned up after 30s (safety net)
+- Askpass state machine (v0.9.2): first call delivers password; subsequent password/passphrase prompt → exit 1 (fail fast); subsequent non-password prompt → relay to terminal (proxy 2FA, reason field)
+- Injection strategy: macOS default (Terminal.app) — inline env vars in osascript; macOS custom — temp `.sh` script; Windows CMD/WT — temp `.bat` + `cmd /c`; Windows PowerShell — Base64-encoded command (no temp file)
+- In-app failure toast (v0.9.2): terminal script writes `OK`/`FAIL` to a status file after SSH exits; background polling thread (60s, 2s interval) emits `ssh-connection-failed` event on `FAIL`; app restores from minimised and shows error toast naming the profile
 - If no password stored, a clear error toast is shown directing the user to edit the profile
 - Central Passwords (shared credentials for multiple profiles) — backend complete (Phase 2), UI complete (Phase 4)
 - Central Passwords manager: key-icon toolbar button + `P` shortcut; modal with create/edit form at top (Edit populates form, fetches password), list with Show/Edit/Delete actions, bulk select/delete with checkboxes
@@ -515,7 +486,7 @@ cargo test --lib -- --nocapture
 cargo llvm-cov --lib --open
 ```
 
-**Expected result:** `142 passed; 0 failed` in ~41 seconds
+**Expected result:** `163 passed; 0 failed` in ~41 seconds
 
 ### Writing Tests for New Features
 
@@ -547,90 +518,11 @@ fn test_feature_success() {
 - **Fast:** In-memory databases, no I/O, no network (~41s for 163 tests)
 - **Isolated:** Each test uses fresh database (no shared state)
 - **Deterministic:** No flaky tests, no time-based tests, no randomness in assertions
-- **Comprehensive:** Unit tests + 22 integration tests covering all backend logic
+- **Comprehensive:** Unit tests + 24 integration tests covering all backend logic
 
 ### Pre-Release Testing Checklist
 
-Before creating a release PR:
-
-**Automated Tests:**
-- [ ] Run `cargo test --lib` → All 163 tests pass
-- [ ] New features have corresponding automated tests
-- [ ] Tests run in <45 seconds
-- [ ] No warnings from test compilation
-- [ ] CI/CD tests pass on both macOS and Windows
-
-**Manual GUI Tests:**
-- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-test-results.md`
-- [ ] Complete macOS testing section (~2-3 hours)
-- [ ] Complete Windows testing section (~45 minutes)
-- [ ] Document test results (fill in summary, issues fixed, observations)
-- [ ] Log any failed tests as GitHub issues
-- [ ] Verify no console errors during testing
-- [ ] Commit completed test results file
-
-**Migration Tests** (if database migrations present):
-- [ ] Open version-specific migration plan: `plans/vX.X.X-migration-testing.md`
-- [ ] Create v[PREVIOUS_VERSION] test database with minimal realistic data
-- [ ] Export JSON backup (recommended user method)
-- [ ] Run migration to v[NEW_VERSION], monitor console for errors
-- [ ] Validate 100% data integrity (zero profiles lost)
-- [ ] Test new features with migrated data
-- [ ] Document migration results in plan file
-- [ ] Update plan status to "✅ Complete"
-- [ ] Commit completed migration plan
-
-## Manual GUI Testing
-
-**Template:** `plans/templates/manual-gui-test-plan-template.md`
-**Results:** `plans/test-results/vX.X.X-test-results.md`
-
-**Purpose:** Comprehensive manual testing of all GUI/frontend functionality before each major release.
-
-**When to Run:** After all automated tests pass and before creating release PR (step 10 in Release Process).
-
-**What's Tested:** Profile management UI, group management UI, tag management UI, export/import workflows, connection management, settings UI, keyboard navigation (30+ shortcuts), visual & layout testing, platform-specific behaviors.
-
-**How to Use:** Copy template to test-results, create test data per checklist, complete macOS testing (~2-3 hours), complete Windows testing (~45 minutes), document results, log issues, commit completed results.
-
-**Test Results Storage:**
-- **Template:** `plans/templates/manual-gui-test-plan-template.md` (never modified, always blank)
-- **Completed Results:** `plans/test-results/vX.X.X-test-results.md` (one per release)
-- **Version Prefix:** Use `vX.X.X-` prefix for chronological sorting
-
-## Migration Testing
-
-**Guidelines:** `plans/templates/migration-testing-guidelines.md`
-**Version-Specific Plans:** `plans/vX.X.X-migration-testing.md`
-
-**Purpose:** Validate database and frontend migrations when upgrading between versions.
-
-**When to Run:** After all automated and GUI tests pass, before creating release PR (step 12 in Release Process).
-
-**Approach:** Unlike GUI testing (same features across versions), migration testing is **version-specific**. Each upgrade has different schema changes, data transformations, and new features.
-
-**Two-Part System:**
-1. **Guidelines:** Reusable checklist and procedures for all migrations
-2. **Version-Specific Plan:** Detailed test plan for specific version upgrade (e.g., `plans/v0.7.0-migration-testing.md`)
-
-**What's Tested:** Database schema migrations, data integrity (zero data loss requirement), frontend localStorage migrations, new features work with migrated data, JSON export/import validation (recommended user backup method).
-
-**Test Duration:** ~1.5 hours total (20min setup, 5min migration, 20min data validation, 30min feature validation, 15min documentation)
-
-**Success Criteria:**
-- Migration completes without errors (no console warnings/errors)
-- 100% data integrity (zero profiles lost, all groups preserved)
-- All user settings preserved
-- Keychain entries intact (password-auth profiles)
-- New features work correctly with migrated data
-- Migration time <30 seconds
-
-**Migration Testing Notes:**
-- **Backup via Export:** Always recommend users export profiles (JSON) before upgrading, NOT database file backups
-- **No Backward Compatibility:** Users cannot downgrade to previous versions with a migrated database
-- **Zero Data Loss:** Any data loss (even 1 profile) is a CRITICAL blocker requiring investigation
-- **Minimal Test Data:** Use minimal realistic data (e.g., 4 profiles, 3 groups) - not extreme datasets
-- **Version-Specific:** Each migration is unique - don't assume the same tests apply across versions
+See `DEVELOPMENT.md` for the full pre-release checklist (automated tests, manual GUI tests, migration tests).
 
 ## Quick Reference
 

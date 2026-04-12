@@ -53,8 +53,8 @@
 
 4. **Prepare for Release** - Before creating PR, ensure:
    - ✅ **All tests passing** (`cargo test --lib` - 163 tests must pass; add `default-run = "ssh-profile-manager"` to `Cargo.toml` `[package]` if multiple `[[bin]]` targets exist)
-   - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
-   - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
+   - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent — **scope to branch diff only**: `git diff main...HEAD`, not the full codebase; pass the diff directly to minimise token usage; only review full codebase if explicitly requested)
+   - ✅ Security review completed (use `voltagent-infra:security-engineer` agent — **scope to branch diff only**, same approach as code review)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
    - ✅ Version updated in ALL 7 locations:
      1. `src-tauri/tauri.conf.json`
@@ -69,7 +69,9 @@
      - `dist/main.js` `VERSION_CHANGELOG` — 5–7 high-level highlights for the in-app splash screen
    - ✅ **Documentation reviewed** — `CLAUDE.md`, `TODO.md`, `SECURITY.md` updated to reflect the new version (see step 15 in CLAUDE.md release process)
    - ✅ README.md updated (features, screenshots if needed)
-   - ✅ Manual testing completed
+   - ✅ **Automated tests pass** (see Pre-Release Testing Checklist below)
+   - ✅ **Manual GUI tests complete** (see Manual GUI Testing below)
+   - ✅ **Migration tests complete** if database migrations present (see Migration Testing below)
    - ✅ All changes committed and pushed to `vX.X.X-dev`
 
 5. **Create Release PR** - Trigger automated checks and release:
@@ -311,6 +313,95 @@ fn test_new_feature_validation_fails() {
 
 ---
 
+## Pre-Release Testing Checklist
+
+Before creating a release PR:
+
+**Automated Tests:**
+- [ ] Run `cargo test --lib` → All 163 tests pass
+- [ ] New features have corresponding automated tests
+- [ ] Tests run in <45 seconds
+- [ ] No warnings from test compilation
+- [ ] CI/CD tests pass on both macOS and Windows
+
+**Manual GUI Tests:**
+- [ ] Copy template: `cp plans/templates/manual-gui-test-plan-template.md plans/test-results/vX.X.X-test-results.md`
+- [ ] Complete macOS testing section (~2-3 hours)
+- [ ] Complete Windows testing section (~45 minutes)
+- [ ] Document test results (fill in summary, issues fixed, observations)
+- [ ] Log any failed tests as GitHub issues
+- [ ] Verify no console errors during testing
+- [ ] Commit completed test results file
+
+**Migration Tests** (if database migrations present):
+- [ ] Open version-specific migration plan: `plans/vX.X.X-migration-testing.md`
+- [ ] Create v[PREVIOUS_VERSION] test database with minimal realistic data
+- [ ] Export JSON backup (recommended user method)
+- [ ] Run migration to v[NEW_VERSION], monitor console for errors
+- [ ] Validate 100% data integrity (zero profiles lost)
+- [ ] Test new features with migrated data
+- [ ] Document migration results in plan file
+- [ ] Update plan status to "✅ Complete"
+- [ ] Commit completed migration plan
+
+---
+
+## Manual GUI Testing
+
+**Template:** `plans/templates/manual-gui-test-plan-template.md`
+**Results:** `plans/test-results/vX.X.X-test-results.md`
+
+**Purpose:** Comprehensive manual testing of all GUI/frontend functionality before each major release.
+
+**When to Run:** After all automated tests pass and before creating release PR.
+
+**What's Tested:** Profile management UI, group management UI, tag management UI, export/import workflows, connection management, settings UI, keyboard navigation (30+ shortcuts), visual & layout testing, platform-specific behaviours.
+
+**How to Use:** Copy template to test-results, create test data per checklist, complete macOS testing (~2-3 hours), complete Windows testing (~45 minutes), document results, log issues, commit completed results.
+
+**Test Results Storage:**
+- **Template:** `plans/templates/manual-gui-test-plan-template.md` (never modified, always blank)
+- **Completed Results:** `plans/test-results/vX.X.X-test-results.md` (one per release)
+- **Version Prefix:** Use `vX.X.X-` prefix for chronological sorting
+
+---
+
+## Migration Testing
+
+**Guidelines:** `plans/templates/migration-testing-guidelines.md`
+**Version-Specific Plans:** `plans/vX.X.X-migration-testing.md`
+
+**Purpose:** Validate database and frontend migrations when upgrading between versions.
+
+**When to Run:** After all automated and GUI tests pass, before creating release PR.
+
+**Approach:** Unlike GUI testing (same features across versions), migration testing is **version-specific**. Each upgrade has different schema changes, data transformations, and new features.
+
+**Two-Part System:**
+1. **Guidelines:** Reusable checklist and procedures for all migrations
+2. **Version-Specific Plan:** Detailed test plan for a specific version upgrade (e.g., `plans/v0.9.0-migration-testing.md`)
+
+**What's Tested:** Database schema migrations, data integrity (zero data loss requirement), frontend localStorage migrations, new features work with migrated data, JSON export/import validation.
+
+**Test Duration:** ~1.5 hours total (20min setup, 5min migration, 20min data validation, 30min feature validation, 15min documentation)
+
+**Success Criteria:**
+- Migration completes without errors (no console warnings/errors)
+- 100% data integrity (zero profiles lost, all groups preserved)
+- All user settings preserved
+- Keychain entries intact (password-auth profiles)
+- New features work correctly with migrated data
+- Migration time <30 seconds
+
+**Migration Testing Notes:**
+- **Backup via Export:** Always recommend users export profiles (JSON) before upgrading, NOT database file backups
+- **No Backward Compatibility:** Users cannot downgrade to previous versions with a migrated database
+- **Zero Data Loss:** Any data loss (even 1 profile) is a CRITICAL blocker requiring investigation
+- **Minimal Test Data:** Use minimal realistic data (e.g., 4 profiles, 3 groups) — not extreme datasets
+- **Version-Specific:** Each migration is unique — don't assume the same tests apply across versions
+
+---
+
 ## Quick Start
 
 ```bash
@@ -326,7 +417,7 @@ dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
   ├── src/
   │   ├── lib.rs        # Main backend code (~6300 lines)
-  │   └── tests/        # Test modules (142 tests)
+  │   └── tests/        # Test modules (163 tests)
 ```
 
 See CLAUDE.md for detailed development notes (local file, not in repo).

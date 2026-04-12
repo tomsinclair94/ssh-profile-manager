@@ -40,8 +40,6 @@ use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
 use zeroize::Zeroize;
 
-#[cfg(target_os = "windows")]
-use windows_acl::acl::ACL;
 
 // Constants
 const FILE_DIALOG_TIMEOUT_SECS: u64 = 60; // 1 minute timeout for file dialogs
@@ -119,60 +117,42 @@ fn create_file_windows_secure(path: &std::path::Path, content: &str) -> Result<(
     Ok(())
 }
 
+// Restricts a file on Windows to the current user only, using icacls.
+// This removes all inherited ACEs and grants only the current user Full Control,
+// preventing other users on the machine from reading the file.
+//
+// The previous DENY-based approach (windows_acl crate) was broken: adding DENY ACEs
+// for the "Everyone" and "Users" groups also denies the current user (who is a member
+// of both), making the file unreadable by its own creator. The icacls /inheritance:r
+// approach correctly removes inherited ACEs without denying the owner.
+//
+// whoami is used instead of %USERNAME% to get the fully-qualified account name
+// (e.g. DOMAIN\tom on domain-joined machines). %USERNAME% returns only the bare
+// username which can be ambiguous on domain machines, causing icacls to fail or
+// grant permissions to the wrong principal.
 #[cfg(target_os = "windows")]
 fn set_file_permissions_windows(path: &std::path::Path) -> Result<(), String> {
-    use windows_acl::helper;
-    use winapi::um::winnt::{PSID, FILE_GENERIC_READ};
+    use std::process::Command;
 
-    // Convert path to string
-    let path_str = path.to_str()
-        .ok_or("Invalid file path".to_string())?;
+    let path_str = path.to_string_lossy().to_string();
 
-    // Load the file's ACL
-    let mut acl = ACL::from_file_path(path_str, false)
-        .map_err(|e| {
-            eprintln!("Windows ACL read error details: {}", e);
-            "Failed to read file ACL".to_string()
-        })?;
+    // Use whoami to get the fully-qualified current user (e.g. DOMAIN\tom or COMPUTER\tom)
+    let whoami_output = Command::new("whoami")
+        .output()
+        .map_err(|e| format!("Failed to run whoami: {}", e))?;
+    let username = String::from_utf8_lossy(&whoami_output.stdout).trim().to_string();
+    if username.is_empty() {
+        return Err("Failed to get current username for file permission setup".to_string());
+    }
 
-    // Well-known SIDs:
-    // Everyone: S-1-1-0
-    // Users: S-1-5-32-545
-
-    // Get SID for Everyone group
-    let everyone_sid = helper::string_to_sid("S-1-1-0")
-        .map_err(|e| {
-            eprintln!("Failed to convert Everyone SID: {}", e);
-            "Failed to get Everyone SID".to_string()
-        })?;
-
-    // Get SID for Users group
-    let users_sid = helper::string_to_sid("S-1-5-32-545")
-        .map_err(|e| {
-            eprintln!("Failed to convert Users SID: {}", e);
-            "Failed to get Users SID".to_string()
-        })?;
-
-    // Deny read access to Everyone group
-    acl.deny(everyone_sid.as_ptr() as PSID, false, FILE_GENERIC_READ)
-        .map_err(|e| {
-            eprintln!("Windows ACL deny Everyone error details: {}", e);
-            "Failed to deny Everyone group access".to_string()
-        })?;
-
-    // Deny read access to Users group
-    acl.deny(users_sid.as_ptr() as PSID, false, FILE_GENERIC_READ)
-        .map_err(|e| {
-            eprintln!("Windows ACL deny Users error details: {}", e);
-            "Failed to deny Users group access".to_string()
-        })?;
-
-    // NOTE: We're not adding an explicit allow for the current user because:
-    // 1. The file is created by the current user, so they have ownership rights by default
-    // 2. We deny Everyone and Users, which prevents other accounts from accessing
-    // 3. The file is deleted after 5 seconds anyway (see secure cleanup)
-
-    // windows-acl automatically persists changes to the file system
+    // Remove inherited permissions, grant only the current user Full Control
+    let status = Command::new("icacls")
+        .args([&path_str, "/inheritance:r", "/grant:r", &format!("{}:F", username)])
+        .output()
+        .map_err(|e| format!("Failed to run icacls: {}", e))?;
+    if !status.status.success() {
+        return Err("Failed to restrict file permissions (icacls failed)".to_string());
+    }
     Ok(())
 }
 
@@ -624,9 +604,10 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
 
 fn validate_settings_os_specific(settings_os: &SettingsOsSpecific) -> Result<(), String> {
     // Validate terminal_preference
-    // Valid values for macOS: default, custom, embedded
-    // Valid values for Windows: default, cmd, powershell, windows_terminal, custom, embedded
-    let valid_prefs = ["default", "cmd", "powershell", "windows_terminal", "custom", "embedded"];
+    // Valid values for macOS: terminal, custom, embedded
+    // Valid values for Windows: windows_terminal, cmd, powershell, custom, embedded
+    // "default" is accepted on both platforms for backwards compatibility (migrated to explicit value in v0.9.2)
+    let valid_prefs = ["default", "terminal", "cmd", "powershell", "windows_terminal", "custom", "embedded"];
     if !valid_prefs.contains(&settings_os.terminal_preference.as_str()) {
         return Err(format!("Invalid terminal_preference value: {}", settings_os.terminal_preference));
     }
@@ -806,40 +787,39 @@ impl Database {
         // to prevent TOCTOU race condition where the file would be created with default
         // permissions and then changed afterward.
 
-        // Only apply security hardening if the file doesn't exist yet
+        // Apply security hardening to the database file.
+        // On new installs: create the file with restricted permissions before SQLite opens it
+        // (TOCTOU protection — avoids a window where the file exists with default permissions).
+        // On existing installs: re-apply permissions in case a previous run left the file with
+        // a broken ACL (e.g. from the old windows_acl DENY approach that blocked the owner).
+        #[cfg(unix)]
         if !path.exists() {
-            #[cfg(unix)]
-            {
-                use std::fs;
-                use std::os::unix::fs::OpenOptionsExt;
+            use std::fs;
+            use std::os::unix::fs::OpenOptionsExt;
+            fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .mode(0o600)
+                .open(&path)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        }
 
-                // Create file with 0600 permissions (owner read/write only)
-                fs::OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .mode(0o600)
-                    .open(&path)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                use std::fs::OpenOptions;
-
-                // Create empty file with create_new (fails if exists)
+        #[cfg(target_os = "windows")]
+        {
+            use std::fs::OpenOptions;
+            if !path.exists() {
+                // Create the file before setting ACL (icacls requires the file to exist)
                 let file = OpenOptions::new()
                     .write(true)
                     .create_new(true)
                     .open(&path)
                     .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-                // Close file handle before setting ACL
                 drop(file);
-
-                // Set restrictive Windows ACL (owner-only access)
-                set_file_permissions_windows(&path)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))))?;
             }
+            // Always re-apply permissions — fixes files left with a broken ACL from a
+            // prior run (e.g. old DENY-based setup that blocked the current user).
+            set_file_permissions_windows(&path)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))))?;
         }
 
         let conn = Connection::open(&path)?;
@@ -5365,6 +5345,14 @@ fn build_ssh_args(profile: &Profile) -> Result<Vec<String>, String> {
     ssh_args.push("-o".to_string());
     ssh_args.push("StrictHostKeyChecking=ask".to_string());
 
+    // For password auth, limit SSH to exactly one password attempt.
+    // Without this, SSH retries up to NumberOfPasswordPrompts times (default 3),
+    // invoking the askpass helper repeatedly even after a wrong password.
+    if profile.auth_method == "password" || profile.auth_method == "central_password" {
+        ssh_args.push("-o".to_string());
+        ssh_args.push("NumberOfPasswordPrompts=1".to_string());
+    }
+
     // Add key path if specified and validated
     if profile.auth_method == "key" {
         if let Some(key_path) = &profile.key_path {
@@ -5400,6 +5388,13 @@ fn applescript_escape(s: &str) -> String {
      .replace('`', "\\`")
 }
 
+// Helper function: Escape a single argument for inclusion in a Windows batch file.
+// Wraps the argument in double quotes and escapes any embedded double quotes by doubling them.
+#[cfg(target_os = "windows")]
+fn escape_batch_arg(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
+
 // Helper function: Escape strings for bash double-quote context
 #[cfg(target_os = "macos")]
 fn escape_bash_double_quote(s: &str) -> String {
@@ -5413,6 +5408,8 @@ fn escape_bash_double_quote(s: &str) -> String {
 struct AskpassSetup {
     askpass_script_path: std::path::PathBuf,
     pwd_file_path: std::path::PathBuf,
+    // Written by the terminal script on SSH non-zero exit; monitored to emit in-app failure toast
+    status_file_path: std::path::PathBuf,
 }
 
 // Creates a temporary password file and askpass script for SSH_ASKPASS mechanism.
@@ -5427,6 +5424,9 @@ fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
     // state). On Windows, icacls restricts access after creation; failure is treated as an error
     // and the file is removed to avoid leaving it with default permissions.
     let pwd_file_path = temp_dir.join(format!("spm-pwd-{}", uuid));
+    // Path only — file is created by the terminal launch script on SSH auth failure.
+    // Its presence is the failure signal monitored by the background polling thread.
+    let status_file_path = temp_dir.join(format!("spm-status-{}", uuid));
 
     #[cfg(unix)]
     {
@@ -5479,7 +5479,43 @@ fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
         use std::io::Write;
         let script_path = temp_dir.join(format!("spm-askpass-{}.sh", uuid));
         let pwd_path_escaped = shell_escape(&pwd_file_path.to_string_lossy());
-        let script_content = format!("#!/bin/sh\ncat {}\n", pwd_path_escaped);
+        // State machine — mirrors spm-askpass.exe behaviour on Windows:
+        //
+        //   Password file EXISTS (first invocation):
+        //     Deliver the stored password and delete the file.
+        //
+        //   File GONE + non-password prompt (proxy follow-up challenges):
+        //     Relay the prompt to /dev/tty so the user can type a response
+        //     (reason for access, MFA token, etc.).
+        //
+        //   File GONE + password/passphrase prompt (wrong-password retry):
+        //     Exit non-zero immediately — fail fast rather than re-submitting
+        //     the stored password or leaving the user with an interactive prompt.
+        //
+        // SSH_ASKPASS_REQUIRE=force + NumberOfPasswordPrompts=1 ensure this
+        // script is always called for auth prompts and SSH retries only once.
+        let script_content = format!(
+            "#!/bin/sh\n\
+             if [ -f {0} ]; then\n\
+             \tpassword=$(cat {0})\n\
+             \trm -f {0}\n\
+             \tprintf '%s' \"$password\"\n\
+             else\n\
+             \tPROMPT=\"$1\"\n\
+             \tcase \"$(printf '%s' \"$PROMPT\" | tr '[:upper:]' '[:lower:]')\" in\n\
+             \t\t*password*|*passphrase*)\n\
+             \t\t\tprintf 'spm-askpass: stored password rejected; aborting\\n' >&2\n\
+             \t\t\texit 1\n\
+             \t\t\t;;\n\
+             \t\t*)\n\
+             \t\t\tprintf '%s' \"$PROMPT\" > /dev/tty\n\
+             \t\t\tread -r SPM_INPUT < /dev/tty\n\
+             \t\t\tprintf '%s' \"$SPM_INPUT\"\n\
+             \t\t\t;;\n\
+             \tesac\n\
+             fi\n",
+            pwd_path_escaped
+        );
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -5511,14 +5547,16 @@ fn create_askpass_setup(password: &str) -> Result<AskpassSetup, String> {
         helper
     };
 
-    Ok(AskpassSetup { askpass_script_path, pwd_file_path })
+    Ok(AskpassSetup { askpass_script_path, pwd_file_path, status_file_path })
 }
 
 // Spawns a background thread to securely delete askpass temp files after a delay.
-// The 10s delay ensures SSH has had time to invoke the script and read the password.
+// spm-askpass.exe deletes the password file itself after first use, so this cleanup
+// is a safety net for the case where the connection fails before SSH ever invokes
+// the askpass helper (e.g. host unreachable). 30s is ample for that scenario.
 fn schedule_askpass_cleanup(setup: AskpassSetup) {
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        std::thread::sleep(std::time::Duration::from_secs(30));
         delete_file_with_overwrite(&setup.pwd_file_path);
         // On Unix, askpass_script_path is a temp .sh script — delete it.
         // On Windows, askpass_script_path is the bundled spm-askpass.exe — do NOT delete it.
@@ -5544,29 +5582,42 @@ fn launch_macos_custom_terminal(
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.sh", Uuid::new_v4()));
 
-    let askpass_env = if let Some(setup) = askpass_setup {
+    let ssh_args_escaped = ssh_args.iter()
+        .map(|arg| shell_escape(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let script_content = if let Some(setup) = askpass_setup {
+        let status_path_escaped = shell_escape(&setup.status_file_path.to_string_lossy());
         format!(
-            "export SSH_ASKPASS={}\nexport SSH_ASKPASS_REQUIRE=force\n",
-            shell_escape(&setup.askpass_script_path.to_string_lossy())
+            "#!/bin/bash\n\
+             echo \"Connecting to {}...\"\n\
+             export SSH_ASKPASS={}\n\
+             export SSH_ASKPASS_REQUIRE=force\n\
+             ssh {}\n\
+             SPMCODE=$?\n\
+             if [ \"$SPMCODE\" = \"0\" ]; then printf OK > {}; else printf FAIL > {}; fi\n\
+             echo \"\"\n\
+             echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+             exec bash\n",
+            escape_bash_double_quote(profile_name),
+            shell_escape(&setup.askpass_script_path.to_string_lossy()),
+            ssh_args_escaped,
+            status_path_escaped,
+            status_path_escaped
         )
     } else {
-        String::new()
+        format!(
+            "#!/bin/bash\n\
+             echo \"Connecting to {}...\"\n\
+             ssh {}\n\
+             echo \"\"\n\
+             echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
+             exec bash\n",
+            escape_bash_double_quote(profile_name),
+            ssh_args_escaped
+        )
     };
-
-    let script_content = format!(
-        "#!/bin/bash\n\
-         echo \"Connecting to {}...\"\n\
-         {}ssh {}\n\
-         echo \"\"\n\
-         echo \"Connection closed. Press any key to exit or type 'exit'...\"\n\
-         exec bash\n",
-        escape_bash_double_quote(profile_name),
-        askpass_env,
-        ssh_args.iter()
-            .map(|arg| shell_escape(arg))
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
 
     // Write and make executable
     fs::write(&script_path, script_content)
@@ -5651,7 +5702,19 @@ fn launch_macos_default_terminal(
         format!("ssh {}", escaped_args.join(" "))
     };
     let close_command = "osascript -e 'tell application \"System Events\" to keystroke \"w\" using command down'";
-    let ssh_with_close = format!("{} ; {}", ssh_cmd_no_exit, close_command);
+    // For password auth, write OK/FAIL to the status file immediately after SSH exits.
+    // The background polling thread reads this to emit an in-app toast on auth failure.
+    // Use `if cmd; then ... else ... fi` rather than $? — applescript_escape() escapes $
+    // to \$, which would prevent shell variable expansion if $? were used directly.
+    let ssh_with_close = if let Some(setup) = askpass_setup {
+        let status_path_escaped = shell_escape(&setup.status_file_path.to_string_lossy());
+        format!(
+            "if {}; then printf OK > {}; else printf FAIL > {}; fi ; {}",
+            ssh_cmd_no_exit, status_path_escaped, status_path_escaped, close_command
+        )
+    } else {
+        format!("{} ; {}", ssh_cmd_no_exit, close_command)
+    };
     let ssh_with_close_escaped = applescript_escape(&ssh_with_close);
 
     let applescript = if use_tabs {
@@ -5706,25 +5769,50 @@ fn launch_windows_cmd(ssh_args: &[String], askpass_setup: Option<&AskpassSetup>)
     use std::process::Command;
 
     if let Some(setup) = askpass_setup {
-        // Inline set chain — no temp file needed for cmd.exe.
-        // SSH_ASKPASS points to spm-askpass.exe (a real exe, not a .bat).
-        // SPM_PASSWORD_FILE tells the helper where to read the password from.
+        // Use a temp bat file for env var injection.
+        // The inline `set "VAR=val"& ssh ...` compound command approach fails because
+        // the inner quotes in `set "VAR=val"` get mangled as they pass through the
+        // Rust→cmd→start→cmd subprocess chain (three layers of quoting interpretation),
+        // leaving SSH_ASKPASS unset.  A bat file sidesteps all quoting layers entirely.
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
         let askpass_path = setup.askpass_script_path.to_string_lossy();
         let pwd_path = setup.pwd_file_path.to_string_lossy();
-        let compound = format!(
-            "set \"SPM_PASSWORD_FILE={}\"& set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
-            pwd_path,
-            askpass_path,
-            ssh_args.join(" ")
+        let status_path = setup.status_file_path.to_string_lossy();
+        // Save ERRORLEVEL to SSHCODE immediately after ssh exits, before any other
+        // command can reset it. Then write the outcome to SPM_STATUS_FILE.
+        let script_content = format!(
+            "@echo off\r\n\
+             set \"SPM_PASSWORD_FILE={}\"\r\n\
+             set \"SSH_ASKPASS={}\"\r\n\
+             set \"SSH_ASKPASS_REQUIRE=force\"\r\n\
+             set \"SPM_STATUS_FILE={}\"\r\n\
+             ssh {}\r\n\
+             set \"SSHCODE=%ERRORLEVEL%\"\r\n\
+             if \"%SSHCODE%\"==\"0\" (echo OK>\"%SPM_STATUS_FILE%\") else (echo FAIL>\"%SPM_STATUS_FILE%\")\r\n",
+            pwd_path, askpass_path, status_path,
+            ssh_args.iter().map(|arg| escape_batch_arg(arg)).collect::<Vec<_>>().join(" ")
         );
+        create_file_windows_secure(&script_path, &script_content)?;
+
         Command::new("cmd")
             .arg("/c")
             .arg("start")
             .arg("cmd")
             .arg("/c")
-            .arg(&compound)
+            .arg(&script_path)
             .spawn()
             .map_err(|e| format!("Failed to launch Command Prompt: {}", e))?;
+
+        let script_path_cleanup = script_path.clone();
+        std::thread::spawn(move || {
+            // Plain remove (not overwrite) — bat files contain no sensitive data.
+            // Must outlive the SSH session: cmd.exe re-reads the file after SSH exits
+            // to execute the remaining lines (SSHCODE capture + FAIL/OK write).
+            // 90s exceeds the 60s monitor window with margin.
+            std::thread::sleep(std::time::Duration::from_secs(90));
+            let _ = std::fs::remove_file(&script_path_cleanup);
+        });
     } else {
         // Build SSH command with explicit exit to ensure auto-close
         let mut full_command = vec!["ssh".to_string()];
@@ -5770,14 +5858,17 @@ fn launch_windows_powershell(ssh_args: &[String], askpass_setup: Option<&Askpass
         let askpass_path_escaped = askpass_path.replace('\'', "''");
         let pwd_path = setup.pwd_file_path.to_string_lossy();
         let pwd_path_escaped = pwd_path.replace('\'', "''");
+        let status_path = setup.status_file_path.to_string_lossy();
+        let status_path_escaped = status_path.replace('\'', "''");
         format!(
-            "$env:SPM_PASSWORD_FILE = '{}'; $env:SSH_ASKPASS = '{}'; $env:SSH_ASKPASS_REQUIRE = 'force'; & {} | Out-Null; exit",
+            "$env:SPM_PASSWORD_FILE = '{}'; $env:SSH_ASKPASS = '{}'; $env:SSH_ASKPASS_REQUIRE = 'force'; $env:SPM_STATUS_FILE = '{}'; & {}; if ($LASTEXITCODE -ne 0) {{ [System.IO.File]::WriteAllText($env:SPM_STATUS_FILE, 'FAIL') }} else {{ [System.IO.File]::WriteAllText($env:SPM_STATUS_FILE, 'OK') }}; exit",
             pwd_path_escaped,
             askpass_path_escaped,
+            status_path_escaped,
             args_quoted.join(" ")
         )
     } else {
-        format!("& {} | Out-Null; exit", args_quoted.join(" "))
+        format!("& {}; exit", args_quoted.join(" "))
     };
 
     // Convert to UTF-16LE and Base64 encode (required by PowerShell -EncodedCommand)
@@ -5818,11 +5909,15 @@ fn launch_windows_terminal(
         let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
         let askpass_path = setup.askpass_script_path.to_string_lossy();
         let pwd_path = setup.pwd_file_path.to_string_lossy();
+        let status_path = setup.status_file_path.to_string_lossy();
+        // Save ERRORLEVEL to SSHCODE immediately after ssh exits, before any other
+        // command can reset it. Then write the outcome to SPM_STATUS_FILE.
         let script_content = format!(
-            "@echo off\r\nset \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
+            "@echo off\r\nset \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nset \"SPM_STATUS_FILE={}\"\r\nssh {}\r\nset \"SSHCODE=%ERRORLEVEL%\"\r\nif \"%SSHCODE%\"==\"0\" (echo OK>\"%SPM_STATUS_FILE%\") else (echo FAIL>\"%SPM_STATUS_FILE%\")\r\n",
             pwd_path,
             askpass_path,
-            ssh_args.join(" ")
+            status_path,
+            ssh_args.iter().map(|arg| escape_batch_arg(arg)).collect::<Vec<_>>().join(" ")
         );
         create_file_windows_secure(&script_path, &script_content)?;
 
@@ -5838,8 +5933,11 @@ fn launch_windows_terminal(
 
         let script_path_cleanup = script_path.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(5));
-            delete_file_with_overwrite(&script_path_cleanup);
+            // Must outlive the SSH session: cmd.exe re-reads the file after SSH exits
+            // to execute the remaining lines (SSHCODE capture + FAIL/OK write).
+            // 90s exceeds the 60s monitor window with margin.
+            std::thread::sleep(std::time::Duration::from_secs(90));
+            let _ = std::fs::remove_file(&script_path_cleanup);
         });
     } else {
         let mut cmd = Command::new("wt");
@@ -5867,7 +5965,7 @@ fn launch_windows_custom_terminal(
     // Re-validate path (TOCTOU protection)
     let validated_path = validate_terminal_path(custom_path)?;
 
-    // Helper functions for batch escaping
+    // Helper function for batch echo escaping (caret-escapes shell metacharacters)
     fn escape_batch_echo(s: &str) -> String {
         s.replace('^', "^^")
          .replace('&', "^&")
@@ -5878,45 +5976,61 @@ fn launch_windows_custom_terminal(
          .replace('!', "^!")
     }
 
-    fn escape_batch_arg(s: &str) -> String {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    }
-
     // Create temporary script
     let temp_dir = std::env::temp_dir();
     let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
 
-    let askpass_env = if let Some(setup) = askpass_setup {
+    let ssh_args_str = ssh_args.iter()
+        .map(|arg| escape_batch_arg(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let script_content = if let Some(setup) = askpass_setup {
         let askpass_path = setup.askpass_script_path.to_string_lossy();
         let pwd_path = setup.pwd_file_path.to_string_lossy();
+        let status_path = setup.status_file_path.to_string_lossy();
         format!(
-            "set \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\n",
-            pwd_path,
-            askpass_path
-        )
-    } else {
-        String::new()
-    };
-
-    let script_content = format!(
-        "@echo off\r\n\
-         echo Connecting to {}...\r\n\
-         {}ssh {}\r\n\
-         if errorlevel 1 (\r\n\
+            "@echo off\r\n\
+             set \"SPM_PASSWORD_FILE={}\"\r\n\
+             set \"SSH_ASKPASS={}\"\r\n\
+             set \"SSH_ASKPASS_REQUIRE=force\"\r\n\
+             set \"SPM_STATUS_FILE={}\"\r\n\
+             echo Connecting to {}...\r\n\
+             ssh {}\r\n\
+             set \"SSHCODE=%ERRORLEVEL%\"\r\n\
+             if \"%SSHCODE%\"==\"0\" (\r\n\
+             echo OK>\"%SPM_STATUS_FILE%\"\r\n\
+             echo.\r\n\
+             echo Connection closed.\r\n\
+             ) else (\r\n\
+             echo FAIL>\"%SPM_STATUS_FILE%\"\r\n\
              echo.\r\n\
              echo Connection failed. Press any key to close...\r\n\
              pause >nul\r\n\
-         ) else (\r\n\
+             )\r\n",
+            pwd_path,
+            askpass_path,
+            status_path,
+            escape_batch_echo(profile_name),
+            ssh_args_str
+        )
+    } else {
+        format!(
+            "@echo off\r\n\
+             echo Connecting to {}...\r\n\
+             ssh {}\r\n\
+             if errorlevel 1 (\r\n\
+             echo.\r\n\
+             echo Connection failed. Press any key to close...\r\n\
+             pause >nul\r\n\
+             ) else (\r\n\
              echo.\r\n\
              echo Connection closed.\r\n\
-         )\r\n",
-        escape_batch_echo(profile_name),
-        askpass_env,
-        ssh_args.iter()
-            .map(|arg| escape_batch_arg(arg))
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
+             )\r\n",
+            escape_batch_echo(profile_name),
+            ssh_args_str
+        )
+    };
 
     // Create file with restrictive permissions atomically (TOCTOU protection)
     create_file_windows_secure(&script_path, &script_content)?;
@@ -5931,82 +6045,14 @@ fn launch_windows_custom_terminal(
         .spawn()
         .map_err(|e| format!("Failed to launch custom terminal: {}", e))?;
 
-    // Schedule secure cleanup
     let script_path_cleanup = script_path.clone();
     std::thread::spawn(move || {
-        // Wait longer to ensure terminal has read the script
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        delete_file_with_overwrite(&script_path_cleanup);
+        // Must outlive the SSH session: cmd.exe re-reads the file after SSH exits
+        // to execute the remaining lines (SSHCODE capture + FAIL/OK write).
+        // 90s exceeds the 60s monitor window with margin.
+        std::thread::sleep(std::time::Duration::from_secs(90));
+        let _ = std::fs::remove_file(&script_path_cleanup);
     });
-
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn launch_windows_default_terminal(
-    ssh_args: &[String],
-    profile_name: &str,
-    use_tabs: bool,
-    askpass_setup: Option<&AskpassSetup>,
-) -> Result<(), String> {
-    use std::process::Command;
-
-    if let Some(setup) = askpass_setup {
-        // Password auth: wt uses a temp .bat script; cmd fallback uses inline set chain.
-        // SSH_ASKPASS points to spm-askpass.exe (a real exe, not a .bat).
-        // SPM_PASSWORD_FILE tells the helper where to read the password from.
-        let temp_dir = std::env::temp_dir();
-        let script_path = temp_dir.join(format!("ssh-profile-{}.bat", Uuid::new_v4()));
-        let askpass_path = setup.askpass_script_path.to_string_lossy();
-        let pwd_path = setup.pwd_file_path.to_string_lossy();
-        let ssh_args_str = ssh_args.join(" ");
-        let script_content = format!(
-            "@echo off\r\nset \"SPM_PASSWORD_FILE={}\"\r\nset \"SSH_ASKPASS={}\"\r\nset \"SSH_ASKPASS_REQUIRE=force\"\r\nssh {}\r\n",
-            pwd_path, askpass_path, ssh_args_str
-        );
-        create_file_windows_secure(&script_path, &script_content)?;
-
-        let mut wt_cmd = Command::new("wt");
-        if use_tabs { wt_cmd.arg("-w").arg("last").arg("nt"); } else { wt_cmd.arg("-w").arg("new"); }
-        wt_cmd.arg("--title").arg(profile_name).arg("cmd").arg("/c").arg(&script_path);
-
-        match wt_cmd.spawn() {
-            Ok(_) => {}
-            Err(_) => {
-                // Fall back to cmd.exe with inline set chain
-                let compound = format!(
-                    "set \"SPM_PASSWORD_FILE={}\"& set \"SSH_ASKPASS={}\"& set \"SSH_ASKPASS_REQUIRE=force\"& ssh {}& exit",
-                    pwd_path, askpass_path, ssh_args_str
-                );
-                Command::new("cmd")
-                    .arg("/c").arg("start").arg("cmd").arg("/c").arg(&compound)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-            }
-        }
-
-        let script_path_cleanup = script_path.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(5));
-            delete_file_with_overwrite(&script_path_cleanup);
-        });
-    } else {
-        // Non-password: try Windows Terminal first, fall back to cmd.exe
-        let mut wt_cmd = Command::new("wt");
-        if use_tabs { wt_cmd.arg("-w").arg("last").arg("nt"); } else { wt_cmd.arg("-w").arg("new"); }
-        wt_cmd.arg("--title").arg(profile_name).arg("ssh").args(ssh_args);
-
-        match wt_cmd.spawn() {
-            Ok(_) => {}
-            Err(_) => {
-                Command::new("cmd")
-                    .arg("/c").arg("start").arg("cmd").arg("/c")
-                    .arg("ssh").args(ssh_args)
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch terminal: {}", e))?;
-            }
-        }
-    }
 
     Ok(())
 }
@@ -6080,7 +6126,8 @@ fn connect_ssh(
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
-            "default" | _ => {
+            // "default" is the legacy value (migrated to "terminal" in v0.9.2); treat as Terminal.app
+            "terminal" | "default" | _ => {
                 launch_macos_default_terminal(&ssh_args, use_tabs, askpass_setup.as_ref())?;
             }
         }
@@ -6098,7 +6145,6 @@ fn connect_ssh(
         match terminal_pref.as_str() {
             "cmd" => launch_windows_cmd(&ssh_args, askpass_setup.as_ref())?,
             "powershell" => launch_windows_powershell(&ssh_args, askpass_setup.as_ref())?,
-            "windows_terminal" => launch_windows_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
             "custom" => {
                 if let Some(custom_path) = custom_terminal_path {
                     launch_windows_custom_terminal(&custom_path, &ssh_args, &profile.name, askpass_setup.as_ref())?;
@@ -6106,7 +6152,8 @@ fn connect_ssh(
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
-            "default" | _ => launch_windows_default_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
+            // "default" is the legacy value (migrated to "windows_terminal" in v0.9.2); treat as WT
+            "windows_terminal" | "default" | _ => launch_windows_terminal(&ssh_args, &profile.name, use_tabs, askpass_setup.as_ref())?,
         }
 
         // Minimize app window if enabled
@@ -6117,7 +6164,83 @@ fn connect_ssh(
         }
     }
 
-    // Schedule secure cleanup of askpass temp files (10s delay)
+    // Poll for the status file written by the terminal script after SSH exits.
+    // The monitoring thread runs for up to 60s; if the file appears, emit an in-app toast.
+    // 60s covers slow proxy auth (2FA + typed reason) that may exceed 30s.
+    // The thread stops early on OK (clean session close) or FAIL (auth failure).
+    #[cfg(target_os = "macos")]
+    if let Some(ref setup) = askpass_setup {
+        let status_path = setup.status_file_path.clone();
+        let app_handle_poll = app_handle.clone();
+        let profile_name_poll = profile.name.clone();
+        std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                if std::time::Instant::now() >= deadline {
+                    let _ = std::fs::remove_file(&status_path);
+                    break;
+                }
+                if status_path.exists() {
+                    let content = std::fs::read_to_string(&status_path).unwrap_or_default();
+                    let _ = std::fs::remove_file(&status_path);
+                    if content.trim() == "FAIL" {
+                        if let Some(win) = app_handle_poll.get_webview_window("main") {
+                            let _ = win.unminimize();
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                        let message = format!(
+                            "SSH authentication failed — the stored password was rejected.\n\
+                             Edit the profile '{}' to update the password.",
+                            profile_name_poll
+                        );
+                        let _ = app_handle_poll.emit("ssh-connection-failed", message);
+                    }
+                    // Stop polling for both FAIL and OK
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Some(ref setup) = askpass_setup {
+        let status_path = setup.status_file_path.clone();
+        let app_handle_poll = app_handle.clone();
+        let profile_name_poll = profile.name.clone();
+        std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                if std::time::Instant::now() >= deadline {
+                    let _ = std::fs::remove_file(&status_path);
+                    break;
+                }
+                if status_path.exists() {
+                    let content = std::fs::read_to_string(&status_path).unwrap_or_default();
+                    let _ = std::fs::remove_file(&status_path);
+                    if content.trim() == "FAIL" {
+                        if let Some(win) = app_handle_poll.get_webview_window("main") {
+                            let _ = win.unminimize();
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                        let message = format!(
+                            "SSH authentication failed — the stored password was rejected.\n\
+                             Edit the profile '{}' to update the password.",
+                            profile_name_poll
+                        );
+                        let _ = app_handle_poll.emit("ssh-connection-failed", message);
+                    }
+                    // Stop polling for both FAIL and OK
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
+    }
+
+    // Schedule secure cleanup of askpass temp files (30s safety-net delay)
     if let Some(setup) = askpass_setup {
         schedule_askpass_cleanup(setup);
     }
