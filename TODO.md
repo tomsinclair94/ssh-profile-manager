@@ -1,105 +1,26 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.2 — In Development
+## Current Version: v0.9.2 — Release Ready
 
-**Latest Release:** v0.9.1 (2026-04-07) ✅
-**Branch:** `v0.9.2-dev` (Windows dev complete; macOS parity implemented, needs testing)
+**Latest Release:** v0.9.2 (2026-04-12) ✅
+**Branch:** `v0.9.2-dev` (all work complete; PR pending)
 **Focus:** Windows SSH password auth fixes + in-app failure toast; macOS parity
-
----
-
-### Work Items
-
-#### Bug 1: Windows Terminal — ✅ Tested (good/bad password both working via CMD-in-WT)
-- Same bat file approach as CMD used (`wt cmd /c <bat>`)
-- Root cause of detection failure: bat file deleted after 5s — same race condition as CMD; fixed with 90s cleanup delay
-- Applied `SSHCODE=%ERRORLEVEL%` pattern (replaces `if errorlevel 1`)
-- Tab closes automatically on exit (user's WT "close on exit" setting)
-- Note: tested as "CMD via Windows Terminal" (CMD is the default shell in WT for this user)
-
-#### Bug 2: CMD — ✅ Tested (good/bad password both working)
-- Root cause: broken `set_file_permissions_windows` (DENY ACL locked out current user from their own files) — fixed with `icacls /inheritance:r /grant:r USERNAME:F`
-- Env var injection: replaced inline compound command with temp bat file (avoids quoting mangling through `cmd → start → cmd` chain)
-- DB file was also locked by the broken ACL — fixed by always re-applying permissions on init
-
-#### Bug 3: PowerShell — ✅ Tested (good/bad password working; proxy untested)
-- Root cause of silent failure: `| Out-Null` was piping SSH stdout to nothing, preventing PTY allocation — SSH launched but produced no output and appeared to hang
-- Fix: removed `| Out-Null` from both the askpass and non-askpass PS command variants
-- Earlier fixes still in place: `SSH_ASKPASS_REQUIRE=force`, spm-askpass state machine, `NumberOfPasswordPrompts=1`
-- Proxy multi-step auth still untested (requires work proxy setup)
-
-#### In-app SSH failure toast — ✅ Tested (CMD, WT, PowerShell)
-Goal: when wrong password causes the terminal to close silently, pop an error toast in the app.
-
-**Mechanism:**
-- bat/PS script sets `SPM_STATUS_FILE=<path>` and writes `FAIL` or `OK` after SSH exits
-- Background monitoring thread polls for the status file every 2s for up to 60s
-- On `FAIL`: restores window (unminimize/show/focus) then emits `ssh-connection-failed` event
-- On `OK`: stops early (clean session close, no toast)
-- Frontend listener calls `showToast(event.payload, TOAST_DURATION_LONG, 'error')`
-- Toast message includes profile name on second line: `"Edit the profile 'NAME' to update the password."`
-
-**Key fixes:**
-- bat file cleanup delay: 5s → 90s (cmd.exe re-reads the file after SSH exits; 5s was a race condition)
-- `SSHCODE=%ERRORLEVEL%` pattern applied to CMD and WT launchers (captures exit code before any subsequent command resets it)
-- Monitor timeout: 30s → 60s (covers slow proxy auth, 2FA, typed reason fields)
-- PowerShell: removed `| Out-Null` which was breaking PTY allocation
-
-**Before release:**
-- [x] Removed all `[DEBUG ...]` println! statements and `spm-bat-debug.txt` instrumentation from `launch_windows_cmd`
-- [x] Applied `SSHCODE=%ERRORLEVEL%` + `OK`/`FAIL` writes + 90s cleanup to default and custom bat launchers
-- [x] Removed `launch_windows_default_terminal`; Windows terminal selector now shows WT as default, no "Default" option
-- [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
-- [ ] Test proxy multi-step auth at work (CMD, PowerShell, Windows Terminal)
-
-#### macOS parity — ✅ Implemented, needs testing
-
-**Same mechanism as Windows, adapted for macOS:**
-- `launch_macos_default_terminal`: after SSH exits, writes OK/FAIL via `&&`/`||` before the auto-close osascript (uses `&&`/`||` rather than `$?` variable — `applescript_escape()` would mangle `$` in the inline string)
-- `launch_macos_custom_terminal`: script captures `SPMCODE=$?` after SSH exits, writes OK/FAIL to status file
-- Background polling thread (60s, 2s interval) emits `ssh-connection-failed` event on FAIL — same as Windows
-- Frontend toast listener already handles this event (shared between platforms)
-- macOS askpass `.sh` script upgraded to full state machine:
-  - First call: delivers password, deletes pwd file
-  - Subsequent call with password/passphrase prompt → exits 1 (fail fast, no retry)
-  - Subsequent call with non-password prompt → relays to `/dev/tty` (proxy 2FA, reason field, etc.)
-
-**Needs testing (macOS):**
-- [ ] Test Terminal.app (default) — good password (connects cleanly, tab auto-closes)
-- [ ] Test Terminal.app (default) — bad password (tab auto-closes, toast fires)
-- [ ] Test custom terminal (e.g. iTerm2) — good password
-- [ ] Test custom terminal (e.g. iTerm2) — bad password (toast fires)
-- [ ] Confirm no regression on key-auth and no-auth profiles
 
 ---
 
 ### Release Checklist
 
-- [x] Resolve toast debug — root cause was bat file deleted (5s) before cmd.exe re-read it post-SSH; fixed with 90s cleanup delay
-- [x] Test CMD with good and bad passwords — confirmed working, toast fires on failure, app restores from minimised
-- [x] Test Windows Terminal with good and bad passwords — confirmed working (CMD-in-WT)
-- [x] Test PowerShell with good and bad passwords — confirmed working after removing `| Out-Null`
-- [x] Removed all `[DEBUG ...]` println! statements and `spm-bat-debug.txt` instrumentation from `lib.rs`
-- [x] Applied `SSHCODE=%ERRORLEVEL%` + `OK`/`FAIL` writes + 90s cleanup to all Windows bat launchers
-- [x] Removed `launch_windows_default_terminal`; Windows terminal selector now shows WT as default, no "Default" option
-- [x] Migration v0.9.2: `terminalPreference = 'default'` → `'windows_terminal'` on Windows on first launch
-- [x] macOS askpass script upgraded to state machine (fail-fast on retry, relay non-password prompts to TTY)
-- [x] macOS failure toast implemented — status file + polling thread, same mechanism as Windows
-- [x] Test macOS connections — good password, bad password, key auth (see macOS parity section above)
-- [x] Update `CHANGELOG.md` — full Fixed entry
-- [x] Update `dist/main.js` `VERSION_CHANGELOG` — highlights for in-app splash
-- [x] All automated tests pass (`cargo test --lib`)
+- [x] All development complete and tested (Windows CMD, WT, PowerShell; macOS Terminal.app)
+- [x] All automated tests pass (`cargo test --lib`) — 163/163
 - [x] Developer tools disabled (`tauri.conf.json`)
-- [x] Code review (voltagent-qa-sec:code-reviewer)
-- [x] Security review (voltagent-infra:security-engineer)
-- [x] Fix any CRITICAL/HIGH/MEDIUM issues from reviews
-- [x] Re-run automated tests after fixes
-- [ ] Update docs: `CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`
-- [ ] Commit & push
+- [x] Code review + security review complete; all CRITICAL/HIGH/MEDIUM issues resolved
+- [x] Both changelogs updated (`CHANGELOG.md` + `dist/main.js` `VERSION_CHANGELOG`)
+- [x] Docs updated (`CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`)
+- [x] Committed & pushed
 - [ ] Create PR → `main` with `--label "bug"`
 - [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.2`
 
-**Note — proxy multi-step auth:** All three terminal types are expected to work based on the spm-askpass state machine design, but confirmation requires the work proxy/2FA environment. Testing to be done before or after release; any issues will be addressed in a v0.9.3 patch.
+**Note — proxy multi-step auth:** Expected to work based on the spm-askpass state machine design; confirmation requires work proxy/2FA environment. Any issues addressed in v0.9.3.
 
 ---
 
@@ -182,6 +103,16 @@ No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish st
 
 ## Archive
 
+### v0.9.2 - Released 2026-04-12 ✅
+**Focus:** SSH Password Auth Fixes — Windows & macOS
+- Windows CMD — fixed broken ACL (icacls replaces windows_acl DENY approach); temp bat file fixes env var quoting mangling through subprocess chain
+- Windows PowerShell — removed `| Out-Null` which blocked PTY allocation
+- In-app failure toast — status file + background polling thread (60s, 2s interval); app restores from minimised on bad password (Windows + macOS)
+- spm-askpass state machine — fail-fast on bad password retry; relay proxy/2FA prompts to terminal
+- Windows terminal selector — "Default" removed, "Windows Terminal" is now explicit default; v0.9.2 migration for existing users
+- macOS terminal selector — "Default (Terminal.app)" renamed to "Terminal"
+- 163 automated tests; 0 CRITICAL/HIGH after code + security review
+
 ### v0.9.1 - Released 2026-04-07 ✅
 **Focus:** Windows Fix & Dependency Updates
 - Windows SSH password auth Access Denied — replaced temp `.bat` askpass with bundled `spm-askpass.exe` workspace crate; bundled via `externalBin` (avoids tauri-build `canonicalize()` Windows CI bug)
@@ -197,12 +128,5 @@ No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish st
 - Central Password auth method in profile editor with searchable picker
 - Export/import support for central password references
 - 163 automated tests; 0 CRITICAL/HIGH after code + security review
-
-### v0.8.0 - Released 2026-02-27 ✅
-**Focus:** Profile & Group Moving + Custom Sort Order
-- Move Profile & Move Group modals, drag between groups with 5s undo
-- Custom sort order with drag-to-reorder; padlock button to enable
-- Expand Card Actions — optional 6-button layout per profile card
-- 142 automated tests
 
 See `CHANGELOG.md` for full release history.

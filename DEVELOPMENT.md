@@ -53,8 +53,8 @@
 
 4. **Prepare for Release** - Before creating PR, ensure:
    - ✅ **All tests passing** (`cargo test --lib` - 163 tests must pass; add `default-run = "ssh-profile-manager"` to `Cargo.toml` `[package]` if multiple `[[bin]]` targets exist)
-   - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent)
-   - ✅ Security review completed (use `voltagent-infra:security-engineer` agent)
+   - ✅ Code review completed (use `voltagent-qa-sec:code-reviewer` agent — **scope to branch diff only**: `git diff main...HEAD`, not the full codebase; pass the diff directly to minimise token usage; only review full codebase if explicitly requested)
+   - ✅ Security review completed (use `voltagent-infra:security-engineer` agent — **scope to branch diff only**, same approach as code review)
    - ✅ All CRITICAL/HIGH/MEDIUM issues fixed
    - ✅ Version updated in ALL 7 locations:
      1. `src-tauri/tauri.conf.json`
@@ -326,7 +326,7 @@ dist/           # Frontend (index.html, styles.css, main.js)
 src-tauri/      # Rust backend (lib.rs, Cargo.toml, tauri.conf.json)
   ├── src/
   │   ├── lib.rs        # Main backend code (~6300 lines)
-  │   └── tests/        # Test modules (142 tests)
+  │   └── tests/        # Test modules (163 tests)
 ```
 
 See CLAUDE.md for detailed development notes (local file, not in repo).
