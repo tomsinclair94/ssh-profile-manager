@@ -3120,13 +3120,17 @@ function checkAndPerformMigration() {
         localStorage.removeItem('collapsedGroups');
     }
 
-    // v0.9.x → v0.9.2: Migrate Windows terminal preference 'default' → 'windows_terminal'
-    // 'default' was removed from the Windows terminal selector; Windows Terminal is now the
-    // explicit default on Windows 11 (pre-installed since 22H2, October 2022).
+    // v0.9.x → v0.9.2: Migrate terminal preference 'default' to explicit value per platform.
+    // Windows: 'default' → 'windows_terminal' (Windows Terminal is now the explicit default on Windows 11).
+    // macOS: 'default' → 'terminal' (Terminal.app is now listed as 'terminal' for consistency with Windows naming).
     if (lastMigrationVersion && lastMigrationVersion < '0.9.2') {
         if (getOS() === 'windows' && localStorage.getItem('terminalPreference') === 'default') {
             debug.log(`Running ${lastMigrationVersion} → v0.9.2 migration: terminalPreference default → windows_terminal`);
             localStorage.setItem('terminalPreference', 'windows_terminal');
+        }
+        if (getOS() === 'macos' && localStorage.getItem('terminalPreference') === 'default') {
+            debug.log(`Running ${lastMigrationVersion} → v0.9.2 migration: terminalPreference default → terminal`);
+            localStorage.setItem('terminalPreference', 'terminal');
         }
     }
 
@@ -7452,11 +7456,11 @@ function populateTerminalOptions() {
 
     if (os === 'macos') {
         terminalSelect.innerHTML = `
-            <option value="default">Default (Terminal.app)</option>
+            <option value="terminal">Terminal</option>
             <option value="custom">Custom Terminal (unsupported)</option>
             <option value="embedded">Embedded Terminal (beta)</option>
         `;
-        if (defaultLabel) defaultLabel.textContent = '(Default: Terminal.app)';
+        if (defaultLabel) defaultLabel.textContent = '(Default: Terminal)';
         if (helpText) {
             helpText.innerHTML = 'Choose which terminal application to use when connecting to SSH profiles.<br><em>When enabled, profiles open as tabs in existing terminal windows (macOS Terminal, Windows Terminal).<br>When minimise is enabled, the app will minimise after launching a connection.</em>';
         }
@@ -9188,15 +9192,16 @@ async function restoreSettings(file) {
             // Validate terminal preference based on OS (must be string and in whitelist)
             const isWindows = getOS() === 'windows';
             const validTerminalPrefs = getOS() === 'macos'
-                ? ['default', 'custom', 'embedded']
+                ? ['terminal', 'custom', 'embedded', 'default']
                 : ['windows_terminal', 'cmd', 'powershell', 'custom', 'embedded', 'default'];
 
             let termPref = (typeof result.settings_os_specific.terminal_preference === 'string'
                 && validTerminalPrefs.includes(result.settings_os_specific.terminal_preference))
                 ? result.settings_os_specific.terminal_preference
-                : (isWindows ? 'windows_terminal' : 'default');
-            // Migrate legacy 'default' setting to 'windows_terminal' on Windows
+                : (isWindows ? 'windows_terminal' : 'terminal');
+            // Migrate legacy 'default' to explicit platform value
             if (isWindows && termPref === 'default') termPref = 'windows_terminal';
+            if (!isWindows && termPref === 'default') termPref = 'terminal';
             localStorage.setItem('terminalPreference', termPref);
 
             // Restore use_tabs_in_terminal if present (default to true if not specified)

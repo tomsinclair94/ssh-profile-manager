@@ -594,10 +594,10 @@ fn validate_settings(settings: &SettingsData) -> Result<(), String> {
 
 fn validate_settings_os_specific(settings_os: &SettingsOsSpecific) -> Result<(), String> {
     // Validate terminal_preference
-    // Valid values for macOS: default, custom, embedded
+    // Valid values for macOS: terminal, custom, embedded
     // Valid values for Windows: windows_terminal, cmd, powershell, custom, embedded
-    // "default" is accepted on both platforms for backwards compatibility (mapped to platform default at connect time)
-    let valid_prefs = ["default", "cmd", "powershell", "windows_terminal", "custom", "embedded"];
+    // "default" is accepted on both platforms for backwards compatibility (migrated to explicit value in v0.9.2)
+    let valid_prefs = ["default", "terminal", "cmd", "powershell", "windows_terminal", "custom", "embedded"];
     if !valid_prefs.contains(&settings_os.terminal_preference.as_str()) {
         return Err(format!("Invalid terminal_preference value: {}", settings_os.terminal_preference));
     }
@@ -6113,7 +6113,8 @@ fn connect_ssh(
                     return Err("Custom terminal selected but no path provided.".to_string());
                 }
             }
-            "default" | _ => {
+            // "default" is the legacy value (migrated to "terminal" in v0.9.2); treat as Terminal.app
+            "terminal" | "default" | _ => {
                 launch_macos_default_terminal(&ssh_args, use_tabs, askpass_setup.as_ref())?;
             }
         }
