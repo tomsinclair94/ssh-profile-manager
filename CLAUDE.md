@@ -24,7 +24,7 @@ bun run build    # Production build
 ## Current Status
 
 **Latest Release:** v0.9.2 (2026-04-12) ✅
-**Next:** v0.9.3 (planned — key/none auth failure toasts, Windows password file ACL refactor)
+**Next:** v0.9.3 (in development — splash screen collapsed history, key/none auth failure toasts, Windows password file ACL refactor)
 
 **v0.9.2 Fixes (Released - 2026-04-12):**
 - ✅ Windows CMD — broken ACL on temp files (windows_acl DENY approach replaced with icacls /inheritance:r); env var quoting mangling fixed with temp bat file approach

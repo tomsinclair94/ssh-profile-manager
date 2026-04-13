@@ -53,9 +53,21 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.9.2';
+const CURRENT_APP_VERSION = '0.9.3';
 
 const VERSION_CHANGELOG = {
+    '0.9.3': {
+        title: 'SSH Connection Failure Detection',
+        subtitle: 'Surfaces connection failures for key and no-auth profiles, and tightens Windows password file security',
+        highlights: [
+            { header: 'Improvements' },
+            'SSH key auth failure toast — if your key is rejected, the app restores from minimised and shows a clear error toast naming the profile',
+            'No-auth / keyboard-interactive failure toast — if the server closes the connection after too many attempts, a clear error toast is shown',
+            'Windows password file security — file is now created empty before ACLs are applied, eliminating the brief window where content was world-readable',
+        ],
+        releaseDate: '2026-TBD',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.3'
+    },
     '0.9.2': {
         title: 'SSH Auth Fixes — Windows & macOS',
         subtitle: 'Fixes SSH password authentication failures and adds in-app error feedback on both platforms',

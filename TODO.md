@@ -1,26 +1,12 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.2 — Release Ready
+## Current Version: v0.9.3 — In Development
 
 **Latest Release:** v0.9.2 (2026-04-12) ✅
-**Branch:** `v0.9.2-dev` (all work complete; PR pending)
-**Focus:** Windows SSH password auth fixes + in-app failure toast; macOS parity
+**Branch:** `v0.9.3-dev`
+**Focus:** Version splash screen fix; SSH connection failure detection for key/none auth; Windows password file ACL race fix
 
----
-
-### Release Checklist
-
-- [x] All development complete and tested (Windows CMD, WT, PowerShell; macOS Terminal.app)
-- [x] All automated tests pass (`cargo test --lib`) — 163/163
-- [x] Developer tools disabled (`tauri.conf.json`)
-- [x] Code review + security review complete; all CRITICAL/HIGH/MEDIUM issues resolved
-- [x] Both changelogs updated (`CHANGELOG.md` + `dist/main.js` `VERSION_CHANGELOG`)
-- [x] Docs updated (`CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`)
-- [x] Committed & pushed
-- [ ] Create PR → `main` with `--label "bug"`
-- [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.2`
-
-**Note — proxy multi-step auth:** Expected to work based on the spm-askpass state machine design; confirmation requires work proxy/2FA environment. Any issues addressed in v0.9.3.
+**Note — proxy multi-step auth:** Verified working in real work environment (2026-04-13) — password delivered, 2FA relayed, reason-field prompt relayed, connection completes successfully.
 
 ---
 
@@ -36,7 +22,7 @@
 ## Roadmap
 
 ```
-... → v0.9.1 ✅ → v0.9.2 → v0.9.3 → v0.10.0 → ... → v1.0.0
+... → v0.9.2 ✅ → v0.9.3 → v0.10.0 → ... → v1.0.0
 ```
 
 ---
@@ -45,10 +31,11 @@
 
 See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customization.md` for detailed plans.
 
-### v0.9.3 - Planned
+### v0.9.3 - In Development
 
-**Focus:** SSH connection failure detection for key and no-auth profiles
+**Focus:** Version splash screen fix; SSH connection failure detection for key/none auth; Windows password file ACL race fix
 
+- **Version splash screen — collapsed history** — when upgrading within the same minor version (e.g. 0.9.1 → 0.9.2), previously-seen versions are shown collapsed (expandable) rather than hidden entirely; unseen versions remain expanded; versions from a different minor series remain hidden. Manual "What's New" views always show only the current version expanded with all other same-minor versions collapsed. Implemented with `<details>`/`<summary>` HTML elements for accessible, CSP-compliant accordion behaviour.
 - **Key auth failure toast** — expand polling/status mechanism to `auth_method = 'key'`; if the key is rejected (SSH exits non-zero), surface a toast: "SSH key not permitted — check the key is authorised on the server. Edit the profile to update the key path."
 - **None/interactive auth failure toast** — expand to `auth_method = 'none'`; if the user fails keyboard-interactive auth (too many attempts, SSH exits non-zero), surface a generic toast: "SSH connection failed — the server closed the connection."
 - Both use the same status file + polling thread mechanism already in place for password auth; the main change is spawning the monitor thread and writing OK/FAIL in the terminal script for non-password profiles
