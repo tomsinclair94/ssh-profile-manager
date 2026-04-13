@@ -93,26 +93,42 @@ fn create_file_windows_secure(path: &std::path::Path, content: &str) -> Result<(
     use std::fs::OpenOptions;
     use std::io::Write;
 
-    // Create file with minimal access (owner-only initially)
-    let mut file = OpenOptions::new()
+    // Step 1: Create empty file (no content yet) and immediately close the handle.
+    // The file briefly exists with OS-default inherited permissions, but contains nothing.
+    OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)
         .map_err(|e| format!("Failed to create secure file: {}", e))?;
+    // Handle dropped here — file is closed before ACL is applied.
 
-    // Write content
+    // Step 2: Lock down permissions before writing any content.
+    // This eliminates the window where content would be readable under inherited ACEs.
+    if let Err(e) = set_file_permissions_windows(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(e);
+    }
+
+    // Step 3: Write content now that the file is restricted to the current user only.
+    let mut file = OpenOptions::new()
+        .write(true)
+        .open(path)
+        .map_err(|e| {
+            let _ = std::fs::remove_file(path);
+            format!("Failed to open secure file for writing: {}", e)
+        })?;
+
     file.write_all(content.as_bytes())
-        .map_err(|e| format!("Failed to write file content: {}", e))?;
+        .map_err(|e| {
+            let _ = std::fs::remove_file(path);
+            format!("Failed to write file content: {}", e)
+        })?;
 
-    // Sync to disk
     file.sync_all()
-        .map_err(|e| format!("Failed to sync file: {}", e))?;
-
-    // Drop file handle before setting ACL
-    drop(file);
-
-    // Set restrictive ACL
-    set_file_permissions_windows(path)?;
+        .map_err(|e| {
+            let _ = std::fs::remove_file(path);
+            format!("Failed to sync file: {}", e)
+        })?;
 
     Ok(())
 }

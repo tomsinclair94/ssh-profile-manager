@@ -39,7 +39,7 @@ See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customizatio
 - ✅ **Key auth failure toast** — expand polling/status mechanism to `auth_method = 'key'`; if the key is rejected (SSH exits non-zero), surface a toast: "SSH key not permitted — check the key is authorised on the server. Edit the profile to update the key path."
 - ✅ **None/interactive auth failure toast** — expand to `auth_method = 'none'`; if the user fails keyboard-interactive auth (too many attempts, SSH exits non-zero), surface a generic toast: "SSH connection failed — the server closed the connection."
 - Both use the same status file + polling thread mechanism already in place for password auth; the main change is spawning the monitor thread and writing OK/FAIL in the terminal script for non-password profiles
-- **Windows password file world-readable window** — refactor `create_file_windows_secure` to write content only after icacls has been applied (create empty → icacls → write content), eliminating the brief window where the file exists with default permissions before ACL restriction
+- ✅ **Windows password file world-readable window** — refactor `create_file_windows_secure` to write content only after icacls has been applied (create empty → icacls → write content), eliminating the brief window where the file exists with default permissions before ACL restriction
 
 ---
 
