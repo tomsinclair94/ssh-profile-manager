@@ -5587,6 +5587,9 @@ fn launch_macos_custom_terminal(
     use std::process::Command;
     use std::fs;
 
+    eprintln!("[SPM debug] launcher: macos_custom profile='{}' password_auth={} status_file='{}'",
+        profile_name, askpass_setup.is_some(), status_file_path.display());
+
     // Re-validate path immediately before use (TOCTOU protection)
     let validated_path = validate_terminal_path(custom_path)?;
 
@@ -5695,6 +5698,9 @@ fn launch_macos_default_terminal(
 ) -> Result<(), String> {
     use std::process::Command;
 
+    eprintln!("[SPM debug] launcher: macos_default use_tabs={} password_auth={} status_file='{}'",
+        use_tabs, askpass_setup.is_some(), status_file_path.display());
+
     let escaped_args: Vec<String> = ssh_args.iter()
         .map(|arg| shell_escape(arg))
         .collect();
@@ -5776,6 +5782,9 @@ fn launch_windows_cmd(
 ) -> Result<(), String> {
     use std::process::Command;
 
+    eprintln!("[SPM debug] launcher: windows_cmd password_auth={} status_file='{}'",
+        askpass_setup.is_some(), status_file_path.display());
+
     // Always use a temp bat file so we can write OK/FAIL to the status file after SSH exits.
     // (Inline compound commands get mangled through the Rust→cmd→start→cmd quoting layers.)
     let temp_dir = std::env::temp_dir();
@@ -5840,6 +5849,9 @@ fn launch_windows_powershell(
     status_file_path: &std::path::Path,
 ) -> Result<(), String> {
     use std::process::Command;
+
+    eprintln!("[SPM debug] launcher: windows_powershell password_auth={} status_file='{}'",
+        askpass_setup.is_some(), status_file_path.display());
 
     // SECURITY: Use Base64-encoded command to avoid complex shell escaping issues
     // when passing through cmd /c start powershell (three different shell contexts).
@@ -5912,6 +5924,9 @@ fn launch_windows_terminal(
 ) -> Result<(), String> {
     use std::process::Command;
 
+    eprintln!("[SPM debug] launcher: windows_terminal profile='{}' use_tabs={} password_auth={} status_file='{}'",
+        profile_name, use_tabs, askpass_setup.is_some(), status_file_path.display());
+
     // Always use a temp bat file so we can write OK/FAIL to the status file after SSH exits.
     // (Cannot inject env vars via wt command-line args reliably.)
     let temp_dir = std::env::temp_dir();
@@ -5967,6 +5982,9 @@ fn launch_windows_custom_terminal(
     status_file_path: &std::path::Path,
 ) -> Result<(), String> {
     use std::process::Command;
+
+    eprintln!("[SPM debug] launcher: windows_custom profile='{}' password_auth={} status_file='{}'",
+        profile_name, askpass_setup.is_some(), status_file_path.display());
 
     // Re-validate path (TOCTOU protection)
     let validated_path = validate_terminal_path(custom_path)?;
@@ -6095,6 +6113,8 @@ fn connect_ssh(
     // Status file path — created for all auth methods; written by the terminal script after SSH
     // exits (OK or FAIL) and monitored by the background polling thread to emit failure toasts.
     let status_file_path = std::env::temp_dir().join(format!("spm-status-{}", Uuid::new_v4()));
+    eprintln!("[SPM debug] connect_ssh: profile='{}' auth='{}' status_file='{}'",
+        profile.name, profile.auth_method, status_file_path.display());
 
     // Retrieve password and create askpass temp files if this is a password-auth profile
     let askpass_setup = if profile.auth_method == "password" || profile.auth_method == "central_password" {
@@ -6203,22 +6223,28 @@ fn connect_ssh(
         let status_path = status_file_path.clone();
         let app_handle_poll = app_handle.clone();
         std::thread::spawn(move || {
+            eprintln!("[SPM debug] polling thread started: status_file='{}'", status_path.display());
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
             loop {
                 if std::time::Instant::now() >= deadline {
+                    eprintln!("[SPM debug] polling thread: deadline expired, no status file written");
                     let _ = std::fs::remove_file(&status_path);
                     break;
                 }
                 if status_path.exists() {
                     let content = std::fs::read_to_string(&status_path).unwrap_or_default();
                     let _ = std::fs::remove_file(&status_path);
+                    eprintln!("[SPM debug] polling thread: status file found, content='{}'", content.trim());
                     if content.trim() == "FAIL" {
+                        eprintln!("[SPM debug] polling thread: FAIL — restoring window and emitting ssh-connection-failed");
                         if let Some(win) = app_handle_poll.get_webview_window("main") {
                             let _ = win.unminimize();
                             let _ = win.show();
                             let _ = win.set_focus();
                         }
                         let _ = app_handle_poll.emit("ssh-connection-failed", failure_message);
+                    } else {
+                        eprintln!("[SPM debug] polling thread: OK — connection succeeded cleanly");
                     }
                     // Stop polling for both FAIL and OK
                     break;
@@ -6233,22 +6259,28 @@ fn connect_ssh(
         let status_path = status_file_path.clone();
         let app_handle_poll = app_handle.clone();
         std::thread::spawn(move || {
+            eprintln!("[SPM debug] polling thread started: status_file='{}'", status_path.display());
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
             loop {
                 if std::time::Instant::now() >= deadline {
+                    eprintln!("[SPM debug] polling thread: deadline expired, no status file written");
                     let _ = std::fs::remove_file(&status_path);
                     break;
                 }
                 if status_path.exists() {
                     let content = std::fs::read_to_string(&status_path).unwrap_or_default();
                     let _ = std::fs::remove_file(&status_path);
+                    eprintln!("[SPM debug] polling thread: status file found, content='{}'", content.trim());
                     if content.trim() == "FAIL" {
+                        eprintln!("[SPM debug] polling thread: FAIL — restoring window and emitting ssh-connection-failed");
                         if let Some(win) = app_handle_poll.get_webview_window("main") {
                             let _ = win.unminimize();
                             let _ = win.show();
                             let _ = win.set_focus();
                         }
                         let _ = app_handle_poll.emit("ssh-connection-failed", failure_message);
+                    } else {
+                        eprintln!("[SPM debug] polling thread: OK — connection succeeded cleanly");
                     }
                     // Stop polling for both FAIL and OK
                     break;

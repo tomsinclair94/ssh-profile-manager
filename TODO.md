@@ -41,6 +41,11 @@ See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customizatio
 - Both use the same status file + polling thread mechanism already in place for password auth; the main change is spawning the monitor thread and writing OK/FAIL in the terminal script for non-password profiles
 - ✅ **Windows password file world-readable window** — refactor `create_file_windows_secure` to write content only after icacls has been applied (create empty → icacls → write content), eliminating the brief window where the file exists with default permissions before ACL restriction
 
+**Status: awaiting manual GUI testing (macOS + Windows)**
+- All 4 items implemented; `[SPM debug]` eprintln statements added to all launchers and polling thread for test visibility
+- Test matrix: all 5 launchers × all auth methods (key, none, password, central_password); verify OK on clean connect, FAIL + toast on bad auth
+- Remove debug statements before release
+
 ---
 
 ### Feature Backlog
