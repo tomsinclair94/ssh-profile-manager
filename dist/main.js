@@ -53,9 +53,21 @@ const DEBOUNCE_DELAY = 100;         // 100ms debounce for filter updates
 
 // Version and Changelog Constants
 // IMPORTANT: Update this for each release - used by migration system and splash screen
-const CURRENT_APP_VERSION = '0.9.2';
+const CURRENT_APP_VERSION = '0.9.3';
 
 const VERSION_CHANGELOG = {
+    '0.9.3': {
+        title: 'SSH Connection Failure Detection',
+        subtitle: 'Surfaces connection failures for key and no-auth profiles, and tightens Windows password file security',
+        highlights: [
+            { header: 'Improvements' },
+            'SSH key auth failure toast — if your key is rejected, the app restores from minimised and shows a clear error toast naming the profile',
+            'No-auth / keyboard-interactive failure toast — if the server closes the connection after too many attempts, a clear error toast is shown',
+            'Windows password file security — file is now created empty before ACLs are applied, eliminating the brief window where content was world-readable',
+        ],
+        releaseDate: '2026-05-23',
+        githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.3'
+    },
     '0.9.2': {
         title: 'SSH Auth Fixes — Windows & macOS',
         subtitle: 'Fixes SSH password authentication failures and adds in-app error feedback on both platforms',
@@ -3269,8 +3281,39 @@ function compareVersions(a, b) {
 }
 
 /**
- * Populate the version splash screen with changelog data for all versions
- * newer than lastSeenVersion, newest first.
+ * Append a changelog's highlights list to a container element.
+ * Supports plain strings and {header: '...'} sub-section dividers.
+ * @param {HTMLElement} container
+ * @param {object} changelog
+ */
+function appendHighlightsList(container, changelog) {
+    let currentUl = document.createElement('ul');
+    currentUl.className = 'version-splash-highlights';
+    container.appendChild(currentUl);
+
+    changelog.highlights.forEach(highlight => {
+        if (highlight && typeof highlight === 'object' && highlight.header) {
+            const h4 = document.createElement('h4');
+            h4.textContent = highlight.header;
+            container.appendChild(h4);
+            currentUl = document.createElement('ul');
+            currentUl.className = 'version-splash-highlights';
+            container.appendChild(currentUl);
+        } else {
+            const li = document.createElement('li');
+            li.textContent = highlight;
+            currentUl.appendChild(li);
+        }
+    });
+}
+
+/**
+ * Populate the version splash screen with changelog data.
+ * Shows all versions from the same minor series (e.g. 0.9.x), newest first.
+ * Unseen versions (newer than lastSeenVersion) are expanded; previously-seen
+ * versions from the same minor series are shown collapsed via <details>/<summary>.
+ * Versions from a different minor series are hidden entirely.
+ * On first launch (null lastSeenVersion), only the current version is shown.
  * @param {string|null} lastSeenVersion - Last version the user saw the splash for, or null on first launch
  */
 function populateVersionSplash(lastSeenVersion) {
@@ -3294,63 +3337,79 @@ function populateVersionSplash(lastSeenVersion) {
             : '';
     }
 
-    // Collect unseen versions — all VERSION_CHANGELOG keys newer than lastSeenVersion.
-    // On first launch (null), only show current version to avoid a wall of historical entries.
-    // Always include current version so manual opens (version link click) are never blank.
+    // Only show versions from the same minor series (e.g. 0.9.x when on 0.9.3).
+    // Versions from a different minor series (e.g. 0.8.x) are hidden entirely.
+    const getMinorSeries = v => v.split('.').slice(0, 2).join('.');
+    const currentMinorSeries = getMinorSeries(CURRENT_APP_VERSION);
     const allVersions = Object.keys(VERSION_CHANGELOG);
-    const unseenVersions = lastSeenVersion
-        ? allVersions.filter(v => compareVersions(v, lastSeenVersion) > 0)
-        : [CURRENT_APP_VERSION];
-    if (!unseenVersions.includes(CURRENT_APP_VERSION)) {
-        unseenVersions.push(CURRENT_APP_VERSION);
-    }
-    unseenVersions.sort((a, b) => compareVersions(b, a)); // newest first
+    const sameMinorVersions = allVersions.filter(v => getMinorSeries(v) === currentMinorSeries);
 
-    // Populate body — one section per unseen version, with dividers between them
+    // Build the ordered list of versions to render, with expanded/collapsed state.
+    // On first launch: only current version, expanded (avoid a wall of history).
+    // Otherwise: all same-minor versions; unseen ones expanded, previously-seen ones collapsed.
+    let versionsToRender;
+
+    if (!lastSeenVersion) {
+        versionsToRender = [{ version: CURRENT_APP_VERSION, collapsed: false }];
+    } else {
+        versionsToRender = sameMinorVersions.map(v => ({
+            version: v,
+            collapsed: v !== CURRENT_APP_VERSION && compareVersions(v, lastSeenVersion) <= 0
+        }));
+        if (!versionsToRender.find(x => x.version === CURRENT_APP_VERSION)) {
+            versionsToRender.push({ version: CURRENT_APP_VERSION, collapsed: false });
+        }
+    }
+
+    // Sort newest first
+    versionsToRender.sort((a, b) => compareVersions(b.version, a.version));
+
+    // Populate body — one section per version, with dividers between them
     const highlightsSection = document.getElementById('version-splash-highlights-section');
     if (highlightsSection) {
         highlightsSection.innerHTML = '';
 
-        unseenVersions.forEach((version, index) => {
+        versionsToRender.forEach(({ version, collapsed }, index) => {
             const changelog = VERSION_CHANGELOG[version];
             if (!changelog) return;
 
-            // Section heading: "v0.9.1 — Dependency Updates"
-            const sectionTitle = document.createElement('h3');
-            sectionTitle.className = 'version-splash-section-title';
-            sectionTitle.textContent = `v${version} \u2014 ${changelog.title}`;
-            highlightsSection.appendChild(sectionTitle);
+            if (collapsed) {
+                // Previously-seen version: wrap in <details>/<summary> accordion
+                const details = document.createElement('details');
+                details.className = 'version-splash-collapsed-section';
 
-            // Muted subtitle
-            if (changelog.subtitle) {
-                const subtitle = document.createElement('p');
-                subtitle.className = 'version-splash-section-subtitle';
-                subtitle.textContent = changelog.subtitle;
-                highlightsSection.appendChild(subtitle);
+                const summary = document.createElement('summary');
+                summary.textContent = `v${version} \u2014 ${changelog.title}`;
+                details.appendChild(summary);
+
+                if (changelog.subtitle) {
+                    const subtitle = document.createElement('p');
+                    subtitle.className = 'version-splash-section-subtitle';
+                    subtitle.textContent = changelog.subtitle;
+                    details.appendChild(subtitle);
+                }
+
+                appendHighlightsList(details, changelog);
+                highlightsSection.appendChild(details);
+            } else {
+                // Unseen / current version: render expanded
+                const sectionTitle = document.createElement('h3');
+                sectionTitle.className = 'version-splash-section-title';
+                sectionTitle.textContent = `v${version} \u2014 ${changelog.title}`;
+                highlightsSection.appendChild(sectionTitle);
+
+                if (changelog.subtitle) {
+                    const subtitle = document.createElement('p');
+                    subtitle.className = 'version-splash-section-subtitle';
+                    subtitle.textContent = changelog.subtitle;
+                    highlightsSection.appendChild(subtitle);
+                }
+
+                appendHighlightsList(highlightsSection, changelog);
             }
 
-            // Highlights — supports plain strings and {header: '...'} sub-section dividers
-            let currentUl = document.createElement('ul');
-            currentUl.className = 'version-splash-highlights';
-            highlightsSection.appendChild(currentUl);
-
-            changelog.highlights.forEach(highlight => {
-                if (highlight && typeof highlight === 'object' && highlight.header) {
-                    const h4 = document.createElement('h4');
-                    h4.textContent = highlight.header;
-                    highlightsSection.appendChild(h4);
-                    currentUl = document.createElement('ul');
-                    currentUl.className = 'version-splash-highlights';
-                    highlightsSection.appendChild(currentUl);
-                } else {
-                    const li = document.createElement('li');
-                    li.textContent = highlight;
-                    currentUl.appendChild(li);
-                }
-            });
-
             // Divider between sections (not after the last one)
-            if (index < unseenVersions.length - 1) {
+            if (index < versionsToRender.length - 1) {
                 const divider = document.createElement('hr');
                 divider.className = 'version-splash-section-divider';
                 highlightsSection.appendChild(divider);
@@ -3363,7 +3422,9 @@ function populateVersionSplash(lastSeenVersion) {
         versionSplashGithubLink.href = currentChangelog.githubUrl;
     }
 
-    debug.log(`Version splash populated: ${unseenVersions.length} version(s) since ${lastSeenVersion || 'first launch'}`);
+    const collapsedCount = versionsToRender.filter(x => x.collapsed).length;
+    const expandedCount = versionsToRender.length - collapsedCount;
+    debug.log(`Version splash populated: ${expandedCount} expanded, ${collapsedCount} collapsed (since ${lastSeenVersion || 'first launch'})`);
     return true;
 }
 

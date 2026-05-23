@@ -23,16 +23,14 @@ bun run build    # Production build
 
 ## Current Status
 
-**Latest Release:** v0.9.2 (2026-04-12) ✅
-**Next:** v0.9.3 (planned — key/none auth failure toasts, Windows password file ACL refactor)
+**Latest Release:** v0.9.3 (2026-05-23) ✅
+**Next:** v0.10.0 (planned — features TBD)
 
-**v0.9.2 Fixes (Released - 2026-04-12):**
-- ✅ Windows CMD — broken ACL on temp files (windows_acl DENY approach replaced with icacls /inheritance:r); env var quoting mangling fixed with temp bat file approach
-- ✅ Windows PowerShell — `| Out-Null` removed (was blocking PTY allocation, causing silent hang)
-- ✅ In-app failure toast — status file + background polling thread on Windows and macOS; app restores from minimised on bad password
-- ✅ spm-askpass state machine (Windows + macOS) — fail-fast on bad password retry; relay proxy/2FA prompts to terminal for interactive input
-- ✅ Windows terminal selector — "Default" replaced with explicit "Windows Terminal"; v0.9.2 migration for existing users
-- ✅ macOS terminal selector — "Default (Terminal.app)" renamed to "Terminal" for consistency
+**v0.9.3 Fixes (Released - 2026-05-23):**
+- ✅ Key auth failure toast — SSH key rejected or not authorised triggers in-app error toast naming the profile
+- ✅ None/interactive auth failure toast — server closing connection after too many attempts triggers a generic failure toast
+- ✅ Windows password file ACL race — file created empty before `icacls` applied, then content written; eliminates world-readable window
+- ✅ What's New splash — previously-seen same-minor versions now collapsed (expandable) rather than hidden
 - ✅ 163 automated tests; 0 CRITICAL/HIGH after code + security review
 
 See `CHANGELOG.md` for full release history.

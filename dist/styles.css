@@ -3375,6 +3375,35 @@ body.drag-in-progress .profile-group--ungrouped-empty .profile-group-header {
     margin: 20px 0;
 }
 
+/* Collapsed (previously-seen) version sections - <details>/<summary> accordion */
+.version-splash-collapsed-section {
+    margin: 0;
+}
+
+.version-splash-collapsed-section > summary {
+    margin: 0 0 4px 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.version-splash-collapsed-section > summary:hover {
+    color: var(--text-color);
+}
+
+.version-splash-collapsed-section > summary:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 3px;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.version-splash-collapsed-section[open] > summary {
+    margin-bottom: 8px;
+}
+
 /* Sub-headers within a version's highlights (e.g. "Fixed", "Added") */
 #version-splash-highlights-section h4 {
     margin: 0 0 12px 0;

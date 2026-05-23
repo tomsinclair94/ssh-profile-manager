@@ -6,8 +6,8 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.9.2   | :white_check_mark: |
-| < 0.9.2 | :x:                |
+| 0.9.3   | :white_check_mark: |
+| < 0.9.3 | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -74,6 +74,7 @@ Subscribe to [GitHub releases](https://github.com/tomsinclair94/ssh-profile-mana
 ## Security Review History
 
 This project undergoes regular security reviews:
+- **v0.9.3:** Patch release — code review + security review scoped to branch changes only (0 CRITICAL, 0 HIGH, 0 MEDIUM, 2 LOW — both accepted as intentional); key fixes: SSH failure toast extended to key and none auth methods, Windows password file ACL race eliminated (create-empty-before-write pattern). Dependency audit: 0 vulnerabilities.
 - **v0.9.2:** Patch release — code review + security review scoped to branch changes only (1 CRITICAL, 1 HIGH, 2 MEDIUM — all resolved); key fixes: batch argument escaping applied consistently across all Windows launchers, `whoami` replaces `%USERNAME%` for domain-safe ACL grants, `&&`/`||` logic bug in macOS status write replaced with `if/then/else`, status file cleanup race between polling thread and safety-net removed. Dependency audit: 0 vulnerabilities.
 - **v0.9.1:** Patch release — security review scoped to new code only (0 CRITICAL, 0 HIGH, 0 MEDIUM); Windows `spm-askpass.exe` helper assessed as net security improvement over previous temp `.bat` approach (bundled exe in admin-protected install dir vs. user-writable `%TEMP%`). Dependency audit: 0 vulnerabilities.
 - **v0.9.0:** Feature release — code review (1 CRITICAL, 4 HIGH, 6 MEDIUM — all resolved) + security review (0 CRITICAL, 1 HIGH, 5 MEDIUM — all resolved); key fixes: TOCTOU-safe temp file creation, password zeroization after use, DB existence checks before keychain access, custom `Debug` impl redacting passwords, input validation on central password descriptions and import paths. Dependency audit (`cargo audit`): 0 vulnerabilities; 19 Linux-only GTK3 warnings (pre-existing, not applicable to macOS/Windows targets).

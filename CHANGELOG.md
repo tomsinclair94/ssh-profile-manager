@@ -5,6 +5,16 @@ All notable changes to SSH Profile Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-05-23
+
+### Fixed
+- **SSH key auth failure toast** — if SSH exits non-zero when using key authentication (key rejected or not authorised on the server), the app restores from minimised and shows a clear error toast naming the profile and directing the user to check the key path
+- **No-auth / keyboard-interactive failure toast** — if the server closes the connection after too many failed keyboard-interactive attempts, a clear error toast is shown
+- **Windows password file security** — `create_file_windows_secure` now creates the file empty before applying `icacls` restrictions, then writes content; eliminates the brief window where file content was world-readable before the ACL was applied
+
+### Changed
+- **"What's New" splash screen** — previously-seen versions within the current minor series are now shown collapsed (expandable via `<details>`/`<summary>`) rather than fully expanded; unseen versions remain expanded; versions from a different minor series remain hidden; manual "What's New" views always show only the current version expanded
+
 ## [0.9.2] - 2026-04-12
 
 ### Fixed

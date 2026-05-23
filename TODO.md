@@ -1,26 +1,10 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.2 — Release Ready
+## Current Version: v0.9.3 — Released 2026-05-23
 
-**Latest Release:** v0.9.2 (2026-04-12) ✅
-**Branch:** `v0.9.2-dev` (all work complete; PR pending)
-**Focus:** Windows SSH password auth fixes + in-app failure toast; macOS parity
-
----
-
-### Release Checklist
-
-- [x] All development complete and tested (Windows CMD, WT, PowerShell; macOS Terminal.app)
-- [x] All automated tests pass (`cargo test --lib`) — 163/163
-- [x] Developer tools disabled (`tauri.conf.json`)
-- [x] Code review + security review complete; all CRITICAL/HIGH/MEDIUM issues resolved
-- [x] Both changelogs updated (`CHANGELOG.md` + `dist/main.js` `VERSION_CHANGELOG`)
-- [x] Docs updated (`CLAUDE.md`, `TODO.md`, `SECURITY.md`, `DEVELOPMENT.md`)
-- [x] Committed & pushed
-- [ ] Create PR → `main` with `--label "bug"`
-- [ ] Enable auto-merge (squash); commit title must start with `Release v0.9.2`
-
-**Note — proxy multi-step auth:** Expected to work based on the spm-askpass state machine design; confirmation requires work proxy/2FA environment. Any issues addressed in v0.9.3.
+**Latest Release:** v0.9.3 (2026-05-23) ✅
+**Branch:** `main`
+**Focus:** SSH connection failure detection for key/none auth; Windows password file ACL race fix; splash screen collapsed history
 
 ---
 
@@ -36,7 +20,7 @@
 ## Roadmap
 
 ```
-... → v0.9.1 ✅ → v0.9.2 → v0.9.3 → v0.10.0 → ... → v1.0.0
+... → v0.9.2 ✅ → v0.9.3 ✅ → v0.10.0 → ... → v1.0.0
 ```
 
 ---
@@ -44,15 +28,6 @@
 ## Planned Features
 
 See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customization.md` for detailed plans.
-
-### v0.9.3 - Planned
-
-**Focus:** SSH connection failure detection for key and no-auth profiles
-
-- **Key auth failure toast** — expand polling/status mechanism to `auth_method = 'key'`; if the key is rejected (SSH exits non-zero), surface a toast: "SSH key not permitted — check the key is authorised on the server. Edit the profile to update the key path."
-- **None/interactive auth failure toast** — expand to `auth_method = 'none'`; if the user fails keyboard-interactive auth (too many attempts, SSH exits non-zero), surface a generic toast: "SSH connection failed — the server closed the connection."
-- Both use the same status file + polling thread mechanism already in place for password auth; the main change is spawning the monitor thread and writing OK/FAIL in the terminal script for non-password profiles
-- **Windows password file world-readable window** — refactor `create_file_windows_secure` to write content only after icacls has been applied (create empty → icacls → write content), eliminating the brief window where the file exists with default permissions before ACL restriction
 
 ---
 
@@ -86,10 +61,28 @@ All four must move together due to the `digest 0.10 → 0.11` type split. Cannot
 |---|---|---|---|
 | sha2 | 0.10.9 | 0.11.0 | Stable ✅ — ready |
 | hmac | 0.12.1 | 0.13.0 | Stable ✅ — ready |
-| pbkdf2 | 0.12.2 | 0.13.0 | `0.13.0-rc.10` as of 2026-04-07 — **blocked** |
-| aes-gcm | 0.10.3 | 0.11.0 | `0.11.0-rc.3` as of 2026-04-07 — **blocked** |
+| pbkdf2 | 0.12.2 | 0.13.0 | Stable ✅ — ready (crossed 2026-05-23) |
+| aes-gcm | 0.10.3 | 0.11.0 | `0.11.0-rc.3` as of 2026-05-23 — **blocked** |
 
-No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish stable releases, update all four in `Cargo.toml` together and verify the API call sites in `lib.rs` (`pbkdf2_hmac::<Sha256>`, `Hmac<Sha256>`, `Aes256Gcm`).
+No current vulnerabilities or conflicts. Once aes-gcm publishes a stable `0.11.0` release, update all four in `Cargo.toml` together and verify the API call sites in `lib.rs` (`pbkdf2_hmac::<Sha256>`, `Hmac<Sha256>`, `Aes256Gcm`).
+
+### keyring (3.6 → 4.x)
+The `keyring` crate has been repurposed as a sample application in v4. Production apps must migrate to `keyring-core` instead. The core API (`Entry::new`, `set_password`, `get_password`, `delete_credential`) is similar but the crate identity changes and feature flags are restructured.
+
+| Crate | Current | Target | Status |
+|---|---|---|---|
+| keyring | 3.6 | keyring-core 1.x | Deferred — medium migration effort; security-critical path requires thorough testing on both platforms |
+
+Check at the start of a future dev branch. Needs full manual GUI testing (macOS + Windows) after migration.
+
+### portable-pty (0.8 → 0.9)
+v0.9.0 introduced a Windows ConPTY regression: PTY output returns garbage data due to the `PSEUDOCONSOLE_INHERIT_CURSOR` flag causing unhandled escape sequences. Issue is open and unresolved upstream.
+
+| Crate | Current | Target | Status |
+|---|---|---|---|
+| portable-pty | 0.8.1 | 0.9.0 | **Do not upgrade** — known Windows regression (ConPTY garbage output); revisit once upstream fix is published |
+
+Monitor upstream for a patched release before revisiting.
 
 ---
 
@@ -102,6 +95,14 @@ No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish st
 ---
 
 ## Archive
+
+### v0.9.3 - Released 2026-05-23 ✅
+**Focus:** SSH Connection Failure Detection & Windows ACL Fix
+- Key auth failure toast — SSH key rejected or not authorised triggers an in-app error toast naming the profile
+- None/interactive auth failure toast — server closes connection after too many attempts triggers a generic failure toast
+- Windows password file ACL race — file now created empty before `icacls` is applied, then content written; eliminates world-readable window
+- What's New splash — previously-seen same-minor versions now collapsed (expandable) rather than hidden; unseen versions remain expanded
+- 163 automated tests; 0 CRITICAL/HIGH after code + security review
 
 ### v0.9.2 - Released 2026-04-12 ✅
 **Focus:** SSH Password Auth Fixes — Windows & macOS
