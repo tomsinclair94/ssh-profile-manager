@@ -1,12 +1,10 @@
 # SSH Profile Manager - TODO & Roadmap
 
-## Current Version: v0.9.3 — In Development
+## Current Version: v0.9.3 — Released 2026-05-23
 
-**Latest Release:** v0.9.2 (2026-04-12) ✅
-**Branch:** `v0.9.3-dev`
-**Focus:** Version splash screen fix; SSH connection failure detection for key/none auth; Windows password file ACL race fix
-
-**Note — proxy multi-step auth:** Verified working in real work environment (2026-04-13) — password delivered, 2FA relayed, reason-field prompt relayed, connection completes successfully.
+**Latest Release:** v0.9.3 (2026-05-23) ✅
+**Branch:** `main`
+**Focus:** SSH connection failure detection for key/none auth; Windows password file ACL race fix; splash screen collapsed history
 
 ---
 
@@ -22,7 +20,7 @@
 ## Roadmap
 
 ```
-... → v0.9.2 ✅ → v0.9.3 → v0.10.0 → ... → v1.0.0
+... → v0.9.2 ✅ → v0.9.3 ✅ → v0.10.0 → ... → v1.0.0
 ```
 
 ---
@@ -30,21 +28,6 @@
 ## Planned Features
 
 See `plans/feature-multi-tab-system.md` and `plans/feature-terminal-customization.md` for detailed plans.
-
-### v0.9.3 - In Development
-
-**Focus:** Version splash screen fix; SSH connection failure detection for key/none auth; Windows password file ACL race fix
-
-- ✅ **Version splash screen — collapsed history** — when upgrading within the same minor version (e.g. 0.9.1 → 0.9.2), previously-seen versions are shown collapsed (expandable) rather than hidden entirely; unseen versions remain expanded; versions from a different minor series remain hidden. Manual "What's New" views always show only the current version expanded with all other same-minor versions collapsed. Implemented with `<details>`/`<summary>` HTML elements for accessible, CSP-compliant accordion behaviour.
-- ✅ **Key auth failure toast** — expand polling/status mechanism to `auth_method = 'key'`; if the key is rejected (SSH exits non-zero), surface a toast: "SSH key not permitted — check the key is authorised on the server. Edit the profile to update the key path."
-- ✅ **None/interactive auth failure toast** — expand to `auth_method = 'none'`; if the user fails keyboard-interactive auth (too many attempts, SSH exits non-zero), surface a generic toast: "SSH connection failed — the server closed the connection."
-- Both use the same status file + polling thread mechanism already in place for password auth; the main change is spawning the monitor thread and writing OK/FAIL in the terminal script for non-password profiles
-- ✅ **Windows password file world-readable window** — refactor `create_file_windows_secure` to write content only after icacls has been applied (create empty → icacls → write content), eliminating the brief window where the file exists with default permissions before ACL restriction
-
-**Status: awaiting manual GUI testing (macOS + Windows)**
-- All 4 items implemented; `[SPM debug]` eprintln statements added to all launchers and polling thread for test visibility
-- Test matrix: all 5 launchers × all auth methods (key, none, password, central_password); verify OK on clean connect, FAIL + toast on bad auth
-- Remove debug statements before release
 
 ---
 
@@ -112,6 +95,14 @@ Monitor upstream for a patched release before revisiting.
 ---
 
 ## Archive
+
+### v0.9.3 - Released 2026-05-23 ✅
+**Focus:** SSH Connection Failure Detection & Windows ACL Fix
+- Key auth failure toast — SSH key rejected or not authorised triggers an in-app error toast naming the profile
+- None/interactive auth failure toast — server closes connection after too many attempts triggers a generic failure toast
+- Windows password file ACL race — file now created empty before `icacls` is applied, then content written; eliminates world-readable window
+- What's New splash — previously-seen same-minor versions now collapsed (expandable) rather than hidden; unseen versions remain expanded
+- 163 automated tests; 0 CRITICAL/HIGH after code + security review
 
 ### v0.9.2 - Released 2026-04-12 ✅
 **Focus:** SSH Password Auth Fixes — Windows & macOS

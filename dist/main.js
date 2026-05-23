@@ -65,7 +65,7 @@ const VERSION_CHANGELOG = {
             'No-auth / keyboard-interactive failure toast — if the server closes the connection after too many attempts, a clear error toast is shown',
             'Windows password file security — file is now created empty before ACLs are applied, eliminating the brief window where content was world-readable',
         ],
-        releaseDate: '2026-TBD',
+        releaseDate: '2026-05-23',
         githubUrl: 'https://github.com/tomsinclair94/ssh-profile-manager/releases/tag/v0.9.3'
     },
     '0.9.2': {
