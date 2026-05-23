@@ -78,10 +78,28 @@ All four must move together due to the `digest 0.10 → 0.11` type split. Cannot
 |---|---|---|---|
 | sha2 | 0.10.9 | 0.11.0 | Stable ✅ — ready |
 | hmac | 0.12.1 | 0.13.0 | Stable ✅ — ready |
-| pbkdf2 | 0.12.2 | 0.13.0 | `0.13.0-rc.10` as of 2026-04-07 — **blocked** |
-| aes-gcm | 0.10.3 | 0.11.0 | `0.11.0-rc.3` as of 2026-04-07 — **blocked** |
+| pbkdf2 | 0.12.2 | 0.13.0 | Stable ✅ — ready (crossed 2026-05-23) |
+| aes-gcm | 0.10.3 | 0.11.0 | `0.11.0-rc.3` as of 2026-05-23 — **blocked** |
 
-No current vulnerabilities or conflicts. Once pbkdf2 and aes-gcm both publish stable releases, update all four in `Cargo.toml` together and verify the API call sites in `lib.rs` (`pbkdf2_hmac::<Sha256>`, `Hmac<Sha256>`, `Aes256Gcm`).
+No current vulnerabilities or conflicts. Once aes-gcm publishes a stable `0.11.0` release, update all four in `Cargo.toml` together and verify the API call sites in `lib.rs` (`pbkdf2_hmac::<Sha256>`, `Hmac<Sha256>`, `Aes256Gcm`).
+
+### keyring (3.6 → 4.x)
+The `keyring` crate has been repurposed as a sample application in v4. Production apps must migrate to `keyring-core` instead. The core API (`Entry::new`, `set_password`, `get_password`, `delete_credential`) is similar but the crate identity changes and feature flags are restructured.
+
+| Crate | Current | Target | Status |
+|---|---|---|---|
+| keyring | 3.6 | keyring-core 1.x | Deferred — medium migration effort; security-critical path requires thorough testing on both platforms |
+
+Check at the start of a future dev branch. Needs full manual GUI testing (macOS + Windows) after migration.
+
+### portable-pty (0.8 → 0.9)
+v0.9.0 introduced a Windows ConPTY regression: PTY output returns garbage data due to the `PSEUDOCONSOLE_INHERIT_CURSOR` flag causing unhandled escape sequences. Issue is open and unresolved upstream.
+
+| Crate | Current | Target | Status |
+|---|---|---|---|
+| portable-pty | 0.8.1 | 0.9.0 | **Do not upgrade** — known Windows regression (ConPTY garbage output); revisit once upstream fix is published |
+
+Monitor upstream for a patched release before revisiting.
 
 ---
 
