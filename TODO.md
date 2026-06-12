@@ -92,6 +92,11 @@ Monitor upstream for a patched release before revisiting.
 - DMGs show "damaged" (not code-signed)
 - **Workaround:** Right-click → Open or `xattr -cr "/Applications/SSH Profile Manager.app"`
 
+### macOS Accessibility Permissions (Local Dev & Unsigned Updates)
+- Local builds or unsigned app updates can cause Terminal automation (tab creation) to fail silently or fail out, even if the app has Accessibility permission toggled "ON" in System Settings. This is because macOS invalidates Accessibility (TCC) records when a local binary changes signature/hash.
+- **Workaround:** Go to *System Settings → Privacy & Security → Accessibility*, remove **SSH Profile Manager** using the `-` button, and then toggle it back on if prompted, or add it again to register the new binary.
+- **Alternative:** Disable **"Use Tabs"** in SSH Profile Manager settings. This launchesTerminal in a standard window without simulating key events, bypassing the need for Accessibility permissions entirely.
+
 ---
 
 ## Archive
