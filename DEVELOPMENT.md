@@ -402,6 +402,16 @@ Before creating a release PR:
 
 ---
 
+## Troubleshooting
+
+### macOS Accessibility Permissions (Local Dev & Unsigned Updates)
+When installing or running a new local/unsigned build, macOS may silently block Terminal automation (tab creation) even if the app has Accessibility permission toggled "ON" in System Settings. This occurs because macOS invalidates TCC records when a local binary changes signature/hash.
+
+*   **Workaround:** Go to *System Settings → Privacy & Security → Accessibility*, remove **SSH Profile Manager** using the `-` button, and then add it again to register the new binary.
+*   **Alternative:** Disable **"Use Tabs"** in SSH Profile Manager settings. This launches Terminal in a standard window without simulating key events, bypassing the need for Accessibility permissions entirely.
+
+---
+
 ## Quick Start
 
 ```bash
